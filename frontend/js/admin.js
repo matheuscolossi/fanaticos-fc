@@ -6,7 +6,14 @@ let deleteTargetId = null;
 let categoriasAdmin = [];
 let editingImages = [];
 let viewMode = 'ligas'; // 'ligas' | 'lista'
-const openAccordionIds = new Set();
+
+function getOpenIds() {
+  try { return new Set(JSON.parse(sessionStorage.getItem('fc_open_accordions') || '[]')); }
+  catch { return new Set(); }
+}
+function saveOpenIds(set) {
+  sessionStorage.setItem('fc_open_accordions', JSON.stringify([...set]));
+}
 
 // ── Liga View Config ──────────────────────────────────────────────────────────
 const LIGA_ORDER = [
@@ -150,18 +157,9 @@ function toggleAccordion(bodyId, arrowId) {
   const isOpen = body.style.display !== 'none';
   body.style.display = isOpen ? 'none' : 'block';
   if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
-  if (isOpen) openAccordionIds.delete(bodyId);
-  else openAccordionIds.add(bodyId);
-}
-
-function restoreOpenAccordions() {
-  for (const id of openAccordionIds) {
-    const body = document.getElementById(id);
-    if (!body) { openAccordionIds.delete(id); continue; }
-    body.style.display = 'block';
-    const arrow = document.getElementById(id.replace(/_body$/, '_arrow'));
-    if (arrow) arrow.textContent = '▼';
-  }
+  const ids = getOpenIds();
+  if (isOpen) ids.delete(bodyId); else ids.add(bodyId);
+  saveOpenIds(ids);
 }
 
 function renderLigaView(produtos) {
@@ -195,6 +193,7 @@ function renderLigaView(produtos) {
     return ia - ib;
   });
 
+  const openIds = getOpenIds();
   let html = '<div class="ligas-view">';
 
   for (const liga of sortedLigas) {
@@ -202,7 +201,7 @@ function renderLigaView(produtos) {
     const totalProds = [...timeMap.values()].reduce((s, arr) => s + arr.length, 0);
     const flag      = LIGA_FLAGS[liga] || '🏆';
     const ligaId    = 'liga_' + normalizeText(liga).replace(/[^a-z0-9]/g, '_');
-    const ligaOpen  = openAccordionIds.has(`${ligaId}_body`);
+    const ligaOpen  = openIds.has(`${ligaId}_body`);
 
     html += `
       <div class="liga-section">
@@ -222,7 +221,7 @@ function renderLigaView(produtos) {
     for (const time of sortedTimes) {
       const prods   = timeMap.get(time);
       const timeId  = ligaId + '_time_' + normalizeText(time).replace(/[^a-z0-9]/g, '_');
-      const timeOpen = openAccordionIds.has(`${timeId}_body`);
+      const timeOpen = openIds.has(`${timeId}_body`);
 
       html += `
           <div class="time-section">
