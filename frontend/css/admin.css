@@ -17,13 +17,12 @@
   position: sticky; top: 0; height: 100vh; overflow-y: auto;
 }
 .sidebar__logo {
-  display: flex; align-items: center; gap: .6rem;
-  padding: 1.5rem 1.25rem; border-bottom: 1px solid var(--border);
-  font-family: var(--font-title); font-size: 1rem; font-weight: 700;
-  color: var(--white); letter-spacing: .05em;
+  display: flex; align-items: center; justify-content: center;
+  padding: 1.25rem 1rem; border-bottom: 1px solid var(--border);
 }
 .sidebar__logo em { color: var(--green); font-style: normal; }
 .sidebar__logo span:first-child { font-size: 1.4rem; }
+.sidebar__logo-img { height: 52px; width: auto; object-fit: contain; display: block; }
 .sidebar__nav { flex: 1; padding: 1rem .75rem; display: flex; flex-direction: column; gap: .25rem; }
 .sidebar__link {
   display: flex; align-items: center; gap: .75rem;
@@ -143,6 +142,36 @@ td { padding: .85rem 1rem; color: var(--text); vertical-align: middle; }
 .admin-stat__val { font-family: var(--font-title); font-size: 1.8rem; color: var(--white); font-weight: 700; }
 .admin-stat__val--green { color: var(--green); }
 
+/* ── Tema Claro — Admin ── */
+[data-theme="light"] .admin-body  { background: #f2f2f2; }
+[data-theme="light"] .sidebar     { background: #ffffff; border-right-color: rgba(0,0,0,0.10); }
+[data-theme="light"] .sidebar__link { color: #555; }
+[data-theme="light"] .sidebar__link:hover { background: #f0f0f0; color: #111; }
+[data-theme="light"] .sidebar__link.active { background: rgba(255,107,0,0.08); }
+[data-theme="light"] .sidebar__bottom { border-top-color: rgba(0,0,0,0.10); }
+[data-theme="light"] .admin-topbar { border-bottom-color: rgba(0,0,0,0.10); }
+[data-theme="light"] .table-wrap  { border-color: rgba(0,0,0,0.10); }
+[data-theme="light"] thead th     { background: #f0f0f0; border-bottom-color: rgba(0,0,0,0.10); }
+[data-theme="light"] tbody tr     { border-bottom-color: rgba(0,0,0,0.05); }
+[data-theme="light"] tbody tr:hover { background: #f5f5f5; }
+[data-theme="light"] td           { color: #1a1a1a; }
+[data-theme="light"] .admin-stat  { background: #ffffff; border-color: rgba(0,0,0,0.10); }
+
+[data-theme="light"] .liga-section { border-color: rgba(0,0,0,0.12); }
+[data-theme="light"] .liga-header  { background: #ebebeb; }
+[data-theme="light"] .liga-header:hover { background: #e0e0e0; }
+[data-theme="light"] .liga-body    { background: #f5f5f5; }
+[data-theme="light"] .time-section { border-color: rgba(0,0,0,0.08); }
+[data-theme="light"] .time-header  { background: #f0f0f0; }
+[data-theme="light"] .time-header:hover { background: #e8e8e8; }
+[data-theme="light"] .time-body    { background: #ffffff; }
+[data-theme="light"] .time-table thead th { background: #f0f0f0; border-bottom-color: rgba(0,0,0,0.08); }
+[data-theme="light"] .time-table tbody tr:hover { background: #f8f8f8; }
+[data-theme="light"] .time-table td { color: #1a1a1a; }
+
+[data-theme="light"] .modal { background: #ffffff; }
+[data-theme="light"] .modal__header { border-bottom-color: rgba(0,0,0,0.10); }
+
 @media (max-width: 900px) {
   .admin-body { grid-template-columns: 1fr; }
   .sidebar { display: none; }
@@ -167,6 +196,71 @@ td { padding: .85rem 1rem; color: var(--text); vertical-align: middle; }
   width: fit-content;
 }
 .upload-label:hover { border-color: var(--green); color: var(--green); }
+
+/* ── View Toggle ── */
+.view-toggle {
+  display: flex; gap: .25rem;
+  background: var(--bg-card2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: .2rem;
+}
+.view-toggle .btn {
+  font-size: .8rem; padding: .35rem .8rem; border-radius: 4px;
+  border: none; background: transparent; color: var(--text-muted);
+  cursor: pointer; transition: var(--transition);
+}
+.view-toggle .btn.active { background: var(--bg-card); color: var(--green); }
+.view-toggle .btn:hover:not(.active) { color: var(--text); }
+
+/* ── Liga Accordion ── */
+.ligas-view { display: flex; flex-direction: column; gap: .5rem; }
+
+.liga-section {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden;
+}
+.liga-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .9rem 1.25rem; background: #1a1a1a; cursor: pointer;
+  user-select: none; transition: var(--transition);
+}
+.liga-header:hover { background: #222; }
+.liga-header__left { display: flex; align-items: center; gap: .75rem; }
+.liga-arrow { font-size: .7rem; color: var(--text-dim); transition: var(--transition); min-width: .7rem; }
+.liga-flag { font-size: 1.2rem; line-height: 1; }
+.liga-nome { font-family: var(--font-title); font-size: 1rem; font-weight: 700; color: var(--white); letter-spacing: .04em; }
+.liga-count { font-size: .75rem; color: var(--text-dim); white-space: nowrap; }
+
+.liga-body { padding: .5rem .75rem .75rem; background: #0e0e0e; display: flex; flex-direction: column; gap: .35rem; }
+
+/* ── Time (Team) Sub-Accordion ── */
+.time-section {
+  border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; overflow: hidden;
+}
+.time-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .6rem 1rem; background: #141414; cursor: pointer;
+  user-select: none; transition: var(--transition);
+}
+.time-header:hover { background: #1c1c1c; }
+.time-header__left { display: flex; align-items: center; gap: .6rem; }
+.time-arrow { font-size: .65rem; color: var(--text-dim); transition: var(--transition); min-width: .65rem; }
+.time-nome { font-size: .88rem; font-weight: 600; color: var(--text); }
+.time-count { font-size: .72rem; color: var(--text-dim); white-space: nowrap; }
+
+.time-body { background: #0a0a0a; }
+
+/* ── Time Products Table ── */
+.time-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.time-table thead th {
+  background: #111; padding: .6rem 1rem; text-align: left;
+  font-weight: 600; color: var(--text-dim); font-size: .72rem;
+  text-transform: uppercase; letter-spacing: .08em;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.time-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.03); transition: var(--transition); }
+.time-table tbody tr:hover { background: var(--bg-card2); }
+.time-table tbody tr:last-child { border-bottom: none; }
+.time-table td { padding: .65rem 1rem; color: var(--text); vertical-align: middle; }
 
 /* ── Preview badge ── */
 .preview-img__badge {

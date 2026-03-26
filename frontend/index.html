@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/loja.css" />
+  <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('fc_theme') || 'dark');</script>
 </head>
 <body>
 
@@ -16,7 +17,6 @@
   <header class="header" id="header">
     <div class="header__inner">
       <a href="index.html" class="logo">
-        <span class="logo__icon">⚽</span>
         <span class="logo__text">FANÁTICOS <em>FC</em></span>
       </a>
       <nav class="nav" id="nav">
@@ -32,6 +32,7 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         </button>
         <span id="userNameDisplay" class="user-name-display"></span>
+        <button class="btn-icon btn-theme" title="Tema Claro" aria-label="Alternar tema"></button>
       </div>
     </div>
     <div class="header__categories">

@@ -5,6 +5,297 @@ let currentPage = 1;
 let deleteTargetId = null;
 let categoriasAdmin = [];
 let editingImages = [];
+let viewMode = 'ligas'; // 'ligas' | 'lista'
+const openAccordionIds = new Set();
+
+// ── Liga View Config ──────────────────────────────────────────────────────────
+const LIGA_ORDER = [
+  'Brasileirão', 'Seleções',
+  'Liga Espanhola', 'Liga Inglesa', 'Liga Italiana', 'Liga Alemã',
+  'Liga Francesa', 'Liga Portuguesa', 'Liga Argentina', 'Liga Holandesa',
+  'Liga Mexicana', 'Liga Americana (MLS)', 'NBA', 'Outras Ligas', 'Outros'
+];
+
+const LIGA_FLAGS = {
+  'Brasileirão':        '🇧🇷',
+  'Seleções':           '🌎',
+  'Liga Espanhola':     '🇪🇸',
+  'Liga Inglesa':       '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
+  'Liga Italiana':      '🇮🇹',
+  'Liga Alemã':         '🇩🇪',
+  'Liga Francesa':      '🇫🇷',
+  'Liga Portuguesa':    '🇵🇹',
+  'Liga Argentina':     '🇦🇷',
+  'Liga Holandesa':     '🇳🇱',
+  'Liga Mexicana':      '🇲🇽',
+  'Liga Americana (MLS)': '🇺🇸',
+  'NBA':                '🏀',
+  'Outras Ligas':       '🌍',
+  'Outros':             '📦'
+};
+
+const TEAM_TO_LIGA = {
+  // Liga Espanhola
+  'Real Madrid': 'Liga Espanhola', 'Barcelona': 'Liga Espanhola',
+  'Atlético de Madrid': 'Liga Espanhola', 'Sevilla': 'Liga Espanhola',
+  'Valência': 'Liga Espanhola', 'Real Betis': 'Liga Espanhola',
+  'Real Sociedad': 'Liga Espanhola', 'Villarreal': 'Liga Espanhola',
+  'Celta de Vigo': 'Liga Espanhola', 'Athletic Bilbao': 'Liga Espanhola',
+  'Granada': 'Liga Espanhola', 'Real Valladolid': 'Liga Espanhola',
+  // Liga Inglesa
+  'Manchester City': 'Liga Inglesa', 'Manchester United': 'Liga Inglesa',
+  'Liverpool': 'Liga Inglesa', 'Arsenal': 'Liga Inglesa',
+  'Chelsea': 'Liga Inglesa', 'Tottenham': 'Liga Inglesa',
+  'Newcastle': 'Liga Inglesa', 'Aston Villa': 'Liga Inglesa',
+  'West Ham': 'Liga Inglesa', 'Brighton': 'Liga Inglesa',
+  'Everton': 'Liga Inglesa', 'Crystal Palace': 'Liga Inglesa',
+  'Leicester': 'Liga Inglesa', 'Leeds United': 'Liga Inglesa',
+  'Fulham': 'Liga Inglesa', 'Celtic': 'Liga Inglesa',
+  'AFC Richmond': 'Liga Inglesa', 'Stoke City': 'Liga Inglesa',
+  // Liga Italiana
+  'Juventus': 'Liga Italiana', 'Inter de Milão': 'Liga Italiana',
+  'Milan': 'Liga Italiana', 'Napoli': 'Liga Italiana',
+  'Roma': 'Liga Italiana', 'Lazio': 'Liga Italiana',
+  'Atalanta': 'Liga Italiana', 'Fiorentina': 'Liga Italiana',
+  'Torino': 'Liga Italiana', 'Bologna': 'Liga Italiana',
+  'Venezia': 'Liga Italiana', 'Parma': 'Liga Italiana',
+  'Como': 'Liga Italiana', 'Genoa': 'Liga Italiana', 'Palermo': 'Liga Italiana',
+  // Liga Alemã
+  'Bayern de Munique': 'Liga Alemã', 'Borussia Dortmund': 'Liga Alemã',
+  'Bayer Leverkusen': 'Liga Alemã', 'RB Leipzig': 'Liga Alemã',
+  'Eintracht Frankfurt': 'Liga Alemã', "Borussia M'gladbach": 'Liga Alemã',
+  'Schalke 04': 'Liga Alemã', 'Wolfsburg': 'Liga Alemã',
+  'Hamburgo': 'Liga Alemã', 'Union Berlin': 'Liga Alemã',
+  // Liga Francesa
+  'PSG': 'Liga Francesa', 'Olympique de Marseille': 'Liga Francesa',
+  'Lyon': 'Liga Francesa', 'Mônaco': 'Liga Francesa', 'Lille': 'Liga Francesa',
+  // Liga Portuguesa
+  'Benfica': 'Liga Portuguesa', 'Porto': 'Liga Portuguesa',
+  'Sporting': 'Liga Portuguesa', 'Braga': 'Liga Portuguesa', 'Estoril': 'Liga Portuguesa',
+  // Liga Argentina
+  'Boca Juniors': 'Liga Argentina', 'River Plate': 'Liga Argentina',
+  'Racing': 'Liga Argentina', 'Independiente': 'Liga Argentina', 'San Lorenzo': 'Liga Argentina',
+  // Liga Holandesa
+  'Ajax': 'Liga Holandesa', 'PSV': 'Liga Holandesa',
+  // Liga Mexicana
+  'América': 'Liga Mexicana', 'Tigres': 'Liga Mexicana', 'Pumas': 'Liga Mexicana',
+  // Liga Americana (MLS)
+  'Inter Miami': 'Liga Americana (MLS)', 'LA Galaxy': 'Liga Americana (MLS)',
+  'LAFC': 'Liga Americana (MLS)', 'New York City': 'Liga Americana (MLS)',
+  'NY Red Bulls': 'Liga Americana (MLS)', 'Atlanta United': 'Liga Americana (MLS)',
+  'Orlando City': 'Liga Americana (MLS)',
+  // Outras Ligas
+  'Galatasaray': 'Outras Ligas', 'Fenerbahçe': 'Outras Ligas',
+  'Besiktas': 'Outras Ligas', 'Olympiacos': 'Outras Ligas',
+  'Zenit': 'Outras Ligas', 'Al Nassr': 'Outras Ligas', 'Al Hilal': 'Outras Ligas',
+  'Atlético Nacional': 'Outras Ligas', 'Cerro Porteño': 'Outras Ligas',
+  'Colo Colo': 'Outras Ligas', 'Universidad de Chile': 'Outras Ligas',
+  'Peñarol': 'Outras Ligas', 'Nacional': 'Outras Ligas',
+  // NBA
+  'Los Angeles Lakers': 'NBA', 'Chicago Bulls': 'NBA',
+  'Golden State Warriors': 'NBA', 'Brooklyn Nets': 'NBA',
+  'Miami Heat': 'NBA', 'Boston Celtics': 'NBA',
+  'New York Knicks': 'NBA', 'Dallas Mavericks': 'NBA',
+};
+
+const BRAZILIAN_TEAMS = new Set([
+  'Flamengo', 'Palmeiras', 'Corinthians', 'São Paulo', 'Grêmio', 'Internacional',
+  'Botafogo', 'Atlético Mineiro', 'Vasco', 'Fluminense', 'Cruzeiro', 'Santos',
+  'Athletico Paranaense', 'Athletico-PR', 'Bahia', 'Fortaleza', 'Vitória', 'Sport', 'Ceará',
+  'Red Bull Bragantino', 'Bragantino', 'Chapecoense', 'América Mineiro',
+  'Atlético Goianiense', 'Goiás', 'Avaí', 'Náutico', 'Remo', 'CSA',
+  'Santa Cruz', 'Volta Redonda', 'Paysandu', 'Figueirense', 'Criciúma',
+  'Cuiabá', 'Juventus da Mooca'
+]);
+
+const SELECOES_TEAMS = new Set([
+  'Alemanha', 'Arábia Saudita', 'Argentina', 'Áustria', 'Bélgica', 'Brasil',
+  'Canadá', 'Catar', 'Chile', 'Croácia', 'Dinamarca', 'Equador', 'Escócia',
+  'Eslováquia', 'Eslovênia', 'Espanha', 'Estados Unidos', 'Finlândia', 'França',
+  'Gana', 'Holanda', 'Inglaterra', 'Irlanda', 'Itália', 'Jamaica', 'Japão',
+  'Korea', 'Marrocos', 'México', 'Nigéria', 'País de Gales', 'Peru', 'Portugal',
+  'República Tcheca', 'Rússia', 'Senegal', 'Suécia', 'Suíça', 'Turquia',
+  'Ucrânia', 'Uruguai', 'Venezuela'
+]);
+
+const TYPE_KEYWORDS = new Set([
+  'Titular', 'Reserva', 'Third', 'Fourth', 'Goleiro', 'Feminina',
+  'Treino', 'Regata', 'Retro', 'Retrô', 'Player', 'Manga', 'Edição', 'Pré'
+]);
+
+function extractTime(nome) {
+  const words = nome.split(' ');
+  const teamWords = [];
+  for (const word of words) {
+    if (TYPE_KEYWORDS.has(word)) break;
+    teamWords.push(word);
+  }
+  return teamWords.length > 0 ? teamWords.join(' ') : nome;
+}
+
+function getLiga(produto) {
+  const time = extractTime(produto.nome);
+  if (TEAM_TO_LIGA[time]) return TEAM_TO_LIGA[time];
+  if (BRAZILIAN_TEAMS.has(time)) return 'Brasileirão';
+  if (SELECOES_TEAMS.has(time)) return 'Seleções';
+  if (produto.categoria_nome === 'Brasileirão') return 'Brasileirão';
+  if (produto.categoria_nome === 'Seleções') return 'Seleções';
+  return 'Outros';
+}
+
+function toggleAccordion(bodyId, arrowId) {
+  const body = document.getElementById(bodyId);
+  const arrow = document.getElementById(arrowId);
+  if (!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
+  if (isOpen) openAccordionIds.delete(bodyId);
+  else openAccordionIds.add(bodyId);
+}
+
+function restoreOpenAccordions() {
+  for (const id of openAccordionIds) {
+    const body = document.getElementById(id);
+    if (!body) { openAccordionIds.delete(id); continue; }
+    body.style.display = 'block';
+    const arrow = document.getElementById(id.replace(/_body$/, '_arrow'));
+    if (arrow) arrow.textContent = '▼';
+  }
+}
+
+function renderLigaView(produtos) {
+  const wrap = document.getElementById('tabelaProdutosWrap');
+  const pag  = document.getElementById('paginacaoProdutos');
+  if (pag) pag.style.display = 'none';
+
+  if (produtos.length === 0) {
+    wrap.innerHTML = '<div class="loading-state">Nenhum produto encontrado.</div>';
+    return;
+  }
+
+  // Agrupar por liga → time
+  const ligaMap = new Map();
+  for (const p of produtos) {
+    const liga = getLiga(p);
+    const time = extractTime(p.nome);
+    if (!ligaMap.has(liga)) ligaMap.set(liga, new Map());
+    const timeMap = ligaMap.get(liga);
+    if (!timeMap.has(time)) timeMap.set(time, []);
+    timeMap.get(time).push(p);
+  }
+
+  // Ordenar ligas conforme LIGA_ORDER
+  const sortedLigas = [...ligaMap.keys()].sort((a, b) => {
+    const ia = LIGA_ORDER.indexOf(a);
+    const ib = LIGA_ORDER.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+
+  let html = '<div class="ligas-view">';
+
+  for (const liga of sortedLigas) {
+    const timeMap   = ligaMap.get(liga);
+    const totalProds = [...timeMap.values()].reduce((s, arr) => s + arr.length, 0);
+    const flag      = LIGA_FLAGS[liga] || '🏆';
+    const ligaId    = 'liga_' + normalizeText(liga).replace(/[^a-z0-9]/g, '_');
+    const ligaOpen  = openAccordionIds.has(`${ligaId}_body`);
+
+    html += `
+      <div class="liga-section">
+        <div class="liga-header" onclick="toggleAccordion('${ligaId}_body','${ligaId}_arrow')">
+          <div class="liga-header__left">
+            <span class="liga-arrow" id="${ligaId}_arrow">${ligaOpen ? '▼' : '▶'}</span>
+            <span class="liga-flag">${flag}</span>
+            <span class="liga-nome">${liga}</span>
+          </div>
+          <span class="liga-count">${totalProds} produto${totalProds !== 1 ? 's' : ''}</span>
+        </div>
+        <div class="liga-body" id="${ligaId}_body" style="display:${ligaOpen ? 'block' : 'none'}">
+    `;
+
+    const sortedTimes = [...timeMap.keys()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+    for (const time of sortedTimes) {
+      const prods   = timeMap.get(time);
+      const timeId  = ligaId + '_time_' + normalizeText(time).replace(/[^a-z0-9]/g, '_');
+      const timeOpen = openAccordionIds.has(`${timeId}_body`);
+
+      html += `
+          <div class="time-section">
+            <div class="time-header" onclick="toggleAccordion('${timeId}_body','${timeId}_arrow')">
+              <div class="time-header__left">
+                <span class="time-arrow" id="${timeId}_arrow">${timeOpen ? '▼' : '▶'}</span>
+                <span class="time-nome">📂 ${time}</span>
+              </div>
+              <span class="time-count">${prods.length} produto${prods.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div class="time-body" id="${timeId}_body" style="display:${timeOpen ? 'block' : 'none'}">
+              <table class="time-table">
+                <thead>
+                  <tr>
+                    <th>Foto</th>
+                    <th>Nome</th>
+                    <th>Preço</th>
+                    <th>Est.</th>
+                    <th>Destaque</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+      `;
+
+      for (const p of prods) {
+        const img = (p.imagens || [])[0];
+        html += `
+                  <tr>
+                    <td>
+                      <div class="td-img">
+                        ${img
+                          ? `<img src="${img}" alt="${p.nome}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="td-img-placeholder" style="display:none">⚽</div>`
+                          : `<div class="td-img-placeholder">⚽</div>`}
+                      </div>
+                    </td>
+                    <td><span class="td-nome" title="${p.nome}">${p.nome}</span></td>
+                    <td><span class="td-preco">${formatBRL(p.preco)}</span></td>
+                    <td>${p.estoque}</td>
+                    <td>
+                      <span class="td-badge ${p.destaque ? '' : 'td-badge--off'}">
+                        ${p.destaque ? '🔥 Sim' : 'Não'}
+                      </span>
+                    </td>
+                    <td>
+                      <div class="td-actions">
+                        <button class="btn btn--outline btn--sm" onclick="openEditModal(${p.id})">✏️ Editar</button>
+                        <button class="btn btn--danger btn--sm"  onclick="confirmDelete(${p.id})">🗑️</button>
+                      </div>
+                    </td>
+                  </tr>
+        `;
+      }
+
+      html += `
+                </tbody>
+              </table>
+            </div>
+          </div>
+      `;
+    }
+
+    html += `
+        </div>
+      </div>
+    `;
+  }
+
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function checkAdminAuth() {
   const token = localStorage.getItem('fc_token');
@@ -50,7 +341,22 @@ async function loadProdutosAdmin() {
   }
 }
 
+function setViewMode(mode) {
+  viewMode = mode;
+  document.getElementById('btnViewLigas')?.classList.toggle('active', mode === 'ligas');
+  document.getElementById('btnViewLista')?.classList.toggle('active', mode === 'lista');
+  const pag = document.getElementById('paginacaoProdutos');
+  if (pag) pag.style.display = mode === 'lista' ? '' : 'none';
+  renderTabelaProdutos();
+}
+
 function renderTabelaProdutos() {
+  if (viewMode === 'ligas') {
+    renderLigaView(filteredProdutos);
+    return;
+  }
+
+  // ── Vista Lista (tabela paginada) ──
   const start = (currentPage - 1) * ITEMS_PER_PAGE;
   const page  = filteredProdutos.slice(start, start + ITEMS_PER_PAGE);
   const totalPages = Math.ceil(filteredProdutos.length / ITEMS_PER_PAGE);
@@ -282,7 +588,7 @@ async function saveProduto(e) {
       showToast('Produto criado com sucesso! 🎉');
     }
     closeFormModal();
-    loadProdutosAdmin();
+    await loadProdutosAdmin();
   } catch(e) {
     showToast(e.message, 'error');
   }
@@ -300,7 +606,7 @@ async function doDelete() {
     showToast('Produto excluído.', 'success');
     document.getElementById('deleteOverlay').style.display = 'none';
     deleteTargetId = null;
-    loadProdutosAdmin();
+    await loadProdutosAdmin();
   } catch(e) {
     showToast(e.message, 'error');
   }
@@ -422,6 +728,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       currentPage++; renderTabelaProdutos();
     }
   });
+
+  document.getElementById('btnViewLigas')?.addEventListener('click', () => setViewMode('ligas'));
+  document.getElementById('btnViewLista')?.addEventListener('click', () => setViewMode('lista'));
 
   let st;
   document.getElementById('adminBusca')?.addEventListener('input', (e) => {
