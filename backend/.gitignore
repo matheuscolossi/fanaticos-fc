@@ -1,0 +1,4 @@
+node_modules/
+fanaticos.db
+*.db-shm
+*.db-wal

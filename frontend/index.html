@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fanáticos FC — Camisas de Futebol</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/loja.css" />
+</head>
+<body>
+
+  <!-- ══════════ HEADER ══════════ -->
+  <header class="header" id="header">
+    <div class="header__inner">
+      <a href="index.html" class="logo">
+        <span class="logo__icon">⚽</span>
+        <span class="logo__text">FANÁTICOS <em>FC</em></span>
+      </a>
+      <nav class="nav" id="nav">
+        <a href="index.html" class="nav__link active">Loja</a>
+        <a href="#sobre" class="nav__link">Sobre</a>
+      </nav>
+      <div class="header__actions">
+        <button class="btn-icon" id="btnCart" aria-label="Carrinho">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+          <span class="cart-badge" id="cartBadge">0</span>
+        </button>
+        <button class="btn-icon" id="btnUser" aria-label="Conta">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </button>
+        <span id="userNameDisplay" class="user-name-display"></span>
+      </div>
+    </div>
+    <div class="header__categories">
+      <div class="header__cats-inner" id="headerCats">
+        <button class="cat-nav-btn active" data-cat="">Todas</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ══════════ HERO ══════════ -->
+  <section class="hero">
+    <div class="hero__bg">
+      <div class="hero__pattern"></div>
+    </div>
+    <div class="hero__content">
+      <p class="hero__eyebrow">Qualidade Tailandesa 1:1 · Premium</p>
+      <h1 class="hero__title">VISTA A<br/><span class="hero__title--accent">PAIXÃO</span></h1>
+      <p class="hero__sub">Camisas idênticas à original, tecido premium e detalhes perfeitos. Mais de 130 times disponíveis!</p>
+      <a href="#catalogo" class="btn btn--primary hero__cta">Ver Catálogo</a>
+    </div>
+    <div class="hero__badges">
+      <div class="badge">🏆 Qualidade Thai 1:1</div>
+      <div class="badge">🚚 Frete Grátis acima de R$300</div>
+      <div class="badge">📲 WhatsApp: (54) 99113-8217</div>
+    </div>
+  </section>
+
+  <!-- ══════════ DESTAQUES ══════════ -->
+  <section class="destaques" id="destaques">
+    <div class="container">
+      <h2 class="section-title"><span>🔥</span> Em Destaque</h2>
+      <div class="produtos-grid" id="gridDestaques"></div>
+    </div>
+  </section>
+
+  <!-- ══════════ CATÁLOGO ══════════ -->
+  <section class="catalogo" id="catalogo">
+    <div class="container">
+      <h2 class="section-title">Catálogo Completo</h2>
+
+      <!-- Filtros -->
+      <div class="filtros" id="filtros">
+
+        <!-- Linha 1: busca + ordenação -->
+        <div class="filtros__row filtros__row--top">
+          <div class="filtros__busca">
+            <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="text" id="inputBusca" placeholder="Buscar por time, seleção ou camisa..." class="input-busca" />
+          </div>
+          <div class="filtros__ordem">
+            <label class="filtros__label">Ordenar por</label>
+            <select id="selectOrdem" class="select-ordem">
+              <option value="recente">Mais recentes</option>
+              <option value="az">A → Z</option>
+              <option value="za">Z → A</option>
+              <option value="preco_asc">Menor preço</option>
+              <option value="preco_desc">Maior preço</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Linha 2: categorias -->
+        <div class="filtros__cats" id="filtroCats">
+          <button class="cat-btn active" data-cat="">Todas</button>
+        </div>
+
+        <!-- Linha 3: faixa de preço -->
+        <div class="filtros__row filtros__row--preco">
+          <span class="filtros__label">Faixa de preço:</span>
+          <input type="number" id="precoMin" placeholder="R$ Mín" class="input-preco" />
+          <span class="filtros__sep">—</span>
+          <input type="number" id="precoMax" placeholder="R$ Máx" class="input-preco" />
+          <button class="btn btn--outline btn--sm" id="btnFiltrar">Aplicar</button>
+          <button class="btn btn--ghost btn--sm" id="btnLimpar">Limpar tudo</button>
+          <span class="filtros__count" id="filtrosCount"></span>
+        </div>
+
+      </div>
+
+      <div class="produtos-grid" id="gridProdutos">
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Carregando produtos...</p>
+        </div>
+      </div>
+
+      <div id="emptyState" class="empty-state" style="display:none">
+        <p>😔 Nenhum produto encontrado para essa busca.</p>
+        <button class="btn btn--outline" id="btnLimpar2">Limpar filtros</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ SOBRE ══════════ -->
+  <section class="sobre" id="sobre">
+    <div class="container sobre__inner">
+      <div class="sobre__text">
+        <h2>Sobre a <strong>Fanáticos FC</strong></h2>
+        <p>Somos apaixonados por futebol e por conectar torcedores às camisas que representam sua paixão. Trabalhamos com produtos originais, licenciados e edições limitadas dos maiores clubes do Brasil e do mundo.</p>
+        <p>Entregamos em todo o Brasil com agilidade e segurança.</p>
+      </div>
+      <div class="sobre__stats">
+        <div class="stat"><span class="stat__num">500+</span><span class="stat__label">Produtos</span></div>
+        <div class="stat"><span class="stat__num">50k+</span><span class="stat__label">Clientes</span></div>
+        <div class="stat"><span class="stat__num">10+</span><span class="stat__label">Anos no mercado</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ FOOTER ══════════ -->
+  <footer class="footer">
+    <div class="container footer__inner">
+      <div class="logo logo--sm">
+        <span class="logo__icon">⚽</span>
+        <span class="logo__text">FANÁTICOS <em>FC</em></span>
+      </div>
+      <p class="footer__copy">© 2026 Fanáticos FC. Todos os direitos reservados.</p>
+    </div>
+  </footer>
+
+  <!-- ══════════ SIDE CART ══════════ -->
+  <aside class="side-cart" id="sideCart">
+    <div class="side-cart__overlay" id="cartOverlay"></div>
+    <div class="side-cart__panel">
+      <div class="side-cart__header">
+        <h3>Seu Carrinho</h3>
+        <button class="btn-icon" id="btnCloseCart">✕</button>
+      </div>
+      <div class="side-cart__body" id="cartBody">
+        <div class="cart-empty">
+          <span>🛒</span>
+          <p>Seu carrinho está vazio</p>
+        </div>
+      </div>
+      <div class="side-cart__footer" id="cartFooter" style="display:none">
+        <div class="cart-total">
+          <span>Total</span>
+          <strong id="cartTotal">R$ 0,00</strong>
+        </div>
+        <button class="btn btn--whatsapp" id="btnCheckout">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg>
+          Finalizar via WhatsApp
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ══════════ MODAL PRODUTO ══════════ -->
+  <div class="modal-overlay" id="modalOverlay" style="display:none">
+    <div class="modal" id="modalProduto">
+      <button class="modal__close" id="btnCloseModal">✕</button>
+      <div class="modal__content" id="modalContent"></div>
+    </div>
+  </div>
+
+  <!-- ══════════ MODAL AUTH ══════════ -->
+  <div class="modal-overlay" id="authOverlay" style="display:none">
+    <div class="modal modal--auth" id="authModal">
+      <button class="modal__close" id="btnCloseAuth">✕</button>
+      <div id="authContent"></div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/cart.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/loja.js"></script>
+</body>
+</html>
