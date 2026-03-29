@@ -78,8 +78,9 @@ function openAuthModal(defaultTab = 'login') {
       closeAuthModal();
       showToast(`Bem-vindo, ${data.user.nome.split(' ')[0]}! 👋`);
       if (data.user.perfil === 'admin') {
+        const inPages = window.location.pathname.includes('/pages/');
         if (confirm('Você entrou como admin. Ir para o Painel Administrativo?')) {
-          window.location.href = 'pages/admin.html';
+          window.location.href = inPages ? 'admin.html' : 'pages/admin.html';
         }
       }
     } catch (e) {
@@ -122,12 +123,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btnUser')?.addEventListener('click', () => {
     const user = getCurrentUser();
+    const inPages = window.location.pathname.includes('/pages/');
+    const contaUrl = inPages ? 'conta.html' : 'pages/conta.html';
     if (user) {
-      if (confirm(`Logado como ${user.nome}.\nDeseja sair?`)) {
-        clearSession();
-        updateUserUI();
-        showToast('Sessão encerrada.');
-      }
+      window.location.href = contaUrl;
     } else {
       openAuthModal('login');
     }

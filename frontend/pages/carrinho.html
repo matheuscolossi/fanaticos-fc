@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Carrinho — Fanáticos FC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/main.css" />
+  <link rel="stylesheet" href="../css/loja.css" />
+  <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('fc_theme') || 'dark');</script>
+</head>
+<body>
+
+  <header class="header" id="header">
+    <div class="header__inner">
+      <a href="../index.html" class="logo">
+        <span class="logo__text">FANÁTICOS <em>FC</em></span>
+      </a>
+      <nav class="nav">
+        <a href="../index.html" class="nav__link">Loja</a>
+        <a href="carrinho.html" class="nav__link active">Carrinho</a>
+        <a href="conta.html" class="nav__link">Minha Conta</a>
+      </nav>
+      <div class="header__actions">
+        <button class="btn-icon" id="btnCart" aria-label="Carrinho">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+          <span class="cart-badge" id="cartBadge">0</span>
+        </button>
+        <button class="btn-icon" id="btnUser" aria-label="Minha Conta" title="Minha Conta">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </button>
+        <button class="btn-icon btn-theme" title="Tema Claro" aria-label="Alternar tema"></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="cart-page">
+    <div class="container">
+      <div class="cart-page__header">
+        <h1 class="cart-page__title">Meu Carrinho</h1>
+        <a href="../index.html" class="btn btn--ghost btn--sm">← Continuar comprando</a>
+      </div>
+      <div id="cartPageLayout">
+        <!-- Rendered by carrinho.js -->
+      </div>
+    </div>
+  </main>
+
+  <!-- ══════════ CHECKOUT OVERLAY ══════════ -->
+  <div class="modal-overlay modal-overlay--checkout" id="checkoutOverlay" style="display:none">
+    <div class="modal modal--checkout">
+      <div id="checkoutContent"></div>
+    </div>
+  </div>
+
+  <!-- ══════════ PIX OVERLAY ══════════ -->
+  <div id="pixOverlay" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.82);backdrop-filter:blur(4px);overflow-y:auto;padding:1rem;align-items:flex-start;justify-content:center">
+    <div class="modal modal--checkout" style="margin:auto">
+      <div id="pixContent"></div>
+    </div>
+  </div>
+
+  <!-- ══════════ MODAL RASTREAMENTO ══════════ -->
+  <div class="modal-overlay" id="trackingOverlay" style="display:none">
+    <div class="modal modal--tracking" id="trackingModal">
+      <div id="trackingContent"></div>
+    </div>
+  </div>
+
+  <script src="../js/api.js"></script>
+  <script src="../js/cart.js"></script>
+  <script src="../js/carrinho.js"></script>
+</body>
+</html>

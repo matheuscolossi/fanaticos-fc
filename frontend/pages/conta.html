@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Minha Conta — Fanáticos FC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/main.css" />
+  <link rel="stylesheet" href="../css/loja.css" />
+  <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('fc_theme') || 'dark');</script>
+</head>
+<body>
+
+  <header class="header" id="header">
+    <div class="header__inner">
+      <a href="../index.html" class="logo">
+        <span class="logo__text">FANÁTICOS <em>FC</em></span>
+      </a>
+      <nav class="nav">
+        <a href="../index.html" class="nav__link">Loja</a>
+        <a href="carrinho.html" class="nav__link">Carrinho</a>
+        <a href="conta.html" class="nav__link active">Minha Conta</a>
+      </nav>
+      <div class="header__actions">
+        <button class="btn-icon" id="btnCart" aria-label="Carrinho" onclick="window.location.href='carrinho.html'">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+          <span class="cart-badge" id="cartBadge" style="display:none">0</span>
+        </button>
+        <button class="btn-icon btn-theme" title="Tema Claro" aria-label="Alternar tema"></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="conta-page">
+    <div class="container">
+      <div id="contaContent">
+        <div class="loading-state" style="padding:5rem">
+          <div class="spinner"></div>
+          <p>Carregando...</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/api.js"></script>
+  <script src="../js/conta.js"></script>
+</body>
+</html>

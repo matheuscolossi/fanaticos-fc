@@ -204,6 +204,38 @@ app.get('/api/admin/usuarios', adminMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Pedidos do usuário logado (por email ou usuario_id)
+app.get('/api/pedidos/meus', authMiddleware, async (req, res) => {
+  try {
+    const pedidos = await all(
+      `SELECT * FROM pedidos WHERE email_cliente = ? OR usuario_id = ? ORDER BY created_at DESC`,
+      [req.user.email, req.user.id]
+    );
+    res.json(pedidos.map(p => ({ ...p, itens: JSON.parse(p.itens || '[]') })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── PERFIL DO USUÁRIO ─────────────────────────────────────────────────────
+app.put('/api/auth/perfil', authMiddleware, async (req, res) => {
+  try {
+    const { nome, senhaAtual, novaSenha } = req.body;
+    const user = await get('SELECT * FROM usuarios WHERE id = ?', [req.user.id]);
+    if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
+    if (novaSenha) {
+      if (!senhaAtual) return res.status(400).json({ error: 'Informe a senha atual' });
+      if (!bcrypt.compareSync(senhaAtual, user.senha))
+        return res.status(401).json({ error: 'Senha atual incorreta' });
+      const hash = bcrypt.hashSync(novaSenha, 10);
+      await run('UPDATE usuarios SET nome = ?, senha = ? WHERE id = ?', [nome || user.nome, hash, req.user.id]);
+    } else {
+      if (!nome) return res.status(400).json({ error: 'Informe o nome' });
+      await run('UPDATE usuarios SET nome = ? WHERE id = ?', [nome, req.user.id]);
+    }
+    const updated = await get('SELECT id, nome, email, perfil FROM usuarios WHERE id = ?', [req.user.id]);
+    res.json({ message: 'Perfil atualizado', user: updated });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── HEALTH ────────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
