@@ -164,10 +164,16 @@
   <div class="modal-overlay" id="loginRequired" style="display:flex">
     <div class="modal modal--sm">
       <div class="modal__header"><h2>Acesso Restrito</h2></div>
-      <p style="padding:0 1.5rem 1rem;color:var(--text-muted)">Você precisa fazer login como administrador para acessar este painel.</p>
-      <div class="form-actions" style="padding:0 1.5rem 1.5rem">
-        <button class="btn btn--primary" onclick="window.location='../index.html'">Ir para Login</button>
-      </div>
+      <p style="padding:0 1.5rem .5rem;color:var(--text-muted)">Sessão expirada ou você não está logado como administrador.</p>
+      <form id="adminLoginForm" style="padding:0 1.5rem 1.5rem;display:flex;flex-direction:column;gap:.75rem">
+        <input type="email" id="adminLoginEmail" placeholder="admin@fanaticosfc.com"
+          style="background:var(--bg-card2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:.6rem .85rem;font-size:.9rem" />
+        <input type="password" id="adminLoginSenha" placeholder="Senha"
+          style="background:var(--bg-card2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:.6rem .85rem;font-size:.9rem" />
+        <p id="adminLoginError" style="color:var(--danger);font-size:.82rem;display:none"></p>
+        <button type="submit" class="btn btn--primary">Entrar como Admin</button>
+        <button type="button" class="btn btn--outline" onclick="window.location='../index.html'">Voltar à Loja</button>
+      </form>
     </div>
   </div>
 

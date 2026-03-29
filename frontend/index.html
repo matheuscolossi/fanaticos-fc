@@ -13,7 +13,7 @@
 </head>
 <body>
 
-  <!-- ══════════ HEADER ══════════ -->
+
   <header class="header" id="header">
     <div class="header__inner">
       <a href="index.html" class="logo">
@@ -27,6 +27,9 @@
         <button class="btn-icon" id="btnCart" aria-label="Carrinho">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
           <span class="cart-badge" id="cartBadge">0</span>
+        </button>
+        <button class="btn-icon" id="btnRastrear" aria-label="Rastrear Pedido" title="Rastrear Pedido">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
         </button>
         <button class="btn-icon" id="btnUser" aria-label="Conta">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -42,14 +45,13 @@
     </div>
   </header>
 
-  <!-- ══════════ HERO ══════════ -->
   <section class="hero">
     <div class="hero__bg">
       <div class="hero__pattern"></div>
     </div>
     <div class="hero__content">
       <p class="hero__eyebrow">Qualidade Tailandesa 1:1 · Premium</p>
-      <h1 class="hero__title">VISTA A<br/><span class="hero__title--accent">PAIXÃO</span></h1>
+      <h1 class="hero__title">Vista<br/><span class="hero__title--accent">PAIXÃO</span></h1>
       <p class="hero__sub">Camisas idênticas à original, tecido premium e detalhes perfeitos. Mais de 130 times disponíveis!</p>
       <a href="#catalogo" class="btn btn--primary hero__cta">Ver Catálogo</a>
     </div>
@@ -128,12 +130,12 @@
 
   <!-- ══════════ SOBRE ══════════ -->
   <section class="sobre" id="sobre">
+  </div>
     <div class="container sobre__inner">
       <div class="sobre__text">
         <h2>Sobre a <strong>Fanáticos FC</strong></h2>
         <p>Somos apaixonados por futebol e por conectar torcedores às camisas que representam sua paixão. Trabalhamos com produtos originais, licenciados e edições limitadas dos maiores clubes do Brasil e do mundo.</p>
         <p>Entregamos em todo o Brasil com agilidade e segurança.</p>
-      </div>
       <div class="sobre__stats">
         <div class="stat"><span class="stat__num">500+</span><span class="stat__label">Produtos</span></div>
         <div class="stat"><span class="stat__num">50k+</span><span class="stat__label">Clientes</span></div>
@@ -189,10 +191,32 @@
   </div>
 
   <!-- ══════════ MODAL AUTH ══════════ -->
+  <!-- ══════════ MODAL AUTH ══════════ -->
   <div class="modal-overlay" id="authOverlay" style="display:none">
     <div class="modal modal--auth" id="authModal">
       <button class="modal__close" id="btnCloseAuth">✕</button>
       <div id="authContent"></div>
+    </div>
+  </div>
+
+  <!-- ══════════ MODAL CHECKOUT (formulário) ══════════ -->
+  <div class="modal-overlay modal-overlay--checkout" id="checkoutOverlay" style="display:none">
+    <div class="modal modal--checkout">
+      <div id="checkoutContent"></div>
+    </div>
+  </div>
+
+  <!-- ══════════ TELA PIX (separada, z-index alto) ══════════ -->
+  <div id="pixOverlay" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.82);backdrop-filter:blur(4px);overflow-y:auto;padding:1rem;align-items:flex-start;justify-content:center">
+    <div class="modal modal--checkout" style="margin:auto">
+      <div id="pixContent"></div>
+    </div>
+  </div>
+
+  <!-- ══════════ MODAL RASTREAMENTO ══════════ -->
+  <div class="modal-overlay" id="trackingOverlay" style="display:none">
+    <div class="modal modal--tracking" id="trackingModal">
+      <div id="trackingContent"></div>
     </div>
   </div>
 

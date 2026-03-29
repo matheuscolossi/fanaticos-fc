@@ -51,7 +51,7 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Credenciais inválidas' });
     const token = jwt.sign(
       { id: user.id, nome: user.nome, email: user.email, perfil: user.perfil },
-      JWT_SECRET, { expiresIn: '24h' }
+      JWT_SECRET, { expiresIn: '7d' }
     );
     res.json({ token, user: { id: user.id, nome: user.nome, email: user.email, perfil: user.perfil } });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -149,11 +149,15 @@ app.delete('/api/produtos/:id', adminMiddleware, async (req, res) => {
 // ── PEDIDOS ───────────────────────────────────────────────────────────────
 app.post('/api/pedidos', async (req, res) => {
   try {
-    const { itens, total, usuario_id } = req.body;
+    const { itens, total, usuario_id, nome_cliente, email_cliente, telefone_cliente, endereco, metodo_pagamento } = req.body;
     if (!itens || !total) return res.status(400).json({ error: 'Dados do pedido inválidos' });
+    const status = metodo_pagamento === 'pix' ? 'aguardando_pagamento' : 'pendente';
     const result = await run(
-      'INSERT INTO pedidos (usuario_id, itens, total) VALUES (?, ?, ?)',
-      [usuario_id || null, JSON.stringify(itens), total]
+      `INSERT INTO pedidos (usuario_id, itens, total, nome_cliente, email_cliente, telefone_cliente, endereco, metodo_pagamento, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [usuario_id || null, JSON.stringify(itens), total,
+       nome_cliente || null, email_cliente || null, telefone_cliente || null,
+       endereco || null, metodo_pagamento || 'whatsapp', status]
     );
     res.status(201).json({ message: 'Pedido registrado', id: result.lastID });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -163,6 +167,32 @@ app.get('/api/pedidos', adminMiddleware, async (req, res) => {
   try {
     const pedidos = await all('SELECT * FROM pedidos ORDER BY created_at DESC');
     res.json(pedidos.map(p => ({ ...p, itens: JSON.parse(p.itens) })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Rastreamento público por ID (dados limitados)
+app.get('/api/pedidos/:id/rastreio', async (req, res) => {
+  try {
+    const p = await get(
+      'SELECT id, status, codigo_rastreio, metodo_pagamento, total, nome_cliente, created_at FROM pedidos WHERE id = ?',
+      [req.params.id]
+    );
+    if (!p) return res.status(404).json({ error: 'Pedido não encontrado' });
+    res.json(p);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Atualizar pedido (admin): status e código de rastreio
+app.put('/api/pedidos/:id', adminMiddleware, async (req, res) => {
+  try {
+    const { status, codigo_rastreio } = req.body;
+    const existing = await get('SELECT id FROM pedidos WHERE id = ?', [req.params.id]);
+    if (!existing) return res.status(404).json({ error: 'Pedido não encontrado' });
+    await run(
+      'UPDATE pedidos SET status = COALESCE(?, status), codigo_rastreio = COALESCE(?, codigo_rastreio) WHERE id = ?',
+      [status || null, codigo_rastreio !== undefined ? codigo_rastreio : null, req.params.id]
+    );
+    res.json({ message: 'Pedido atualizado' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

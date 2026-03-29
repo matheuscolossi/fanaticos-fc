@@ -6,6 +6,16 @@ async function apiFetch(path, options = {}) {
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (!res.ok) {
+    if (res.status === 401) {
+      localStorage.removeItem('fc_token');
+      localStorage.removeItem('fc_user');
+      // Na página admin: mostra o painel de login restrito
+      const loginRequired = document.getElementById('loginRequired');
+      if (loginRequired) {
+        loginRequired.style.display = 'flex';
+        throw new Error('Sessão expirada. Faça login novamente.');
+      }
+    }
     const err = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
     throw new Error(err.error || `HTTP ${res.status}`);
   }

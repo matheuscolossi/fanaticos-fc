@@ -611,6 +611,16 @@ async function doDelete() {
   }
 }
 
+const STATUS_PEDIDO = {
+  'pendente':             { label: 'Pendente',              color: '#888' },
+  'aguardando_pagamento': { label: 'Aguard. Pagamento',     color: '#ffd740' },
+  'pago':                 { label: 'Pago',                  color: '#4caf50' },
+  'em_separacao':         { label: 'Em Separação',          color: '#2196f3' },
+  'enviado':              { label: 'Enviado',               color: '#ff9800' },
+  'entregue':             { label: 'Entregue',              color: '#4caf50' },
+  'cancelado':            { label: 'Cancelado',             color: '#ff4444' },
+};
+
 async function loadPedidos() {
   const wrap = document.getElementById('tabelaPedidosWrap');
   try {
@@ -619,6 +629,7 @@ async function loadPedidos() {
       wrap.innerHTML = '<div class="loading-state">Nenhum pedido registrado ainda.</div>'; return;
     }
     const totalGeral = pedidos.reduce((s, p) => s + p.total, 0);
+    const pendentes = pedidos.filter(p => p.status === 'aguardando_pagamento' || p.status === 'pendente').length;
     wrap.innerHTML = `
       <div class="admin-stats">
         <div class="admin-stat">
@@ -629,26 +640,93 @@ async function loadPedidos() {
           <div class="admin-stat__label">Receita Total</div>
           <div class="admin-stat__val admin-stat__val--green">${formatBRL(totalGeral)}</div>
         </div>
+        <div class="admin-stat">
+          <div class="admin-stat__label">Aguardando</div>
+          <div class="admin-stat__val" style="color:#ffd740">${pendentes}</div>
+        </div>
       </div>
-      <table>
-        <thead><tr><th>#</th><th>Itens</th><th>Total</th><th>Status</th><th>Data</th></tr></thead>
+      <table class="pedidos-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Cliente</th>
+            <th>Itens</th>
+            <th>Total</th>
+            <th>Pagamento</th>
+            <th>Status</th>
+            <th>Rastreio</th>
+            <th>Data</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
         <tbody>
-          ${pedidos.map(p => `
-            <tr>
-              <td>#${p.id}</td>
-              <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+          ${pedidos.map(p => {
+            const st = STATUS_PEDIDO[p.status] || { label: p.status, color: '#888' };
+            const metodoIcon = p.metodo_pagamento === 'pix' ? '🏦 PIX' : '💬 WhatsApp';
+            return `
+            <tr id="pedido-row-${p.id}">
+              <td><strong>#${p.id}</strong></td>
+              <td>
+                ${p.nome_cliente ? `<div style="font-weight:600">${p.nome_cliente}</div>` : '<span style="color:var(--text-muted)">—</span>'}
+                ${p.telefone_cliente ? `<div style="font-size:.78rem;color:var(--text-muted)">${p.telefone_cliente}</div>` : ''}
+                ${p.email_cliente ? `<div style="font-size:.78rem;color:var(--text-muted)">${p.email_cliente}</div>` : ''}
+                ${p.endereco ? `<div style="font-size:.75rem;color:var(--text-dim);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${p.endereco}">${p.endereco}</div>` : ''}
+              </td>
+              <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                 ${p.itens.map(i => `${i.nome} (x${i.qty})`).join(', ')}
               </td>
               <td><span class="td-preco">${formatBRL(p.total)}</span></td>
-              <td><span class="td-badge">${p.status}</span></td>
-              <td style="color:var(--text-muted);font-size:.82rem">${new Date(p.created_at).toLocaleString('pt-BR')}</td>
+              <td><span style="font-size:.82rem">${metodoIcon}</span></td>
+              <td>
+                <select class="pedido-status-select" data-id="${p.id}" onchange="salvarStatusPedido(${p.id})">
+                  ${Object.entries(STATUS_PEDIDO).map(([val, info]) =>
+                    `<option value="${val}" ${p.status === val ? 'selected' : ''}>${info.label}</option>`
+                  ).join('')}
+                </select>
+              </td>
+              <td>
+                <div style="display:flex;gap:4px;align-items:center">
+                  <input type="text" class="pedido-rastreio-input" data-id="${p.id}"
+                    value="${p.codigo_rastreio || ''}" placeholder="Cód. rastreio"
+                    style="width:120px;font-size:.8rem;padding:4px 8px;background:var(--bg-card2);border:1px solid var(--border);color:var(--text);border-radius:6px" />
+                  <button class="btn btn--outline btn--sm" onclick="salvarRastreioPedido(${p.id})" title="Salvar rastreio">💾</button>
+                </div>
+              </td>
+              <td style="color:var(--text-muted);font-size:.82rem;white-space:nowrap">${new Date(p.created_at).toLocaleString('pt-BR')}</td>
+              <td>
+                ${p.telefone_cliente ? `
+                <a href="https://wa.me/55${p.telefone_cliente.replace(/\D/g,'')}" target="_blank"
+                   class="btn btn--whatsapp btn--sm" title="Contatar cliente">💬</a>` : ''}
+              </td>
             </tr>
-          `).join('')}
+          `}).join('')}
         </tbody>
       </table>
     `;
   } catch(e) {
     wrap.innerHTML = '<div class="loading-state" style="color:var(--danger)">Erro ao carregar pedidos.</div>';
+  }
+}
+
+async function salvarStatusPedido(id) {
+  const select = document.querySelector(`.pedido-status-select[data-id="${id}"]`);
+  if (!select) return;
+  try {
+    await api.put(`/pedidos/${id}`, { status: select.value });
+    showToast(`Status do pedido #${id} atualizado!`);
+  } catch(e) {
+    showToast('Erro ao atualizar status');
+  }
+}
+
+async function salvarRastreioPedido(id) {
+  const input = document.querySelector(`.pedido-rastreio-input[data-id="${id}"]`);
+  if (!input) return;
+  try {
+    await api.put(`/pedidos/${id}`, { codigo_rastreio: input.value.trim() });
+    showToast(`Rastreio do pedido #${id} salvo!`);
+  } catch(e) {
+    showToast('Erro ao salvar rastreio');
   }
 }
 
@@ -696,6 +774,27 @@ function filterAdminProdutos(term) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Login inline quando sessão expirar
+  document.getElementById('adminLoginForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('adminLoginEmail').value.trim();
+    const senha = document.getElementById('adminLoginSenha').value;
+    const errEl = document.getElementById('adminLoginError');
+    try {
+      const data = await api.post('/auth/login', { email, senha });
+      if (data.user.perfil !== 'admin') throw new Error('Usuário não é administrador');
+      localStorage.setItem('fc_token', data.token);
+      localStorage.setItem('fc_user', JSON.stringify(data.user));
+      document.getElementById('loginRequired').style.display = 'none';
+      document.getElementById('adminUserName').textContent = `👤 ${data.user.nome}`;
+      await loadCategoriasAdmin();
+      await loadProdutosAdmin();
+    } catch(err) {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    }
+  });
+
   if (!checkAdminAuth()) return;
 
   await loadCategoriasAdmin();

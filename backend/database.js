@@ -65,8 +65,27 @@ async function init() {
     itens TEXT NOT NULL,
     total REAL NOT NULL,
     status TEXT DEFAULT 'pendente',
+    nome_cliente TEXT,
+    email_cliente TEXT,
+    telefone_cliente TEXT,
+    endereco TEXT,
+    metodo_pagamento TEXT DEFAULT 'whatsapp',
+    codigo_rastreio TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  // Migrations para banco existente (colunas novas)
+  const pedidoMigrations = [
+    `ALTER TABLE pedidos ADD COLUMN nome_cliente TEXT`,
+    `ALTER TABLE pedidos ADD COLUMN email_cliente TEXT`,
+    `ALTER TABLE pedidos ADD COLUMN telefone_cliente TEXT`,
+    `ALTER TABLE pedidos ADD COLUMN endereco TEXT`,
+    `ALTER TABLE pedidos ADD COLUMN metodo_pagamento TEXT DEFAULT 'whatsapp'`,
+    `ALTER TABLE pedidos ADD COLUMN codigo_rastreio TEXT`,
+  ];
+  for (const sql of pedidoMigrations) {
+    try { await run(sql); } catch(e) { /* coluna já existe */ }
+  }
 
   const cats = await get('SELECT COUNT(*) as c FROM categorias');
   if (cats.c === 0) {
