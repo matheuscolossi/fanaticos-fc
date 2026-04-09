@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brasileirão Série A — Fanáticos FC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/global.css" />
+  <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('fc_theme') || 'dark');</script>
+  <style>
+    .brasileirao-hero {
+      background:
+        radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0, 160, 60, 0.15) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 40% at 80% 90%, rgba(0, 200, 80, 0.08) 0%, transparent 60%),
+        var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 3.5rem 1.5rem 2.5rem;
+      text-align: center;
+    }
+    .brasileirao-hero__eyebrow {
+      font-family: var(--font-title);
+      font-size: .85rem;
+      font-weight: 600;
+      letter-spacing: .25em;
+      text-transform: uppercase;
+      color: #00c84a;
+      margin-bottom: .75rem;
+    }
+    .brasileirao-hero__title {
+      font-family: var(--font-display);
+      font-size: clamp(3.5rem, 10vw, 6.5rem);
+      line-height: .9;
+      color: var(--white);
+      margin-bottom: 1rem;
+    }
+    .brasileirao-hero__title span {
+      color: #00c84a;
+      text-shadow: 0 0 40px rgba(0,200,74,0.5);
+    }
+    .brasileirao-hero__sub {
+      font-size: 1rem;
+      color: var(--text-muted);
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    .times-section {
+      padding: 4rem 0 6rem;
+    }
+    .times-section .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+    .times-section__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .times-section__title {
+      font-family: var(--font-title);
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--white);
+    }
+    .times-section__count {
+      font-size: .82rem;
+      color: var(--text-dim);
+      font-weight: 500;
+    }
+
+    .times-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 1rem;
+    }
+
+    .time-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem 1rem 1.25rem;
+      cursor: pointer;
+      transition: var(--transition);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .75rem;
+      text-decoration: none;
+      position: relative;
+      overflow: hidden;
+    }
+    .time-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--team-color, var(--green));
+      opacity: 0;
+      transition: opacity var(--transition);
+    }
+    .time-card:hover {
+      border-color: var(--team-color, var(--green));
+      transform: translateY(-4px);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.5), 0 0 0 1px var(--team-color, var(--green));
+    }
+    .time-card:hover::before {
+      opacity: 1;
+    }
+
+    .time-card__escudo {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: var(--bg-card2);
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.2rem;
+      transition: var(--transition);
+      flex-shrink: 0;
+    }
+    .time-card:hover .time-card__escudo {
+      border-color: var(--team-color, var(--green));
+      box-shadow: 0 0 20px color-mix(in srgb, var(--team-color, var(--green)) 40%, transparent);
+    }
+
+    .time-card__nome {
+      font-family: var(--font-title);
+      font-size: .9rem;
+      font-weight: 700;
+      color: var(--white);
+      text-align: center;
+      line-height: 1.2;
+    }
+    .time-card__sigla {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      color: var(--team-color, var(--green));
+      letter-spacing: .12em;
+    }
+    .time-card__cta {
+      font-size: .72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: var(--text-dim);
+      transition: var(--transition);
+    }
+    .time-card:hover .time-card__cta {
+      color: var(--team-color, var(--green));
+    }
+    .time-card__arrow {
+      font-size: .8rem;
+      opacity: 0;
+      transform: translateX(-4px);
+      transition: var(--transition);
+    }
+    .time-card:hover .time-card__arrow {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    .time-card__cta-row {
+      display: flex;
+      align-items: center;
+      gap: .3rem;
+    }
+
+    @media (max-width: 768px) {
+      .times-grid {
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+        gap: .75rem;
+      }
+      .time-card {
+        padding: 1.25rem .75rem 1rem;
+      }
+    }
+    @media (max-width: 480px) {
+      .times-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: .6rem;
+      }
+      .time-card__escudo {
+        width: 56px;
+        height: 56px;
+        font-size: 1.8rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header" id="header">
+    <div class="header__inner">
+      <a href="../index.html" class="logo">
+        <span class="logo__text">FANÁTICOS <em>FC</em></span>
+      </a>
+      <nav class="nav" id="nav">
+        <a href="../index.html" class="nav__link">Loja</a>
+        <a href="brasileirao.html" class="nav__link active">Brasileirão</a>
+        <a href="carrinho.html" class="nav__link">Carrinho</a>
+        <a href="conta.html" class="nav__link">Minha Conta</a>
+      </nav>
+      <div class="header__actions">
+        <button class="btn-icon btn-theme" title="Tema Claro" aria-label="Alternar tema"></button>
+      </div>
+    </div>
+  </header>
+
+  <section class="brasileirao-hero">
+    <p class="brasileirao-hero__eyebrow">⚽ Temporada 2025</p>
+    <h1 class="brasileirao-hero__title">BRASILEIRÃO<br/><span>SÉRIE A</span></h1>
+    <p class="brasileirao-hero__sub">Escolha seu time e veja todas as camisas disponíveis. Clique para abrir a loja do clube em uma nova aba.</p>
+  </section>
+
+  <section class="times-section">
+    <div class="container">
+      <div class="times-section__header">
+        <h2 class="times-section__title">Times da Série A 2025</h2>
+        <span class="times-section__count">20 clubes</span>
+      </div>
+      <div class="times-grid" id="timesGrid"></div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container footer__inner">
+      <div class="logo logo--sm">
+        <span class="logo__icon">⚽</span>
+        <span class="logo__text">FANÁTICOS <em>FC</em></span>
+      </div>
+      <p class="footer__copy">© 2026 Fanáticos FC. Todos os direitos reservados.</p>
+    </div>
+  </footer>
+
+  <script>
+    const TIMES_SERIE_A = [
+      { nome: 'Flamengo',           sigla: 'FLA', emoji: '🔴⚫', cor: '#e63329' },
+      { nome: 'Palmeiras',          sigla: 'PAL', emoji: '💚',   cor: '#006b3f' },
+      { nome: 'Atlético Mineiro',   sigla: 'CAM', emoji: '🐓',   cor: '#000000' },
+      { nome: 'Botafogo',           sigla: 'BOT', emoji: '⭐',   cor: '#1a1a1a' },
+      { nome: 'Fluminense',         sigla: 'FLU', emoji: '🔴💚', cor: '#8b0020' },
+      { nome: 'Internacional',      sigla: 'INT', emoji: '❤️',   cor: '#cc0000' },
+      { nome: 'Grêmio',             sigla: 'GRE', emoji: '🔵⚫', cor: '#1a5eb8' },
+      { nome: 'São Paulo',          sigla: 'SPF', emoji: '🔴⚫🔵', cor: '#c8102e' },
+      { nome: 'Corinthians',        sigla: 'COR', emoji: '⚫⚪', cor: '#333333' },
+      { nome: 'Cruzeiro',           sigla: 'CRU', emoji: '🦊',   cor: '#1a3a8f' },
+      { nome: 'Athletico PR',       sigla: 'CAP', emoji: '🔴⚫', cor: '#cc0000' },
+      { nome: 'Bahia',              sigla: 'BAH', emoji: '🔵🔴', cor: '#0033a0' },
+      { nome: 'Fortaleza',          sigla: 'FOR', emoji: '🦁',   cor: '#c8102e' },
+      { nome: 'Vasco da Gama',      sigla: 'VAS', emoji: '✝️',   cor: '#000000' },
+      { nome: 'Bragantino',         sigla: 'RBB', emoji: '🐂',   cor: '#cc0000' },
+      { nome: 'Juventude',          sigla: 'JUV', emoji: '💚⚪', cor: '#006837' },
+      { nome: 'Vitória',            sigla: 'VIT', emoji: '🦅',   cor: '#cc0000' },
+      { nome: 'Mirassol',           sigla: 'MIR', emoji: '🔴⚫', cor: '#d00000' },
+      { nome: 'Santos',             sigla: 'SAN', emoji: '⚫⚪', cor: '#1a1a1a' },
+      { nome: 'Sport',              sigla: 'SPT', emoji: '🔴⚫', cor: '#c8102e' },
+    ];
+
+    function buildTimesGrid() {
+      const grid = document.getElementById('timesGrid');
+      if (!grid) return;
+
+      TIMES_SERIE_A.forEach(time => {
+        const card = document.createElement('div');
+        card.className = 'time-card';
+        card.style.setProperty('--team-color', time.cor);
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
+        card.setAttribute('aria-label', `Ver camisas do ${time.nome}`);
+        card.innerHTML = `
+          <div class="time-card__escudo">${time.emoji}</div>
+          <div class="time-card__sigla">${time.sigla}</div>
+          <div class="time-card__nome">${time.nome}</div>
+          <div class="time-card__cta-row">
+            <span class="time-card__cta">Ver Camisas</span>
+            <span class="time-card__arrow">→</span>
+          </div>
+        `;
+
+        function openTimeTab() {
+          const url = `../index.html?time=${encodeURIComponent(time.nome)}`;
+          window.open(url, '_blank');
+        }
+
+        card.addEventListener('click', openTimeTab);
+        card.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openTimeTab();
+          }
+        });
+
+        grid.appendChild(card);
+      });
+    }
+
+    // Tema
+    (function() {
+      const btn = document.querySelector('.btn-theme');
+      if (!btn) return;
+      function applyTheme(t) {
+        document.documentElement.setAttribute('data-theme', t);
+        localStorage.setItem('fc_theme', t);
+        btn.title = t === 'dark' ? 'Tema Claro' : 'Tema Escuro';
+        btn.innerHTML = t === 'dark'
+          ? `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
+          : `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+      }
+      const t = localStorage.getItem('fc_theme') || 'dark';
+      applyTheme(t);
+      btn.addEventListener('click', () => applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
+    })();
+
+    document.addEventListener('DOMContentLoaded', buildTimesGrid);
+  </script>
+</body>
+</html>

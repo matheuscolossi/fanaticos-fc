@@ -117,7 +117,6 @@ async function loadCategorias() {
     categorias = await api.get('/categorias');
     const cont = document.getElementById('filtroCats');
     if (!cont) return;
-    const headerCont = document.getElementById('headerCats');
     categorias.forEach(c => {
       const btn = document.createElement('button');
       btn.className = 'cat-btn';
@@ -125,18 +124,6 @@ async function loadCategorias() {
       btn.textContent = c.nome;
       btn.addEventListener('click', () => filterByCategory(c.id));
       cont.appendChild(btn);
-
-      if (headerCont) {
-        const navBtn = document.createElement('button');
-        navBtn.className = 'cat-nav-btn';
-        navBtn.dataset.cat = c.id;
-        navBtn.textContent = c.nome;
-        navBtn.addEventListener('click', () => {
-          filterByCategory(c.id);
-          document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' });
-        });
-        headerCont.appendChild(navBtn);
-      }
     });
 
     const sel = document.getElementById('pCategoria');
@@ -349,4 +336,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     e.preventDefault();
     document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' });
   });
+
+  // Auto-filtro por time via parâmetro de URL (?time=Flamengo)
+  const urlParams = new URLSearchParams(window.location.search);
+  const timeParam = urlParams.get('time');
+  if (timeParam) {
+    const inputBusca = document.getElementById('inputBusca');
+    if (inputBusca) {
+      inputBusca.value = timeParam;
+      applyFilters();
+      setTimeout(() => {
+        document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' });
+      }, 300);
+    }
+  }
 });

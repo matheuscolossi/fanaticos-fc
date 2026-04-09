@@ -7,8 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/main.css" />
-  <link rel="stylesheet" href="css/loja.css" />
+  <link rel="stylesheet" href="assets/css/global.css" />
+  <link rel="stylesheet" href="assets/css/loja.css" />
   <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('fc_theme') || 'dark');</script>
 </head>
 <body>
@@ -41,8 +41,81 @@
       </div>
     </div>
     <div class="header__categories">
-      <div class="header__cats-inner" id="headerCats">
-        <button class="cat-nav-btn active" data-cat="">Todas</button>
+      <div class="header__cats-inner">
+
+        <!-- Brasileirão -->
+        <div class="nav__item">
+          <button class="cat-nav-btn nav__link--drop">
+            Brasileirão
+            <svg class="nav__chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="nav__dropdown nav__dropdown--brasileirao">
+            <div class="nav__dropdown-inner">
+              <a class="nav__drop-item" onclick="openTime('América Mineiro')">América Mineiro</a>
+              <a class="nav__drop-item" onclick="openTime('Athletico Paranaense')">Athletico Paranaense</a>
+              <a class="nav__drop-item" onclick="openTime('Atlético Goianiense')">Atlético Goianiense</a>
+              <a class="nav__drop-item" onclick="openTime('Atlético Mineiro')">Atlético Mineiro</a>
+              <a class="nav__drop-item" onclick="openTime('Avaí')">Avaí</a>
+              <a class="nav__drop-item" onclick="openTime('Bahia')">Bahia</a>
+              <a class="nav__drop-item" onclick="openTime('Botafogo')">Botafogo</a>
+              <a class="nav__drop-item" onclick="openTime('Bragantino')">Bragantino</a>
+              <a class="nav__drop-item" onclick="openTime('Ceará')">Ceará</a>
+              <a class="nav__drop-item" onclick="openTime('Chapecoense')">Chapecoense</a>
+              <a class="nav__drop-item" onclick="openTime('Corinthians')">Corinthians</a>
+              <a class="nav__drop-item" onclick="openTime('Coritiba')">Coritiba</a>
+              <a class="nav__drop-item" onclick="openTime('Cruzeiro')">Cruzeiro</a>
+              <a class="nav__drop-item" onclick="openTime('Cuiabá')">Cuiabá</a>
+              <a class="nav__drop-item" onclick="openTime('Figueirense')">Figueirense</a>
+              <a class="nav__drop-item" onclick="openTime('Flamengo')">Flamengo</a>
+              <a class="nav__drop-item" onclick="openTime('Fluminense')">Fluminense</a>
+              <a class="nav__drop-item" onclick="openTime('Fortaleza')">Fortaleza</a>
+              <a class="nav__drop-item" onclick="openTime('Grêmio')">Grêmio</a>
+              <a class="nav__drop-item" onclick="openTime('Internacional')">Internacional</a>
+              <a class="nav__drop-item" onclick="openTime('Juventude')">Juventude</a>
+              <a class="nav__drop-item" onclick="openTime('Mirassol')">Mirassol</a>
+              <a class="nav__drop-item" onclick="openTime('Palmeiras')">Palmeiras</a>
+              <a class="nav__drop-item" onclick="openTime('Santos')">Santos</a>
+              <a class="nav__drop-item" onclick="openTime('São Paulo')">São Paulo</a>
+              <a class="nav__drop-item" onclick="openTime('Sport')">Sport</a>
+              <a class="nav__drop-item" onclick="openTime('Vasco da Gama')">Vasco da Gama</a>
+              <a class="nav__drop-item" onclick="openTime('Vitória')">Vitória</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Times Internacionais -->
+        <div class="nav__item">
+          <button class="cat-nav-btn nav__link--drop">
+            Times Internacionais
+            <svg class="nav__chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="nav__dropdown">
+            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('Bundesliga')">Bundesliga <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('La Liga')">La Liga <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('Ligue 1')">Ligue 1 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('Premier League')">Premier League <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('Serie A')">Serie A <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+          </div>
+        </div>
+
+        <!-- Seleções -->
+        <div class="nav__item">
+          <button class="cat-nav-btn nav__link--drop">
+            Seleções
+            <svg class="nav__chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="nav__dropdown">
+            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('África')">África <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('América do Sul')">América do Sul <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('América do Norte')">América do Norte <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('Ásia')">Ásia <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('Europa')">Europa <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+          </div>
+        </div>
+
+        <!-- Retrô -->
+        <button class="cat-nav-btn" onclick="openTime('Retrô')">Retrô</button>
+
       </div>
     </div>
   </header>
@@ -64,7 +137,7 @@
     </div>
   </section>
 
-  <!-- ══════════ DESTAQUES ══════════ -->
+
   <section class="destaques" id="destaques">
     <div class="container">
       <h2 class="section-title"><span>🔥</span> Em Destaque</h2>
@@ -72,7 +145,7 @@
     </div>
   </section>
 
-  <!-- ══════════ CATÁLOGO ══════════ -->
+ 
   <section class="catalogo" id="catalogo">
     <div class="container">
       <h2 class="section-title">Catálogo Completo</h2>
@@ -130,7 +203,7 @@
     </div>
   </section>
 
-  <!-- ══════════ SOBRE ══════════ -->
+
   <section class="sobre" id="sobre">
   </div>
     <div class="container sobre__inner">
@@ -146,7 +219,7 @@
     </div>
   </section>
 
-  <!-- ══════════ FOOTER ══════════ -->
+
   <footer class="footer">
     <div class="container footer__inner">
       <div class="logo logo--sm">
@@ -157,7 +230,7 @@
     </div>
   </footer>
 
-  <!-- ══════════ SIDE CART ══════════ -->
+ 
   <aside class="side-cart" id="sideCart">
     <div class="side-cart__overlay" id="cartOverlay"></div>
     <div class="side-cart__panel">
@@ -184,7 +257,7 @@
     </div>
   </aside>
 
-  <!-- ══════════ MODAL PRODUTO ══════════ -->
+ 
   <div class="modal-overlay" id="modalOverlay" style="display:none">
     <div class="modal" id="modalProduto">
       <button class="modal__close" id="btnCloseModal">✕</button>
@@ -192,8 +265,7 @@
     </div>
   </div>
 
-  <!-- ══════════ MODAL AUTH ══════════ -->
-  <!-- ══════════ MODAL AUTH ══════════ -->
+ 
   <div class="modal-overlay" id="authOverlay" style="display:none">
     <div class="modal modal--auth" id="authModal">
       <button class="modal__close" id="btnCloseAuth">✕</button>
@@ -201,30 +273,35 @@
     </div>
   </div>
 
-  <!-- ══════════ MODAL CHECKOUT (formulário) ══════════ -->
+ 
   <div class="modal-overlay modal-overlay--checkout" id="checkoutOverlay" style="display:none">
     <div class="modal modal--checkout">
       <div id="checkoutContent"></div>
     </div>
   </div>
 
-  <!-- ══════════ TELA PIX (separada, z-index alto) ══════════ -->
+ 
   <div id="pixOverlay" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.82);backdrop-filter:blur(4px);overflow-y:auto;padding:1rem;align-items:flex-start;justify-content:center">
     <div class="modal modal--checkout" style="margin:auto">
       <div id="pixContent"></div>
     </div>
   </div>
 
-  <!-- ══════════ MODAL RASTREAMENTO ══════════ -->
+ 
   <div class="modal-overlay" id="trackingOverlay" style="display:none">
     <div class="modal modal--tracking" id="trackingModal">
       <div id="trackingContent"></div>
     </div>
   </div>
 
-  <script src="js/api.js"></script>
-  <script src="js/cart.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/loja.js"></script>
+  <script src="assets/js/api.js?v=5"></script>
+  <script src="assets/js/cart.js?v=5"></script>
+  <script src="assets/js/auth.js?v=5"></script>
+  <script src="assets/js/loja.js?v=5"></script>
+  <script>
+    function openTime(nome) {
+      window.open('index.html?time=' + encodeURIComponent(nome), '_blank');
+    }
+  </script>
 </body>
 </html>

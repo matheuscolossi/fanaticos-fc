@@ -195,72 +195,87 @@ function renderCheckoutStep1() {
     </div>
   `;
 
-  document.getElementById('btnFecharCheckout').addEventListener('click', closeCheckoutModal);
-  document.getElementById('btnConfirmarPedido').addEventListener('click', confirmarPedido);
+  const btnFechar = document.getElementById('btnFecharCheckout');
+  const btnConfirmar = document.getElementById('btnConfirmarPedido');
+  // cloneNode remove quaisquer listeners antigos antes de adicionar novo
+  const btnConfirmarClean = btnConfirmar.cloneNode(true);
+  btnConfirmar.parentNode.replaceChild(btnConfirmarClean, btnConfirmar);
+  btnFechar.addEventListener('click', closeCheckoutModal);
+  btnConfirmarClean.addEventListener('click', confirmarPedido);
 }
 
 async function confirmarPedido() {
-  const nome     = document.getElementById('co_nome').value.trim();
-  const telefone = document.getElementById('co_telefone').value.trim();
-  const email    = document.getElementById('co_email').value.trim();
-  const endRua   = document.getElementById('co_endereco').value.trim();
-  const cidade   = document.getElementById('co_cidade').value.trim();
-  const cep      = document.getElementById('co_cep').value.trim();
-
-  if (!nome || !telefone || !email || !endRua || !cidade || !cep) {
-    showToast('Preencha todos os campos obrigatórios.', 'error');
-    return;
-  }
-
-  const metodoEl = document.querySelector('input[name="co_pagamento"]:checked');
-  const metodo   = metodoEl ? metodoEl.value : 'pix';
-  const endereco = `${endRua} — ${cidade} — CEP: ${cep}`;
-  const total    = getTotal();
-
-  const btn = document.getElementById('btnConfirmarPedido');
-  btn.disabled = true;
-  btn.textContent = 'Processando...';
-
-  let pedidoId = null;
   try {
-    const res = await api.post('/pedidos', {
-      itens: cartItems, total,
-      nome_cliente: nome, email_cliente: email,
-      telefone_cliente: telefone, endereco,
-      metodo_pagamento: metodo,
-    });
-    pedidoId = res.id;
-  } catch(_) { /* continua sem salvar */ }
+    const nome     = document.getElementById('co_nome').value.trim();
+    const telefone = document.getElementById('co_telefone').value.trim();
+    const email    = document.getElementById('co_email').value.trim();
+    const endRua   = document.getElementById('co_endereco').value.trim();
+    const cidade   = document.getElementById('co_cidade').value.trim();
+    const cep      = document.getElementById('co_cep').value.trim();
 
-  // Captura itens antes de limpar (para mensagem WhatsApp)
-  const itensCopia = [...cartItems];
+    if (!nome || !telefone || !email || !endRua || !cidade || !cep) {
+      showToast('Preencha todos os campos obrigatórios.', 'error');
+      return;
+    }
 
-  // Limpa carrinho
-  cartItems = [];
-  saveCart();
-  renderCart();
-  updateBadge();
+    const metodoEl = document.querySelector('input[name="co_pagamento"]:checked');
+    const metodo   = metodoEl ? metodoEl.value : 'pix';
+    const endereco = `${endRua} — ${cidade} — CEP: ${cep}`;
+    const total    = getTotal();
 
-  // Fecha o checkout form
-  closeCheckoutModal();
+    const btn = document.getElementById('btnConfirmarPedido');
+    if (btn) { btn.disabled = true; btn.textContent = 'Processando...'; }
 
-  if (metodo === 'pix') {
-    // Abre o overlay de PIX dedicado (elemento separado)
-    abrirPixOverlay(pedidoId, total);
-  } else {
-    const linhas = itensCopia.map(i => `• ${i.nome} (x${i.qty}) — ${formatBRL(i.preco * i.qty)}`).join('\n');
-    const msg = `🛒 *Novo Pedido — Fanáticos FC*\n\nPedido #${pedidoId || '?'}\n\n${linhas}\n\nTotal: ${formatBRL(total)}\n\n👤 ${nome}\n📱 ${telefone}\n📧 ${email}\n📦 ${endereco}\n\nGostaria de finalizar meu pedido!`;
-    window.open(`https://wa.me/5554991138217?text=${encodeURIComponent(msg)}`, '_blank');
-    showToast('Pedido enviado via WhatsApp! ✅');
+    let pedidoId = null;
+    try {
+      const res = await api.post('/pedidos', {
+        itens: cartItems, total,
+        nome_cliente: nome, email_cliente: email,
+        telefone_cliente: telefone, endereco,
+        metodo_pagamento: metodo,
+      });
+      pedidoId = res.id;
+    } catch(apiErr) {
+      console.warn('[PIX] API /pedidos falhou (continuando sem salvar):', apiErr);
+    }
+
+    // Captura itens antes de limpar (para mensagem WhatsApp)
+    const itensCopia = [...cartItems];
+
+    // Limpa carrinho
+    cartItems = [];
+    saveCart();
+    renderCart();
+    updateBadge();
+
+    // Fecha o checkout form
+    closeCheckoutModal();
+
+    if (metodo === 'pix') {
+      abrirPixOverlay(pedidoId, total);
+    } else {
+      const linhas = itensCopia.map(i => `• ${i.nome} (x${i.qty}) — ${formatBRL(i.preco * i.qty)}`).join('\n');
+      const msg = `🛒 *Novo Pedido — Fanáticos FC*\n\nPedido #${pedidoId || '?'}\n\n${linhas}\n\nTotal: ${formatBRL(total)}\n\n👤 ${nome}\n📱 ${telefone}\n📧 ${email}\n📦 ${endereco}\n\nGostaria de finalizar meu pedido!`;
+      window.open(`https://wa.me/5554991138217?text=${encodeURIComponent(msg)}`, '_blank');
+      showToast('Pedido enviado via WhatsApp! ✅');
+    }
+  } catch(err) {
+    console.error('[PIX] Erro inesperado em confirmarPedido:', err);
+    showToast('Erro ao processar pedido. Tente novamente.', 'error');
+    const btn = document.getElementById('btnConfirmarPedido');
+    if (btn) { btn.disabled = false; btn.textContent = 'Confirmar Pedido →'; }
   }
 }
 
-// ── PIX OVERLAY (elemento dedicado, z-index 500) ──────────────────────────────
+// ── PIX OVERLAY (criado dinamicamente, imune a interferências) ────────────────
 
 function abrirPixOverlay(pedidoId, total) {
-  const overlay = document.getElementById('pixOverlay');
-  const content = document.getElementById('pixContent');
-  if (!overlay || !content) return;
+  console.log('[PIX] abrirPixOverlay chamado, total=' + total);
+  // Se já está aberto, não faz nada (evita fechar e reabrir)
+  if (document.getElementById('_pixModal')) {
+    console.warn('[PIX] já aberto — chamada ignorada');
+    return;
+  }
 
   const PIX_CPF    = '03296271040';
   const PIX_NOME   = 'Fanaticos FC';
@@ -270,73 +285,85 @@ function abrirPixOverlay(pedidoId, total) {
   const qrUrl        = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payload)}`;
   const cpfFormatado = PIX_CPF.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
 
-  content.innerHTML = `
-    <div class="co-header">
-      <h2>Pague via PIX</h2>
-      <button class="modal__close" id="btnFecharPix">✕</button>
-    </div>
-    <div class="pix-box">
-      <div class="pix-qr-wrap">
-        <img src="${qrUrl}" alt="QR Code PIX" class="pix-qr-img" />
-        <p class="pix-qr-hint">Escaneie com o app do seu banco</p>
+  // Cria overlay diretamente no body — z-index 9999 garante que nada fique na frente
+  const overlay = document.createElement('div');
+  overlay.id = '_pixModal';
+  overlay.style.cssText = [
+    'position:fixed', 'inset:0', 'z-index:9999',
+    'background:rgba(0,0,0,0.85)', 'backdrop-filter:blur(4px)',
+    'display:flex', 'align-items:flex-start', 'justify-content:center',
+    'overflow-y:auto', 'padding:1rem',
+  ].join(';');
+
+  overlay.innerHTML = `
+    <div class="modal modal--checkout" style="margin:auto;width:100%;max-width:640px">
+      <div class="co-header">
+        <h2>Pague via PIX</h2>
+        <button class="modal__close" id="_btnFecharPix">✕</button>
       </div>
-      <div class="pix-divider"><span>ou use a chave abaixo</span></div>
-      <div class="pix-key-wrap">
-        <div class="pix-key-label">Chave PIX — CPF</div>
-        <div class="pix-key-value" id="pixKeyValue">${cpfFormatado}</div>
-        <button class="btn btn--outline pix-copy-btn" id="btnCopiarChave">📋 Copiar Chave</button>
+      <div class="pix-box">
+        <div class="pix-qr-wrap">
+          <img src="${qrUrl}" alt="QR Code PIX" class="pix-qr-img" />
+          <p class="pix-qr-hint">Escaneie com o app do seu banco</p>
+        </div>
+        <div class="pix-divider"><span>ou use a chave abaixo</span></div>
+        <div class="pix-key-wrap">
+          <div class="pix-key-label">Chave PIX — CPF</div>
+          <div class="pix-key-value" id="_pixKey">${cpfFormatado}</div>
+          <button class="btn btn--outline pix-copy-btn" id="_btnCopiarChave">📋 Copiar Chave</button>
+        </div>
+        <div class="pix-key-wrap" style="margin-top:.75rem">
+          <div class="pix-key-label">PIX Copia e Cola</div>
+          <div class="pix-key-value pix-key-value--sm" id="_pixPayload">${payload}</div>
+          <button class="btn btn--outline pix-copy-btn" id="_btnCopiarPayload">📋 Copiar código completo</button>
+        </div>
+        <div class="pix-info-row">
+          <div class="pix-info-item"><span>Beneficiário</span><strong>Fanáticos FC</strong></div>
+          <div class="pix-info-item"><span>Valor</span><strong>${formatBRL(total)}</strong></div>
+          ${pedidoId ? `<div class="pix-info-item"><span>Nº do Pedido</span><strong>#${pedidoId}</strong></div>` : ''}
+        </div>
+        <div class="pix-steps">
+          <div class="pix-step"><span class="pix-step-num">1</span> Abra o app do seu banco</div>
+          <div class="pix-step"><span class="pix-step-num">2</span> Escaneie o QR code <em>ou</em> use a chave CPF</div>
+          <div class="pix-step"><span class="pix-step-num">3</span> Confirme o valor e pague</div>
+          <div class="pix-step"><span class="pix-step-num">4</span> Envie o comprovante pelo WhatsApp</div>
+        </div>
+        ${pedidoId ? `<p class="pix-rastreio-hint">Guarde o número <strong>#${pedidoId}</strong> para rastrear seu pedido.</p>` : ''}
       </div>
-      <div class="pix-key-wrap" style="margin-top:.75rem">
-        <div class="pix-key-label">PIX Copia e Cola</div>
-        <div class="pix-key-value pix-key-value--sm" id="pixPayloadValue">${payload}</div>
-        <button class="btn btn--outline pix-copy-btn" id="btnCopiarPayload">📋 Copiar código completo</button>
+      <div class="co-pix-actions">
+        <button class="btn btn--whatsapp" id="_btnEnviarComp">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg>
+          Enviar comprovante via WhatsApp
+        </button>
+        <button class="btn btn--outline" id="_btnJaPaguei">Já paguei ✓</button>
       </div>
-      <div class="pix-info-row">
-        <div class="pix-info-item"><span>Beneficiário</span><strong>Fanáticos FC</strong></div>
-        <div class="pix-info-item"><span>Valor</span><strong>${formatBRL(total)}</strong></div>
-        ${pedidoId ? `<div class="pix-info-item"><span>Nº do Pedido</span><strong>#${pedidoId}</strong></div>` : ''}
-      </div>
-      <div class="pix-steps">
-        <div class="pix-step"><span class="pix-step-num">1</span> Abra o app do seu banco</div>
-        <div class="pix-step"><span class="pix-step-num">2</span> Escaneie o QR code <em>ou</em> use a chave CPF</div>
-        <div class="pix-step"><span class="pix-step-num">3</span> Confirme o valor e pague</div>
-        <div class="pix-step"><span class="pix-step-num">4</span> Envie o comprovante pelo WhatsApp</div>
-      </div>
-      ${pedidoId ? `<p class="pix-rastreio-hint">Guarde o número <strong>#${pedidoId}</strong> para rastrear seu pedido.</p>` : ''}
-    </div>
-    <div class="co-pix-actions">
-      <button class="btn btn--whatsapp" id="btnEnviarComprovante">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg>
-        Enviar comprovante via WhatsApp
-      </button>
-      <button class="btn btn--outline" id="btnJaPaguei">Já paguei ✓</button>
     </div>
   `;
 
-  // Mostra o overlay PIX
-  overlay.style.display = 'flex';
+  document.body.appendChild(overlay);
 
-  // Event listeners
-  document.getElementById('btnFecharPix').addEventListener('click', fecharPixOverlay);
-  document.getElementById('btnCopiarChave').addEventListener('click', () => {
+  function fechar() { overlay.remove(); }
+
+  overlay.querySelector('#_btnFecharPix').addEventListener('click', fechar);
+  overlay.querySelector('#_btnCopiarChave').addEventListener('click', () => {
     navigator.clipboard.writeText(PIX_CPF).then(() => showToast('Chave PIX copiada! 📋'));
   });
-  document.getElementById('btnCopiarPayload').addEventListener('click', () => {
-    navigator.clipboard.writeText(document.getElementById('pixPayloadValue').textContent)
+  overlay.querySelector('#_btnCopiarPayload').addEventListener('click', () => {
+    navigator.clipboard.writeText(overlay.querySelector('#_pixPayload').textContent)
       .then(() => showToast('Código PIX copiado! 📋'));
   });
-  document.getElementById('btnEnviarComprovante').addEventListener('click', () => {
+  overlay.querySelector('#_btnEnviarComp').addEventListener('click', () => {
     const msg = `Olá! Realizei o pagamento via PIX do pedido #${pedidoId || '?'}. Segue o comprovante! 📎`;
     window.open(`https://wa.me/5554991138217?text=${encodeURIComponent(msg)}`, '_blank');
   });
-  document.getElementById('btnJaPaguei').addEventListener('click', () => {
-    fecharPixOverlay();
+  overlay.querySelector('#_btnJaPaguei').addEventListener('click', () => {
+    fechar();
     showToast('Pedido registrado! Aguarde a confirmação. ✅');
   });
 }
 
 function fecharPixOverlay() {
-  document.getElementById('pixOverlay').style.display = 'none';
+  document.getElementById('_pixModal')?.remove();
 }
 
 // ── RASTREAR PEDIDO ───────────────────────────────────────────────────────────
