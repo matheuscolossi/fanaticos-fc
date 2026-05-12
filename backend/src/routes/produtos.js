@@ -1,92 +1,142 @@
 const express = require('express');
-const router = express.Router();
 const { run, get, all } = require('../config/database');
+const { asyncHandler, createHttpError, sendCreated } = require('../utils/http');
+
+const ORDER_BY = {
+  az: 'p.nome ASC',
+  za: 'p.nome DESC',
+  preco_asc: 'p.preco ASC',
+  preco_desc: 'p.preco DESC',
+  recente: 'p.created_at DESC',
+};
+
+function parseImages(value) {
+  try {
+    return JSON.parse(value || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function serializeProduct(product) {
+  return { ...product, imagens: parseImages(product.imagens) };
+}
+
+function buildProductFilters(query) {
+  const filters = [];
+  const params = [];
+
+  if (query.busca) {
+    filters.push('LOWER(p.nome) LIKE LOWER(?)');
+    params.push(`%${query.busca}%`);
+  }
+  if (query.categoria) {
+    filters.push('p.categoria_id = ?');
+    params.push(query.categoria);
+  }
+  if (query.precoMin) {
+    filters.push('p.preco >= ?');
+    params.push(Number(query.precoMin));
+  }
+  if (query.precoMax) {
+    filters.push('p.preco <= ?');
+    params.push(Number(query.precoMax));
+  }
+  if (query.destaque) {
+    filters.push('p.destaque = 1');
+  }
+
+  return {
+    params,
+    where: filters.length ? `WHERE ${filters.join(' AND ')}` : '',
+    orderBy: ORDER_BY[query.ordem] || ORDER_BY.recente,
+  };
+}
+
+function normalizeProductPayload(body) {
+  const { nome, preco, categoria_id, descricao, imagens, estoque, destaque } = body;
+  const numericPrice = Number(preco);
+
+  if (!nome || Number.isNaN(numericPrice)) {
+    throw createHttpError(400, 'Product name and valid price are required.', 'VALIDATION_ERROR');
+  }
+
+  return {
+    nome,
+    preco: numericPrice,
+    categoria_id: categoria_id || null,
+    descricao: descricao || '',
+    imagens: JSON.stringify(Array.isArray(imagens) ? imagens : []),
+    estoque: Number(estoque) || 0,
+    destaque: destaque ? 1 : 0,
+  };
+}
+
+async function ensureProductExists(productId) {
+  const product = await get('SELECT id FROM produtos WHERE id = ?', [productId]);
+  if (!product) throw createHttpError(404, 'Product not found.', 'PRODUCT_NOT_FOUND');
+}
 
 module.exports = (adminMiddleware) => {
-  // GET /api/produtos
-  router.get('/', async (req, res) => {
-    try {
-      const { busca, categoria, precoMin, precoMax, destaque } = req.query;
-      let sql = `
+  const router = express.Router();
+
+  router.get('/', asyncHandler(async (req, res) => {
+    const { where, params, orderBy } = buildProductFilters(req.query);
+    const products = await all(
+      `
         SELECT p.*, c.nome as categoria_nome
         FROM produtos p
         LEFT JOIN categorias c ON p.categoria_id = c.id
-        WHERE 1=1
-      `;
-      const params = [];
+        ${where}
+        ORDER BY ${orderBy}
+      `,
+      params
+    );
+    res.json(products.map(serializeProduct));
+  }));
 
-      if (busca) {
-        sql += ` AND LOWER(p.nome) LIKE LOWER(?)`;
-        params.push(`%${busca}%`);
-      }
-      if (categoria) { sql += ` AND p.categoria_id = ?`; params.push(categoria); }
-      if (precoMin)  { sql += ` AND p.preco >= ?`;       params.push(precoMin); }
-      if (precoMax)  { sql += ` AND p.preco <= ?`;       params.push(precoMax); }
-      if (destaque)  { sql += ` AND p.destaque = 1`; }
+  router.get('/:id', asyncHandler(async (req, res) => {
+    const product = await get(
+      'SELECT p.*, c.nome as categoria_nome FROM produtos p LEFT JOIN categorias c ON p.categoria_id = c.id WHERE p.id = ?',
+      [req.params.id]
+    );
+    if (!product) throw createHttpError(404, 'Product not found.', 'PRODUCT_NOT_FOUND');
+    res.json(serializeProduct(product));
+  }));
 
-      const orderMap = {
-        'az':         'p.nome ASC',
-        'za':         'p.nome DESC',
-        'preco_asc':  'p.preco ASC',
-        'preco_desc': 'p.preco DESC',
-        'recente':    'p.created_at DESC',
-      };
-      const order = orderMap[req.query.ordem] || 'p.created_at DESC';
-      sql += ` ORDER BY ${order}`;
+  router.post('/', adminMiddleware, asyncHandler(async (req, res) => {
+    const product = normalizeProductPayload(req.body);
+    const result = await run(
+      'INSERT INTO produtos (nome, preco, categoria_id, descricao, imagens, estoque, destaque) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [product.nome, product.preco, product.categoria_id, product.descricao, product.imagens, product.estoque, product.destaque]
+    );
+    sendCreated(res, { message: 'Product created.', id: result.lastID });
+  }));
 
-      const produtos = await all(sql, params);
-      res.json(produtos.map(p => ({ ...p, imagens: JSON.parse(p.imagens || '[]') })));
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  });
+  router.put('/:id', adminMiddleware, asyncHandler(async (req, res) => {
+    await ensureProductExists(req.params.id);
+    const product = normalizeProductPayload(req.body);
+    await run(
+      'UPDATE produtos SET nome=?, preco=?, categoria_id=?, descricao=?, imagens=?, estoque=?, destaque=? WHERE id=?',
+      [
+        product.nome,
+        product.preco,
+        product.categoria_id,
+        product.descricao,
+        product.imagens,
+        product.estoque,
+        product.destaque,
+        req.params.id,
+      ]
+    );
+    res.json({ message: 'Product updated.' });
+  }));
 
-  // GET /api/produtos/:id
-  router.get('/:id', async (req, res) => {
-    try {
-      const p = await get(
-        'SELECT p.*, c.nome as categoria_nome FROM produtos p LEFT JOIN categorias c ON p.categoria_id = c.id WHERE p.id = ?',
-        [req.params.id]
-      );
-      if (!p) return res.status(404).json({ error: 'Produto não encontrado' });
-      res.json({ ...p, imagens: JSON.parse(p.imagens || '[]') });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  });
-
-  // POST /api/produtos
-  router.post('/', adminMiddleware, async (req, res) => {
-    try {
-      const { nome, preco, categoria_id, descricao, imagens, estoque, destaque } = req.body;
-      if (!nome || !preco) return res.status(400).json({ error: 'Nome e preço são obrigatórios' });
-      const result = await run(
-        'INSERT INTO produtos (nome, preco, categoria_id, descricao, imagens, estoque, destaque) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [nome, preco, categoria_id || null, descricao || '', JSON.stringify(imagens || []), estoque || 0, destaque ? 1 : 0]
-      );
-      res.status(201).json({ message: 'Produto criado', id: result.lastID });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  });
-
-  // PUT /api/produtos/:id
-  router.put('/:id', adminMiddleware, async (req, res) => {
-    try {
-      const { nome, preco, categoria_id, descricao, imagens, estoque, destaque } = req.body;
-      const existing = await get('SELECT id FROM produtos WHERE id = ?', [req.params.id]);
-      if (!existing) return res.status(404).json({ error: 'Produto não encontrado' });
-      await run(
-        'UPDATE produtos SET nome=?, preco=?, categoria_id=?, descricao=?, imagens=?, estoque=?, destaque=? WHERE id=?',
-        [nome, preco, categoria_id || null, descricao || '', JSON.stringify(imagens || []), estoque || 0, destaque ? 1 : 0, req.params.id]
-      );
-      res.json({ message: 'Produto atualizado' });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  });
-
-  // DELETE /api/produtos/:id
-  router.delete('/:id', adminMiddleware, async (req, res) => {
-    try {
-      const existing = await get('SELECT id FROM produtos WHERE id = ?', [req.params.id]);
-      if (!existing) return res.status(404).json({ error: 'Produto não encontrado' });
-      await run('DELETE FROM produtos WHERE id = ?', [req.params.id]);
-      res.json({ message: 'Produto excluído' });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  });
+  router.delete('/:id', adminMiddleware, asyncHandler(async (req, res) => {
+    await ensureProductExists(req.params.id);
+    await run('DELETE FROM produtos WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Product deleted.' });
+  }));
 
   return router;
 };

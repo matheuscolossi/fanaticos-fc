@@ -1,7 +1,9 @@
 const ITEMS_PER_PAGE = 15;
+const ORDERS_PER_PAGE = 25;
 let allProdutosAdmin = [];
 let filteredProdutos = [];
 let currentPage = 1;
+let pedidosPage = 1;
 let deleteTargetId = null;
 let categoriasAdmin = [];
 let editingImages = [];
@@ -23,23 +25,7 @@ const LIGA_ORDER = [
   'Liga Mexicana', 'Liga Americana (MLS)', 'NBA', 'Outras Ligas', 'Outros'
 ];
 
-const LIGA_FLAGS = {
-  'Brasileirão':        '🇧🇷',
-  'Seleções':           '🌎',
-  'Liga Espanhola':     '🇪🇸',
-  'Liga Inglesa':       '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
-  'Liga Italiana':      '🇮🇹',
-  'Liga Alemã':         '🇩🇪',
-  'Liga Francesa':      '🇫🇷',
-  'Liga Portuguesa':    '🇵🇹',
-  'Liga Argentina':     '🇦🇷',
-  'Liga Holandesa':     '🇳🇱',
-  'Liga Mexicana':      '🇲🇽',
-  'Liga Americana (MLS)': '🇺🇸',
-  'NBA':                '🏀',
-  'Outras Ligas':       '🌍',
-  'Outros':             '📦'
-};
+const LIGA_FLAGS = {};
 
 const TEAM_TO_LIGA = {
   // Liga Espanhola
@@ -105,6 +91,19 @@ const TEAM_TO_LIGA = {
   'New York Knicks': 'NBA', 'Dallas Mavericks': 'NBA',
 };
 
+const TEAM_ALIASES = {
+  'Atletico de Madrid': ['Atlético de Madrid', 'Liga Espanhola'],
+  'Atlético de Madrid': ['Atlético de Madrid', 'Liga Espanhola'],
+  'Atletico Mineiro': ['Atlético Mineiro', 'Brasileirão'],
+  'Athletico PR': ['Athletico-PR', 'Brasileirão'],
+  'Athletico Paranaense': ['Athletico-PR', 'Brasileirão'],
+  'Vasco da Gama': ['Vasco', 'Brasileirão'],
+  'Internazionale': ['Inter de Milão', 'Liga Italiana'],
+  'Inter Milan': ['Inter de Milão', 'Liga Italiana'],
+  'Bayern Munich': ['Bayern de Munique', 'Liga Alemã'],
+  'Marseille': ['Olympique de Marseille', 'Liga Francesa'],
+};
+
 const BRAZILIAN_TEAMS = new Set([
   'Flamengo', 'Palmeiras', 'Corinthians', 'São Paulo', 'Grêmio', 'Internacional',
   'Botafogo', 'Atlético Mineiro', 'Vasco', 'Fluminense', 'Cruzeiro', 'Santos',
@@ -130,7 +129,51 @@ const TYPE_KEYWORDS = new Set([
   'Treino', 'Regata', 'Retro', 'Retrô', 'Player', 'Manga', 'Edição', 'Pré'
 ]);
 
+function normalizeTeamKey(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function buildTeamIndex() {
+  const rows = [];
+
+  for (const [team, liga] of Object.entries(TEAM_TO_LIGA)) {
+    rows.push({ team, liga, key: normalizeTeamKey(team) });
+  }
+  for (const team of BRAZILIAN_TEAMS) {
+    rows.push({ team, liga: 'Brasileirão', key: normalizeTeamKey(team) });
+  }
+  for (const team of SELECOES_TEAMS) {
+    rows.push({ team, liga: 'Seleções', key: normalizeTeamKey(team) });
+  }
+  for (const [alias, [team, liga]] of Object.entries(TEAM_ALIASES)) {
+    rows.push({ team, liga, key: normalizeTeamKey(alias) });
+  }
+
+  const unique = new Map();
+  for (const row of rows) {
+    if (!row.key || unique.has(row.key)) continue;
+    unique.set(row.key, row);
+  }
+
+  return [...unique.values()].sort((a, b) => b.key.length - a.key.length);
+}
+
+const TEAM_INDEX = buildTeamIndex();
+
+function findTeamMatch(productName) {
+  const normalizedName = ` ${normalizeTeamKey(productName)} `;
+  return TEAM_INDEX.find(({ key }) => normalizedName.includes(` ${key} `)) || null;
+}
+
 function extractTime(nome) {
+  const match = findTeamMatch(nome);
+  if (match) return match.team;
+
   const words = nome.split(' ');
   const teamWords = [];
   for (const word of words) {
@@ -141,10 +184,10 @@ function extractTime(nome) {
 }
 
 function getLiga(produto) {
+  const match = findTeamMatch(produto.nome);
+  if (match) return match.liga;
+
   const time = extractTime(produto.nome);
-  if (TEAM_TO_LIGA[time]) return TEAM_TO_LIGA[time];
-  if (BRAZILIAN_TEAMS.has(time)) return 'Brasileirão';
-  if (SELECOES_TEAMS.has(time)) return 'Seleções';
   if (produto.categoria_nome === 'Brasileirão') return 'Brasileirão';
   if (produto.categoria_nome === 'Seleções') return 'Seleções';
   return 'Outros';
@@ -172,63 +215,40 @@ function renderLigaView(produtos) {
     return;
   }
 
-  // Agrupar por liga → time
-  const ligaMap = new Map();
+  const teamMap = new Map();
   for (const p of produtos) {
     const liga = getLiga(p);
     const time = extractTime(p.nome);
-    if (!ligaMap.has(liga)) ligaMap.set(liga, new Map());
-    const timeMap = ligaMap.get(liga);
-    if (!timeMap.has(time)) timeMap.set(time, []);
-    timeMap.get(time).push(p);
+    const key = `${liga}__${time}`;
+    if (!teamMap.has(key)) teamMap.set(key, { liga, time, produtos: [] });
+    teamMap.get(key).produtos.push(p);
   }
 
-  // Ordenar ligas conforme LIGA_ORDER
-  const sortedLigas = [...ligaMap.keys()].sort((a, b) => {
-    const ia = LIGA_ORDER.indexOf(a);
-    const ib = LIGA_ORDER.indexOf(b);
-    if (ia === -1 && ib === -1) return a.localeCompare(b);
+  const sortedTeams = [...teamMap.values()].sort((a, b) => {
+    const ia = LIGA_ORDER.indexOf(a.liga);
+    const ib = LIGA_ORDER.indexOf(b.liga);
+    if (ia === -1 && ib === -1) return a.liga.localeCompare(b.liga, 'pt-BR') || a.time.localeCompare(b.time, 'pt-BR');
     if (ia === -1) return 1;
     if (ib === -1) return -1;
-    return ia - ib;
+    if (ia !== ib) return ia - ib;
+    return a.time.localeCompare(b.time, 'pt-BR');
   });
 
   const openIds = getOpenIds();
   let html = '<div class="ligas-view">';
 
-  for (const liga of sortedLigas) {
-    const timeMap   = ligaMap.get(liga);
-    const totalProds = [...timeMap.values()].reduce((s, arr) => s + arr.length, 0);
-    const flag      = LIGA_FLAGS[liga] || '🏆';
-    const ligaId    = 'liga_' + normalizeText(liga).replace(/[^a-z0-9]/g, '_');
-    const ligaOpen  = openIds.has(`${ligaId}_body`);
-
-    html += `
-      <div class="liga-section">
-        <div class="liga-header" onclick="toggleAccordion('${ligaId}_body','${ligaId}_arrow')">
-          <div class="liga-header__left">
-            <span class="liga-arrow" id="${ligaId}_arrow">${ligaOpen ? '▼' : '▶'}</span>
-            <span class="liga-flag">${flag}</span>
-            <span class="liga-nome">${liga}</span>
-          </div>
-          <span class="liga-count">${totalProds} produto${totalProds !== 1 ? 's' : ''}</span>
-        </div>
-        <div class="liga-body" id="${ligaId}_body" style="display:${ligaOpen ? 'block' : 'none'}">
-    `;
-
-    const sortedTimes = [...timeMap.keys()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-
-    for (const time of sortedTimes) {
-      const prods   = timeMap.get(time);
-      const timeId  = ligaId + '_time_' + normalizeText(time).replace(/[^a-z0-9]/g, '_');
-      const timeOpen = openIds.has(`${timeId}_body`);
+  for (const group of sortedTeams) {
+      const { liga, time, produtos: prods } = group;
+      const timeId  = 'time_' + normalizeText(`${liga}_${time}`).replace(/[^a-z0-9]/g, '_');
+      const timeOpen = openIds.has(`${timeId}_body`) || sortedTeams.length <= 8;
 
       html += `
-          <div class="time-section">
+          <div class="time-section time-section--top">
             <div class="time-header" onclick="toggleAccordion('${timeId}_body','${timeId}_arrow')">
               <div class="time-header__left">
                 <span class="time-arrow" id="${timeId}_arrow">${timeOpen ? '▼' : '▶'}</span>
-                <span class="time-nome">📂 ${time}</span>
+                <span class="time-nome">${time}</span>
+                <span class="time-liga">${liga}</span>
               </div>
               <span class="time-count">${prods.length} produto${prods.length !== 1 ? 's' : ''}</span>
             </div>
@@ -254,8 +274,8 @@ function renderLigaView(produtos) {
                     <td>
                       <div class="td-img">
                         ${img
-                          ? `<img src="${img}" alt="${p.nome}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="td-img-placeholder" style="display:none">⚽</div>`
-                          : `<div class="td-img-placeholder">⚽</div>`}
+                          ? `<img src="${img}" alt="${p.nome}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="td-img-placeholder" style="display:none"></div>`
+                          : `<div class="td-img-placeholder"></div>`}
                       </div>
                     </td>
                     <td><span class="td-nome" title="${p.nome}">${p.nome}</span></td>
@@ -263,13 +283,13 @@ function renderLigaView(produtos) {
                     <td>${p.estoque}</td>
                     <td>
                       <span class="td-badge ${p.destaque ? '' : 'td-badge--off'}">
-                        ${p.destaque ? '🔥 Sim' : 'Não'}
+                        ${p.destaque ? 'Sim' : 'Não'}
                       </span>
                     </td>
                     <td>
                       <div class="td-actions">
-                        <button class="btn btn--outline btn--sm" onclick="openEditModal(${p.id})">✏️ Editar</button>
-                        <button class="btn btn--danger btn--sm"  onclick="confirmDelete(${p.id})">🗑️</button>
+                        <button class="btn btn--outline btn--sm" onclick="openEditModal(${p.id})">Editar</button>
+                        <button class="btn btn--danger btn--sm"  onclick="confirmDelete(${p.id})">Excluir</button>
                       </div>
                     </td>
                   </tr>
@@ -282,12 +302,6 @@ function renderLigaView(produtos) {
             </div>
           </div>
       `;
-    }
-
-    html += `
-        </div>
-      </div>
-    `;
   }
 
   html += '</div>';
@@ -304,7 +318,7 @@ function checkAdminAuth() {
     return false;
   }
   document.getElementById('loginRequired').style.display = 'none';
-  document.getElementById('adminUserName').textContent = `👤 ${user.nome}`;
+  document.getElementById('adminUserName').textContent = `${user.nome}`;
   return true;
 }
 
@@ -336,7 +350,7 @@ async function loadProdutosAdmin() {
     renderTabelaProdutos();
   } catch(e) {
     document.getElementById('tabelaProdutosWrap').innerHTML =
-      `<div class="loading-state" style="color:var(--danger)">⚠️ Erro ao carregar produtos. Backend rodando?</div>`;
+      `<div class="loading-state" style="color:var(--danger)">Erro ao carregar produtos. Backend rodando?</div>`;
   }
 }
 
@@ -389,8 +403,8 @@ function renderTabelaProdutos() {
             <td>
               <div class="td-img">
                 ${img
-                  ? `<img src="${img}" alt="${p.nome}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="td-img-placeholder" style="display:none">⚽</div>`
-                  : `<div class="td-img-placeholder">⚽</div>`}
+                  ? `<img src="${img}" alt="${p.nome}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="td-img-placeholder" style="display:none"></div>`
+                  : `<div class="td-img-placeholder"></div>`}
               </div>
             </td>
             <td><span class="td-nome" title="${p.nome}">${p.nome}</span></td>
@@ -399,13 +413,13 @@ function renderTabelaProdutos() {
             <td>${p.estoque}</td>
             <td>
               <span class="td-badge ${p.destaque ? '' : 'td-badge--off'}">
-                ${p.destaque ? '🔥 Sim' : 'Não'}
+                ${p.destaque ? 'Sim' : 'Não'}
               </span>
             </td>
             <td>
               <div class="td-actions">
-                <button class="btn btn--outline btn--sm" onclick="openEditModal(${p.id})">✏️ Editar</button>
-                <button class="btn btn--danger btn--sm"  onclick="confirmDelete(${p.id})">🗑️</button>
+                <button class="btn btn--outline btn--sm" onclick="openEditModal(${p.id})">Editar</button>
+                <button class="btn btn--danger btn--sm"  onclick="confirmDelete(${p.id})">Excluir</button>
               </div>
             </td>
           </tr>`;
@@ -492,7 +506,7 @@ function renderImagePreview() {
     <div class="preview-img" onclick="removePreviewImg(${i})" title="${isUrl ? img : 'Upload'}">
       <img src="${img}" alt="Foto ${i+1}" onerror="this.parentElement.querySelector('.preview-img__err').style.display='flex'" />
       <div class="preview-img__err" style="display:none;position:absolute;inset:0;background:var(--bg-card2);align-items:center;justify-content:center;font-size:.65rem;color:var(--text-muted);text-align:center;padding:.2rem">Erro ao carregar</div>
-      <div class="preview-img__remove">🗑️</div>
+      <div class="preview-img__remove"></div>
       ${isUrl ? '<div class="preview-img__badge">URL</div>' : '<div class="preview-img__badge preview-img__badge--up">UP</div>'}
     </div>
   `}).join('');
@@ -581,10 +595,10 @@ async function saveProduto(e) {
   try {
     if (id) {
       await api.put(`/produtos/${id}`, data);
-      showToast('Produto atualizado com sucesso! ✅');
+      showToast('Produto atualizado com sucesso! ');
     } else {
       await api.post('/produtos', data);
-      showToast('Produto criado com sucesso! 🎉');
+      showToast('Produto criado com sucesso! ');
     }
     closeFormModal();
     await loadProdutosAdmin();
@@ -623,12 +637,21 @@ const STATUS_PEDIDO = {
 
 let pedidosCache = [];
 
+function getPedidosTotalPages() {
+  return Math.max(1, Math.ceil(pedidosCache.length / ORDERS_PER_PAGE));
+}
+
+function setPedidosPage(page) {
+  pedidosPage = Math.min(Math.max(1, page), getPedidosTotalPages());
+  renderPedidos();
+}
+
 function verDetalhesPedido(id) {
   const p = pedidosCache.find(x => x.id === id);
   if (!p) return;
 
   const st = STATUS_PEDIDO[p.status] || { label: p.status, color: '#888' };
-  const metodo = p.metodo_pagamento === 'pix' ? '🏦 PIX' : '💬 WhatsApp';
+  const metodo = p.metodo_pagamento === 'pix' ? ' PIX' : ' WhatsApp';
   const itensHtml = p.itens.map(i =>
     `<div style="display:flex;justify-content:space-between;padding:.35rem 0;border-bottom:1px solid var(--border)">
       <span>${i.nome} <em style="color:var(--text-muted)">x${i.qty}</em></span>
@@ -643,7 +666,7 @@ function verDetalhesPedido(id) {
     <div class="modal modal--checkout" style="margin:auto;width:100%;max-width:580px">
       <div class="co-header">
         <h2>Pedido #${p.id}</h2>
-        <button class="modal__close" id="_btnFecharDetalhe">✕</button>
+        <button class="modal__close" id="_btnFecharDetalhe">Fechar</button>
       </div>
 
       <div style="padding:0 1.25rem 1.25rem">
@@ -655,7 +678,7 @@ function verDetalhesPedido(id) {
 
         <!-- Endereço de Entrega -->
         <div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:1rem">
-          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:.5rem">📦 Endereço de Entrega</div>
+          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:.5rem">Endereço de Entrega</div>
           ${p.endereco
             ? `<div style="font-size:.95rem;font-weight:500;line-height:1.6">${p.endereco.replace(/ — /g, '<br>')}</div>`
             : '<div style="color:var(--text-muted);font-size:.85rem">Não informado</div>'}
@@ -663,7 +686,7 @@ function verDetalhesPedido(id) {
 
         <!-- Dados do Cliente -->
         <div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:1rem">
-          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:.5rem">👤 Dados do Cliente</div>
+          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:.5rem">Dados do Cliente</div>
           <div style="display:grid;gap:.35rem;font-size:.88rem">
             ${p.nome_cliente ? `<div><span style="color:var(--text-muted)">Nome:</span> <strong>${p.nome_cliente}</strong></div>` : ''}
             ${p.telefone_cliente ? `<div><span style="color:var(--text-muted)">Telefone:</span> ${p.telefone_cliente}</div>` : ''}
@@ -673,7 +696,7 @@ function verDetalhesPedido(id) {
 
         <!-- Itens -->
         <div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:1rem">
-          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:.5rem">🛒 Itens do Pedido</div>
+          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:.5rem"> Itens do Pedido</div>
           <div style="font-size:.88rem">${itensHtml}</div>
           <div style="display:flex;justify-content:space-between;padding:.5rem 0 0;font-weight:700;font-size:.95rem">
             <span>Total</span><span>${formatBRL(p.total)}</span>
@@ -691,7 +714,7 @@ function verDetalhesPedido(id) {
         <div style="margin-top:1rem">
           <a href="https://wa.me/55${p.telefone_cliente.replace(/\D/g,'')}" target="_blank"
              class="btn btn--whatsapp" style="width:100%;justify-content:center">
-            💬 Contatar cliente pelo WhatsApp
+             Contatar cliente pelo WhatsApp
           </a>
         </div>` : ''}
       </div>
@@ -708,12 +731,29 @@ async function loadPedidos() {
   try {
     const pedidos = await api.get('/pedidos');
     pedidosCache = pedidos;
-    if (pedidos.length === 0) {
-      wrap.innerHTML = '<div class="loading-state">Nenhum pedido registrado ainda.</div>'; return;
-    }
-    const totalGeral = pedidos.reduce((s, p) => s + p.total, 0);
-    const pendentes = pedidos.filter(p => p.status === 'aguardando_pagamento' || p.status === 'pendente').length;
-    wrap.innerHTML = `
+    pedidosPage = 1;
+    renderPedidos();
+  } catch(e) {
+    wrap.innerHTML = '<div class="loading-state" style="color:var(--danger)">Erro ao carregar pedidos.</div>';
+  }
+}
+
+function renderPedidos() {
+  const wrap = document.getElementById('tabelaPedidosWrap');
+  const pedidos = pedidosCache;
+
+  if (pedidos.length === 0) {
+    wrap.innerHTML = '<div class="loading-state">Nenhum pedido registrado ainda.</div>';
+    return;
+  }
+
+  const totalPages = getPedidosTotalPages();
+  pedidosPage = Math.min(pedidosPage, totalPages);
+  const start = (pedidosPage - 1) * ORDERS_PER_PAGE;
+  const pagePedidos = pedidos.slice(start, start + ORDERS_PER_PAGE);
+  const totalGeral = pedidos.reduce((s, p) => s + p.total, 0);
+  const pendentes = pedidos.filter(p => p.status === 'aguardando_pagamento' || p.status === 'pendente').length;
+  wrap.innerHTML = `
       <div class="admin-stats">
         <div class="admin-stat">
           <div class="admin-stat__label">Total de Pedidos</div>
@@ -727,6 +767,10 @@ async function loadPedidos() {
           <div class="admin-stat__label">Aguardando</div>
           <div class="admin-stat__val" style="color:#ffd740">${pendentes}</div>
         </div>
+      </div>
+      <div class="orders-toolbar">
+        <span>Exibindo ${start + 1}-${Math.min(start + ORDERS_PER_PAGE, pedidos.length)} de ${pedidos.length} pedidos</span>
+        <span>Página ${pedidosPage} de ${totalPages}</span>
       </div>
       <table class="pedidos-table">
         <thead>
@@ -743,9 +787,9 @@ async function loadPedidos() {
           </tr>
         </thead>
         <tbody>
-          ${pedidos.map(p => {
+          ${pagePedidos.map(p => {
             const st = STATUS_PEDIDO[p.status] || { label: p.status, color: '#888' };
-            const metodoIcon = p.metodo_pagamento === 'pix' ? '🏦 PIX' : '💬 WhatsApp';
+            const metodoIcon = p.metodo_pagamento === 'pix' ? ' PIX' : ' WhatsApp';
             return `
             <tr id="pedido-row-${p.id}">
               <td><strong>#${p.id}</strong></td>
@@ -773,26 +817,31 @@ async function loadPedidos() {
                   <input type="text" class="pedido-rastreio-input" data-id="${p.id}"
                     value="${p.codigo_rastreio || ''}" placeholder="Cód. rastreio"
                     style="width:120px;font-size:.8rem;padding:4px 8px;background:var(--bg-card2);border:1px solid var(--border);color:var(--text);border-radius:6px" />
-                  <button class="btn btn--outline btn--sm" onclick="salvarRastreioPedido(${p.id})" title="Salvar rastreio">💾</button>
+                  <button class="btn btn--outline btn--sm" onclick="salvarRastreioPedido(${p.id})" title="Salvar rastreio">Salvar</button>
                 </div>
               </td>
               <td style="color:var(--text-muted);font-size:.82rem;white-space:nowrap">${new Date(p.created_at).toLocaleString('pt-BR')}</td>
               <td>
                 <div style="display:flex;gap:4px;flex-wrap:wrap">
-                  <button class="btn btn--outline btn--sm" onclick="verDetalhesPedido(${p.id})" title="Ver detalhes do pedido">🔍</button>
+                  <button class="btn btn--outline btn--sm" onclick="verDetalhesPedido(${p.id})" title="Ver detalhes do pedido">Ver</button>
                   ${p.telefone_cliente ? `
                   <a href="https://wa.me/55${p.telefone_cliente.replace(/\D/g,'')}" target="_blank"
-                     class="btn btn--whatsapp btn--sm" title="Contatar cliente">💬</a>` : ''}
+                     class="btn btn--whatsapp btn--sm" title="Contatar cliente"></a>` : ''}
                 </div>
               </td>
             </tr>
           `}).join('')}
         </tbody>
       </table>
+      <div class="pagination orders-pagination">
+        <button class="btn btn--outline btn--sm" id="btnPedidosAnterior" ${pedidosPage === 1 ? 'disabled' : ''}>Anterior</button>
+        <span id="pedidosPaginaInfo">Página ${pedidosPage} de ${totalPages}</span>
+        <button class="btn btn--outline btn--sm" id="btnPedidosProximo" ${pedidosPage === totalPages ? 'disabled' : ''}>Próximo</button>
+      </div>
     `;
-  } catch(e) {
-    wrap.innerHTML = '<div class="loading-state" style="color:var(--danger)">Erro ao carregar pedidos.</div>';
-  }
+
+  document.getElementById('btnPedidosAnterior')?.addEventListener('click', () => setPedidosPage(pedidosPage - 1));
+  document.getElementById('btnPedidosProximo')?.addEventListener('click', () => setPedidosPage(pedidosPage + 1));
 }
 
 async function salvarStatusPedido(id) {
@@ -873,7 +922,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       localStorage.setItem('fc_token', data.token);
       localStorage.setItem('fc_user', JSON.stringify(data.user));
       document.getElementById('loginRequired').style.display = 'none';
-      document.getElementById('adminUserName').textContent = `👤 ${data.user.nome}`;
+      document.getElementById('adminUserName').textContent = `${data.user.nome}`;
       await loadCategoriasAdmin();
       await loadProdutosAdmin();
     } catch(err) {

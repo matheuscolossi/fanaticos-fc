@@ -76,7 +76,7 @@ function openAuthModal(defaultTab = 'login') {
       setSession(data.token, data.user);
       updateUserUI();
       closeAuthModal();
-      showToast(`Bem-vindo, ${data.user.nome.split(' ')[0]}! 👋`);
+      showToast(`Bem-vindo, ${data.user.nome.split(' ')[0]}! `);
       if (data.user.perfil === 'admin') {
         const inPages = window.location.pathname.includes('/pages/');
         if (confirm('Você entrou como admin. Ir para o Painel Administrativo?')) {

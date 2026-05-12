@@ -125,22 +125,22 @@
       <div class="hero__pattern"></div>
     </div>
     <div class="hero__content">
-      <p class="hero__eyebrow">Qualidade Tailandesa 1:1 · Premium</p>
-      <h1 class="hero__title">Vista<br/><span class="hero__title--accent">PAIXÃO</span></h1>
-      <p class="hero__sub">Camisas idênticas à original, tecido premium e detalhes perfeitos. Mais de 130 times disponíveis!</p>
-      <a href="#catalogo" class="btn btn--primary hero__cta">Ver Catálogo</a>
+      <p class="hero__eyebrow">Qualidade premium · Acabamento 1:1</p>
+      <h1 class="hero__title">Fanáticos<br/><span class="hero__title--accent">FC</span></h1>
+      <p class="hero__sub">Camisas de futebol com curadoria, acabamento técnico e catálogo amplo de clubes e seleções.</p>
+      <a href="#catalogo" class="btn btn--primary hero__cta">Acessar catálogo</a>
     </div>
     <div class="hero__badges">
-      <div class="badge">🏆 Qualidade Thai 1:1</div>
-      <div class="badge">🚚 Frete Grátis acima de R$300</div>
-      <div class="badge">📲 WhatsApp: (54) 99113-8217</div>
+      <div class="badge">Acabamento premium</div>
+      <div class="badge">Frete grátis acima de R$300</div>
+      <div class="badge">WhatsApp: (54) 99113-8217</div>
     </div>
   </section>
 
 
   <section class="destaques" id="destaques">
     <div class="container">
-      <h2 class="section-title"><span>🔥</span> Em Destaque</h2>
+      <h2 class="section-title">Produtos em destaque</h2>
       <div class="produtos-grid" id="gridDestaques"></div>
     </div>
   </section>
@@ -157,7 +157,7 @@
         <div class="filtros__row filtros__row--top">
           <div class="filtros__busca">
             <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input type="text" id="inputBusca" placeholder="Buscar por time, seleção ou camisa..." class="input-busca" />
+            <input type="text" id="inputBusca" placeholder="Buscar por clube, seleção ou modelo" class="input-busca" />
           </div>
           <div class="filtros__ordem">
             <label class="filtros__label">Ordenar por</label>
@@ -179,9 +179,9 @@
         <!-- Linha 3: faixa de preço -->
         <div class="filtros__row filtros__row--preco">
           <span class="filtros__label">Faixa de preço:</span>
-          <input type="number" id="precoMin" placeholder="R$ Mín" class="input-preco" />
+          <input type="number" id="precoMin" placeholder="Preço mínimo" class="input-preco" />
           <span class="filtros__sep">—</span>
-          <input type="number" id="precoMax" placeholder="R$ Máx" class="input-preco" />
+          <input type="number" id="precoMax" placeholder="Preço máximo" class="input-preco" />
           <button class="btn btn--outline btn--sm" id="btnFiltrar">Aplicar</button>
           <button class="btn btn--ghost btn--sm" id="btnLimpar">Limpar tudo</button>
           <span class="filtros__count" id="filtrosCount"></span>
@@ -197,7 +197,7 @@
       </div>
 
       <div id="emptyState" class="empty-state" style="display:none">
-        <p>😔 Nenhum produto encontrado para essa busca.</p>
+        <p>Nenhum produto encontrado para essa busca.</p>
         <button class="btn btn--outline" id="btnLimpar2">Limpar filtros</button>
       </div>
     </div>
@@ -222,7 +222,7 @@
   <footer class="footer">
     <div class="container footer__inner">
       <div class="logo logo--sm">
-        <span class="logo__icon">⚽</span>
+        <span class="logo__icon"></span>
         <span class="logo__text">FANÁTICOS <em>FC</em></span>
       </div>
       <p class="footer__copy">© 2026 Fanáticos FC. Todos os direitos reservados.</p>
@@ -235,11 +235,11 @@
     <div class="side-cart__panel">
       <div class="side-cart__header">
         <h3>Seu Carrinho</h3>
-        <button class="btn-icon" id="btnCloseCart">✕</button>
+        <button class="btn-icon" id="btnCloseCart">Fechar</button>
       </div>
       <div class="side-cart__body" id="cartBody">
         <div class="cart-empty">
-          <span>🛒</span>
+          <span></span>
           <p>Seu carrinho está vazio</p>
         </div>
       </div>
@@ -259,7 +259,7 @@
  
   <div class="modal-overlay" id="modalOverlay" style="display:none">
     <div class="modal" id="modalProduto">
-      <button class="modal__close" id="btnCloseModal">✕</button>
+      <button class="modal__close" id="btnCloseModal">Fechar</button>
       <div class="modal__content" id="modalContent"></div>
     </div>
   </div>
@@ -267,7 +267,7 @@
  
   <div class="modal-overlay" id="authOverlay" style="display:none">
     <div class="modal modal--auth" id="authModal">
-      <button class="modal__close" id="btnCloseAuth">✕</button>
+      <button class="modal__close" id="btnCloseAuth">Fechar</button>
       <div id="authContent"></div>
     </div>
   </div>

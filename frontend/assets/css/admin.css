@@ -319,15 +319,40 @@ td { padding: .85rem 1rem; color: var(--text); vertical-align: middle; }
 .time-section {
   border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; overflow: hidden;
 }
+.time-section--top {
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+}
 .time-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: .6rem 1rem; background: #141414; cursor: pointer;
   user-select: none; transition: var(--transition);
 }
+.time-section--top .time-header {
+  padding: .85rem 1.1rem;
+  background: var(--bg-card);
+}
 .time-header:hover { background: #1c1c1c; }
+.time-section--top .time-header:hover { background: var(--bg-card2); }
 .time-header__left { display: flex; align-items: center; gap: .6rem; }
 .time-arrow { font-size: .65rem; color: var(--text-dim); transition: var(--transition); min-width: .65rem; }
 .time-nome { font-size: .88rem; font-weight: 600; color: var(--text); }
+.time-section--top .time-nome {
+  font-family: var(--font-title);
+  font-size: 1rem;
+  letter-spacing: .02em;
+}
+.time-liga {
+  color: var(--green);
+  border: 1px solid var(--border-green);
+  border-radius: 999px;
+  padding: .12rem .5rem;
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
 .time-count { font-size: .72rem; color: var(--text-dim); white-space: nowrap; }
 
 .time-body { background: #0a0a0a; }
@@ -357,6 +382,24 @@ td { padding: .85rem 1rem; color: var(--text); vertical-align: middle; }
 /* ── Pedidos Table ── */
 .pedidos-table { width: 100%; }
 .pedidos-table th, .pedidos-table td { vertical-align: middle; }
+.orders-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .75rem 1rem;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  background: var(--bg-card2);
+  color: var(--text-muted);
+  font-size: .82rem;
+}
+.orders-pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding: 1rem;
+  border-top: 1px solid var(--border);
+}
 
 .pedido-status-select {
   background: var(--bg-card2);

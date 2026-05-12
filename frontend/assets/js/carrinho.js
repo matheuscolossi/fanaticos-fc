@@ -10,7 +10,7 @@ function renderCartPage() {
   if (items.length === 0) {
     layout.innerHTML = `
       <div class="cart-page__empty">
-        <span>🛒</span>
+        <span></span>
         <h2>Seu carrinho está vazio</h2>
         <p>Adicione produtos para continuar</p>
         <a href="../index.html" class="btn btn--primary">Ver Catálogo</a>
@@ -32,26 +32,31 @@ function renderCartPage() {
           <span>Subtotal</span>
           <span></span>
         </div>
-        ${items.map(item => `
-          <div class="cart-page__item" data-id="${item.id}">
+        ${items.map(item => {
+          const itemKey = getItemKey(item);
+          const details = cartItemDetails(item);
+          const jsKey = JSON.stringify(itemKey);
+          return `
+          <div class="cart-page__item">
             <div class="cart-page__item-product">
               <div class="cart-page__item-img">
                 ${item.imagem
                   ? `<img src="${item.imagem}" alt="${item.nome}" loading="lazy" decoding="async" />`
-                  : `<div class="cart-page__item-placeholder">⚽</div>`}
+                  : `<div class="cart-page__item-placeholder"></div>`}
               </div>
               <div class="cart-page__item-info">
                 <div class="cart-page__item-nome">${item.nome}</div>
+                ${details ? `<div class="cart-page__item-details">${details}</div>` : ''}
                 <div class="cart-page__item-preco">${formatBRL(item.preco)} / un.</div>
               </div>
             </div>
             <div class="cart-page__item-controls">
-              <button class="qty-btn" onclick="changeQty(${item.id}, -1); renderCartPage()">−</button>
+              <button class="qty-btn" onclick='changeQty(${jsKey}, -1); renderCartPage()'>−</button>
               <span class="cart-item__qty">${item.qty}</span>
-              <button class="qty-btn" onclick="changeQty(${item.id}, +1); renderCartPage()">+</button>
+              <button class="qty-btn" onclick='changeQty(${jsKey}, +1); renderCartPage()'>+</button>
             </div>
             <div class="cart-page__item-subtotal">${formatBRL(item.preco * item.qty)}</div>
-            <button class="cart-page__item-remove" onclick="removeFromCart(${item.id}); renderCartPage()" title="Remover item">
+            <button class="cart-page__item-remove" onclick='removeFromCart(${jsKey}); renderCartPage()' title="Remover item">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="3 6 5 6 21 6"/>
                 <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
@@ -60,9 +65,10 @@ function renderCartPage() {
               </svg>
             </button>
           </div>
-        `).join('')}
+        `;
+        }).join('')}
         <div class="cart-page__items-footer">
-          <button class="btn btn--ghost btn--sm" onclick="cartPageClearAll()">🗑 Limpar carrinho</button>
+          <button class="btn btn--ghost btn--sm" onclick="cartPageClearAll()"> Limpar carrinho</button>
         </div>
       </div>
 
@@ -75,7 +81,7 @@ function renderCartPage() {
         <div class="cart-page__summary-row">
           <span>Frete</span>
           <span class="${freteGratis ? 'cart-summary__frete-gratis' : 'cart-summary__frete-calc'}">
-            ${freteGratis ? '✓ Grátis' : 'A calcular'}
+            ${freteGratis ? 'Frete grátis' : 'A calcular'}
           </span>
         </div>
         ${!freteGratis ? `
@@ -102,7 +108,7 @@ function renderCartPage() {
 function cartPageClearAll() {
   if (!confirm('Remover todos os itens do carrinho?')) return;
   const items = getCart();
-  items.forEach(item => removeFromCart(item.id));
+  items.forEach(item => removeFromCart(getItemKey(item)));
   renderCartPage();
 }
 

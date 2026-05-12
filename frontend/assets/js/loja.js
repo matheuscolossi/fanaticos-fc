@@ -10,8 +10,8 @@ function produtoCard(p) {
       <div class="produto-card__img">
         ${img
           ? `<img src="${img}" alt="${p.nome}" loading="lazy" decoding="async" />`
-          : `<div class="produto-card__placeholder">⚽</div>`}
-        ${p.destaque ? `<span class="produto-card__badge">🔥 Destaque</span>` : ''}
+          : `<div class="produto-card__placeholder"></div>`}
+        ${p.destaque ? `<span class="produto-card__badge">Destaque</span>` : ''}
       </div>
       <div class="produto-card__info">
         <div class="produto-card__cat">${p.categoria_nome || 'Sem categoria'}</div>
@@ -27,24 +27,8 @@ function produtoCard(p) {
   `;
 }
 
-function getEmojiForTeam(nome) {
-  const n = (nome || '').toLowerCase();
-  if (n.includes('brasil') || n.includes('flamengo') || n.includes('palmeiras') || n.includes('corinthians') ||
-      n.includes('são paulo') || n.includes('santos') || n.includes('botafogo') || n.includes('vasco') ||
-      n.includes('grêmio') || n.includes('internacional') || n.includes('atletico') || n.includes('cruzeiro') ||
-      n.includes('fluminense') || n.includes('bahia')) return '🇧🇷';
-  if (n.includes('argentina') || n.includes('boca') || n.includes('river') || n.includes('racing') || n.includes('independiente')) return '🇦🇷';
-  if (n.includes('real madrid') || n.includes('barcelona') || n.includes('atletico de madrid') || n.includes('sevilla') || n.includes('valencia') || n.includes('espanha')) return '🇪🇸';
-  if (n.includes('manchester') || n.includes('liverpool') || n.includes('arsenal') || n.includes('chelsea') || n.includes('tottenham') || n.includes('inglaterra')) return '🏴󠁧󠁢󠁥󠁮󠁧󠁿';
-  if (n.includes('juventus') || n.includes('milan') || n.includes('inter de') || n.includes('napoli') || n.includes('roma') || n.includes('lazio') || n.includes('itália')) return '🇮🇹';
-  if (n.includes('bayern') || n.includes('dortmund') || n.includes('alemanha') || n.includes('bundesliga')) return '🇩🇪';
-  if (n.includes('psg') || n.includes('marseille') || n.includes('lyon') || n.includes('mônaco') || n.includes('frança')) return '🇫🇷';
-  if (n.includes('benfica') || n.includes('porto') || n.includes('sporting') || n.includes('portugal')) return '🇵🇹';
-  if (n.includes('inter miami') || n.includes('galaxy') || n.includes('lafc') || n.includes('mls')) return '🇺🇸';
-  if (n.includes('al hilal') || n.includes('al nassr')) return '🇸🇦';
-  if (n.includes('ajax') || n.includes('psv')) return '🇳🇱';
-  if (n.includes('galatasaray') || n.includes('fenerbahçe') || n.includes('besiktas')) return '🇹🇷';
-  return '⚽';
+function getProductPlaceholderLabel() {
+  return 'Imagem indisponível';
 }
 
 function isGooglePhotosLink(url) {
@@ -55,7 +39,7 @@ function produtoCardSafe(p) {
   const imagens = p.imagens || [];
   const img = imagens[0];
   const isGPhotos = isGooglePhotosLink(img);
-  const emoji = getEmojiForTeam(p.nome);
+  const placeholderLabel = getProductPlaceholderLabel();
   const isJogador = p.nome.toLowerCase().includes('jogador');
   const card = document.createElement('div');
   card.className = 'produto-card';
@@ -63,14 +47,13 @@ function produtoCardSafe(p) {
     <div class="produto-card__img">
       ${isGPhotos
         ? `<div class="produto-card__placeholder gphoto-placeholder">
-             <span class="gphoto-emoji">${emoji}</span>
-             <span class="gphoto-label">Ver Fotos</span>
+             <span class="gphoto-label">Ver imagens</span>
            </div>`
         : img
           ? `<img src="${img}" alt="${p.nome}" loading="lazy" decoding="async" />`
-          : `<div class="produto-card__placeholder">${emoji}</div>`}
-      ${p.destaque ? `<span class="produto-card__badge">🔥 Destaque</span>` : ''}
-      ${isJogador ? `<span class="produto-card__badge produto-card__badge--jogador">⭐ Jogador</span>` : ''}
+          : `<div class="produto-card__placeholder">${placeholderLabel}</div>`}
+      ${p.destaque ? `<span class="produto-card__badge">Destaque</span>` : ''}
+      ${isJogador ? `<span class="produto-card__badge produto-card__badge--jogador">Jogador</span>` : ''}
     </div>
     <div class="produto-card__info">
       <div class="produto-card__cat">${p.categoria_nome || 'Sem categoria'}</div>
@@ -91,14 +74,16 @@ function produtoCardSafe(p) {
         } else {
           const ph = document.createElement('div');
           ph.className = 'produto-card__placeholder';
-          ph.textContent = emoji;
+          ph.textContent = placeholderLabel;
           this.replaceWith(ph);
         }
       });
     }
   }
 
-  card.addEventListener('click', () => openProdutoModal(p.id));
+  card.addEventListener('click', () => {
+    window.location.href = `pages/produto.html?id=${encodeURIComponent(p.id)}`;
+  });
   card.querySelector('.produto-card__btn').addEventListener('click', (e) => {
     e.stopPropagation();
     addToCart(p);
@@ -231,7 +216,7 @@ async function openProdutoModal(id) {
                    <div class="gphoto-detail__emoji">${emoji2}</div>
                    <p class="gphoto-detail__text">Fotos disponíveis no álbum</p>
                    <a href="${mainImg}" target="_blank" rel="noopener" class="btn btn--primary gphoto-detail__btn">
-                     📸 Ver Fotos do ${p.nome}
+                     Ver Fotos do ${p.nome}
                    </a>
                  </div>`
               : mainImg
@@ -244,9 +229,9 @@ async function openProdutoModal(id) {
           <h2 class="product-detail__nome">${p.nome}</h2>
           <div class="product-detail__preco">${formatBRL(p.preco)}</div>
           <p class="product-detail__desc">${p.descricao || 'Sem descrição disponível.'}</p>
-          ${p.estoque ? `<p class="product-detail__estoque">📦 ${p.estoque} em estoque</p>` : ''}
+          ${p.estoque ? `<p class="product-detail__estoque">${p.estoque} em estoque</p>` : ''}
           <div class="product-detail__actions">
-            <button class="btn btn--primary" id="btnAddModal">🛒 Adicionar ao Carrinho</button>
+            <button class="btn btn--primary" id="btnAddModal"> Adicionar ao Carrinho</button>
           </div>
         </div>
       </div>
@@ -299,7 +284,7 @@ async function loadProdutos() {
     if (gridP) renderGrid(gridP, allProdutos);
   } catch(e) {
     const grid = document.getElementById('gridProdutos');
-    if (grid) grid.innerHTML = `<div class="loading-state" style="color:var(--danger)">⚠️ Não foi possível conectar ao servidor. Certifique-se que o backend está rodando em http://localhost:3001</div>`;
+    if (grid) grid.innerHTML = `<div class="loading-state" style="color:var(--danger)">Não foi possível conectar ao servidor. Certifique-se que o backend está rodando em http://localhost:3001</div>`;
   }
 }
 

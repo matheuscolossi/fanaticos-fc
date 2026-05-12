@@ -1,13 +1,13 @@
 // ── Página de Conta ───────────────────────────────────────────────────────
 
 const STATUS_CONTA = {
-  'pendente':             { label: 'Pedido Recebido',      icon: '📋', cor: '' },
-  'aguardando_pagamento': { label: 'Aguardando Pagamento', icon: '⏳', cor: 'warning' },
-  'pago':                 { label: 'Pagamento Confirmado', icon: '✅', cor: 'success' },
-  'em_separacao':         { label: 'Em Separação',         icon: '📦', cor: 'info' },
-  'enviado':              { label: 'Enviado / Em Trânsito',icon: '🚚', cor: 'info' },
-  'entregue':             { label: 'Entregue',             icon: '🎉', cor: 'success' },
-  'cancelado':            { label: 'Cancelado',            icon: '❌', cor: 'danger' },
+  'pendente':             { label: 'Pedido Recebido',      icon: '', cor: '' },
+  'aguardando_pagamento': { label: 'Aguardando Pagamento', icon: '', cor: 'warning' },
+  'pago':                 { label: 'Pagamento Confirmado', icon: '', cor: 'success' },
+  'em_separacao':         { label: 'Em Separação',         icon: '', cor: 'info' },
+  'enviado':              { label: 'Enviado / Em Trânsito',icon: '', cor: 'info' },
+  'entregue':             { label: 'Entregue',             icon: '', cor: 'success' },
+  'cancelado':            { label: 'Cancelado',            icon: '', cor: 'danger' },
 };
 
 let contaTab = 'pedidos';
@@ -49,7 +49,7 @@ function renderContaPage() {
         </div>
       </div>
       <div class="conta-header__actions">
-        ${contaUser.perfil === 'admin' ? `<a href="admin.html" class="btn btn--outline btn--sm">⚙ Painel Admin</a>` : ''}
+        ${contaUser.perfil === 'admin' ? `<a href="admin.html" class="btn btn--outline btn--sm">Painel Admin</a>` : ''}
         <button class="btn btn--outline btn--sm" id="btnContaLogout">Sair</button>
       </div>
     </div>
@@ -110,7 +110,7 @@ async function renderPedidosTab() {
     if (pedidos.length === 0) {
       content.innerHTML = `
         <div class="empty-state" style="padding:4rem 1rem">
-          <p style="font-size:3rem">📦</p>
+          <p style="font-size:3rem"></p>
           <p>Você ainda não fez nenhum pedido.</p>
           <a href="../index.html" class="btn btn--primary">Ver Catálogo</a>
         </div>
@@ -121,7 +121,7 @@ async function renderPedidosTab() {
     content.innerHTML = `
       <div class="pedidos-conta-list">
         ${pedidos.map(pedido => {
-          const info = STATUS_CONTA[pedido.status] || { label: pedido.status, icon: '📋', cor: '' };
+          const info = STATUS_CONTA[pedido.status] || { label: pedido.status, icon: '', cor: '' };
           const data = new Date(pedido.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
           return `
             <div class="pedido-conta-card">
@@ -136,8 +136,8 @@ async function renderPedidosTab() {
               </div>
 
               <div class="pedido-conta-card__meta">
-                <span>${pedido.metodo_pagamento === 'pix' ? '🏦 PIX' : '💬 WhatsApp'}</span>
-                ${pedido.endereco ? `<span>📦 ${pedido.endereco}</span>` : ''}
+                <span>${pedido.metodo_pagamento === 'pix' ? ' PIX' : ' WhatsApp'}</span>
+                ${pedido.endereco ? `<span>${pedido.endereco}</span>` : ''}
                 <strong class="pedido-conta-card__total">${formatBRL(pedido.total)}</strong>
               </div>
 
@@ -147,7 +147,7 @@ async function renderPedidosTab() {
                     <div class="pedido-conta-card__item">
                       ${i.imagem
                         ? `<img src="${i.imagem}" alt="${i.nome}" />`
-                        : `<div class="pedido-item-placeholder">⚽</div>`}
+                        : `<div class="pedido-item-placeholder"></div>`}
                       <div>
                         <div class="pedido-item-nome">${i.nome}</div>
                         <div class="pedido-item-qty">x${i.qty} · ${formatBRL(i.preco * i.qty)}</div>
@@ -162,7 +162,7 @@ async function renderPedidosTab() {
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                   <span>Código de rastreio:</span>
                   <strong id="trackCode_${pedido.id}">${pedido.codigo_rastreio}</strong>
-                  <button class="btn btn--outline btn--sm" data-copy="${pedido.id}">📋 Copiar</button>
+                  <button class="btn btn--outline btn--sm" data-copy="${pedido.id}">Copiar</button>
                 </div>
               ` : ''}
             </div>
@@ -176,7 +176,7 @@ async function renderPedidosTab() {
       const id = btn.dataset.copy;
       btn.addEventListener('click', () => {
         const code = document.getElementById(`trackCode_${id}`)?.textContent;
-        if (code) navigator.clipboard.writeText(code).then(() => showToast('Código copiado! 📋'));
+        if (code) navigator.clipboard.writeText(code).then(() => showToast('Código copiado! '));
       });
     });
 
@@ -221,7 +221,7 @@ async function renderPerfilTab() {
       </div>
 
       <div class="perfil-card">
-        <h2 class="perfil-card__title">📦 Endereço de Entrega</h2>
+        <h2 class="perfil-card__title">Endereço de Entrega</h2>
         <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">
           Seu endereço padrão será preenchido automaticamente no checkout.
         </p>
@@ -288,7 +288,7 @@ async function renderPerfilTab() {
       const avatar = document.querySelector('.conta-avatar');
       if (headerNome) headerNome.textContent = user.nome;
       if (avatar) avatar.textContent = user.nome.charAt(0).toUpperCase();
-      showToast('Nome atualizado com sucesso! ✅');
+      showToast('Nome atualizado com sucesso! ');
     } catch (e) {
       showToast(e.message, 'error');
     }
@@ -310,7 +310,7 @@ async function renderPerfilTab() {
       Object.assign(user, { endereco_rua: rua, cidade, cep, telefone });
       localStorage.setItem('fc_user', JSON.stringify(user));
       contaUser = user;
-      showToast('Endereço salvo com sucesso! 📦');
+      showToast('Endereço salvo com sucesso! ');
     } catch(e) {
       showToast(e.message, 'error');
     }
@@ -328,7 +328,7 @@ async function renderPerfilTab() {
       await api.put('/auth/perfil', { senhaAtual, novaSenha });
       document.getElementById('senhaAtual').value = '';
       document.getElementById('novaSenha').value = '';
-      showToast('Senha alterada com sucesso! ✅');
+      showToast('Senha alterada com sucesso! ');
     } catch (e) {
       showToast(e.message, 'error');
     }
@@ -344,7 +344,7 @@ function renderContaLogin() {
     <div class="conta-login">
       <div class="conta-login__card">
         <div class="conta-login__logo">
-          <span>⚽</span>
+          <span></span>
           <h1>Minha Conta</h1>
           <p>Entre para acompanhar seus pedidos</p>
         </div>
@@ -406,7 +406,7 @@ async function doLogin() {
     const data = await api.post('/auth/login', { email, senha });
     localStorage.setItem('fc_token', data.token);
     localStorage.setItem('fc_user', JSON.stringify(data.user));
-    showToast(`Bem-vindo, ${data.user.nome.split(' ')[0]}! 👋`);
+    showToast(`Bem-vindo, ${data.user.nome.split(' ')[0]}! `);
     contaTab = 'pedidos';
     renderContaPage();
   } catch (e) {
@@ -429,7 +429,7 @@ async function doRegister() {
     const data = await api.post('/auth/login', { email, senha });
     localStorage.setItem('fc_token', data.token);
     localStorage.setItem('fc_user', JSON.stringify(data.user));
-    showToast('Conta criada com sucesso! 🎉');
+    showToast('Conta criada com sucesso! ');
     contaTab = 'pedidos';
     renderContaPage();
   } catch (e) {

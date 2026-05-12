@@ -4,8 +4,8 @@ const path = require('path');
 
 const DB_PATH = path.join(__dirname, '../../fanaticos.db');
 const db = new sqlite3.Database(DB_PATH, (err) => {
-  if (err) console.error('Erro ao abrir banco:', err);
-  else console.log('✅ Banco conectado:', DB_PATH);
+  if (err) console.error('[database:connect:error]', err);
+  else console.log('[database] Connected:', DB_PATH);
 });
 
 function run(sql, params = []) {
@@ -105,7 +105,7 @@ async function init() {
     ]) {
       await run('INSERT INTO categorias (nome) VALUES (?)', [nome]);
     }
-    console.log('✅ Categorias inseridas');
+    console.log('[database] Default categories inserted.');
   }
 
   const admin = await get("SELECT COUNT(*) as c FROM usuarios WHERE perfil='admin'");
@@ -113,7 +113,7 @@ async function init() {
     const hash = bcrypt.hashSync('admin123', 10);
     await run('INSERT INTO usuarios (nome, email, senha, perfil) VALUES (?,?,?,?)',
       ['Administrador','admin@fanaticosfc.com', hash,'admin']);
-    console.log('✅ Admin criado: admin@fanaticosfc.com / admin123');
+    console.log('[database] Default admin created: admin@fanaticosfc.com');
   }
 
   const prods = await get('SELECT COUNT(*) as c FROM produtos');
@@ -670,10 +670,10 @@ async function init() {
       );
       count++;
     }
-    console.log(`✅ ${count} produtos inseridos`);
+    console.log(` ${count} produtos inseridos`);
   }
 
-  console.log('✅ Banco inicializado');
+    console.log('[database] Initialized.');
 }
 
 module.exports = { db, run, get, all, init };
