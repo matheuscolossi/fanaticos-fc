@@ -621,10 +621,93 @@ const STATUS_PEDIDO = {
   'cancelado':            { label: 'Cancelado',             color: '#ff4444' },
 };
 
+let pedidosCache = [];
+
+function verDetalhesPedido(id) {
+  const p = pedidosCache.find(x => x.id === id);
+  if (!p) return;
+
+  const st = STATUS_PEDIDO[p.status] || { label: p.status, color: '#888' };
+  const metodo = p.metodo_pagamento === 'pix' ? '🏦 PIX' : '💬 WhatsApp';
+  const itensHtml = p.itens.map(i =>
+    `<div style="display:flex;justify-content:space-between;padding:.35rem 0;border-bottom:1px solid var(--border)">
+      <span>${i.nome} <em style="color:var(--text-muted)">x${i.qty}</em></span>
+      <span>${formatBRL(i.preco * i.qty)}</span>
+    </div>`
+  ).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = '_pedidoDetailOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.82);backdrop-filter:blur(4px);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:1.5rem';
+  overlay.innerHTML = `
+    <div class="modal modal--checkout" style="margin:auto;width:100%;max-width:580px">
+      <div class="co-header">
+        <h2>Pedido #${p.id}</h2>
+        <button class="modal__close" id="_btnFecharDetalhe">✕</button>
+      </div>
+
+      <div style="padding:0 1.25rem 1.25rem">
+        <!-- Status -->
+        <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:1.25rem">
+          <span style="background:${st.color}22;color:${st.color};padding:.3rem .75rem;border-radius:20px;font-size:.82rem;font-weight:600">${st.label}</span>
+          <span style="color:var(--text-muted);font-size:.8rem">${new Date(p.created_at).toLocaleString('pt-BR')}</span>
+        </div>
+
+        <!-- Endereço de Entrega -->
+        <div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:1rem">
+          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:.5rem">📦 Endereço de Entrega</div>
+          ${p.endereco
+            ? `<div style="font-size:.95rem;font-weight:500;line-height:1.6">${p.endereco.replace(/ — /g, '<br>')}</div>`
+            : '<div style="color:var(--text-muted);font-size:.85rem">Não informado</div>'}
+        </div>
+
+        <!-- Dados do Cliente -->
+        <div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:1rem">
+          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:.5rem">👤 Dados do Cliente</div>
+          <div style="display:grid;gap:.35rem;font-size:.88rem">
+            ${p.nome_cliente ? `<div><span style="color:var(--text-muted)">Nome:</span> <strong>${p.nome_cliente}</strong></div>` : ''}
+            ${p.telefone_cliente ? `<div><span style="color:var(--text-muted)">Telefone:</span> ${p.telefone_cliente}</div>` : ''}
+            ${p.email_cliente ? `<div><span style="color:var(--text-muted)">E-mail:</span> ${p.email_cliente}</div>` : ''}
+          </div>
+        </div>
+
+        <!-- Itens -->
+        <div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:1rem">
+          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:.5rem">🛒 Itens do Pedido</div>
+          <div style="font-size:.88rem">${itensHtml}</div>
+          <div style="display:flex;justify-content:space-between;padding:.5rem 0 0;font-weight:700;font-size:.95rem">
+            <span>Total</span><span>${formatBRL(p.total)}</span>
+          </div>
+        </div>
+
+        <!-- Pagamento -->
+        <div style="display:flex;gap:.75rem;font-size:.85rem;color:var(--text-muted)">
+          <span>Pagamento: <strong style="color:var(--text)">${metodo}</strong></span>
+          ${p.codigo_rastreio ? `<span>| Rastreio: <strong style="color:var(--text)">${p.codigo_rastreio}</strong></span>` : ''}
+        </div>
+
+        <!-- Ações -->
+        ${p.telefone_cliente ? `
+        <div style="margin-top:1rem">
+          <a href="https://wa.me/55${p.telefone_cliente.replace(/\D/g,'')}" target="_blank"
+             class="btn btn--whatsapp" style="width:100%;justify-content:center">
+            💬 Contatar cliente pelo WhatsApp
+          </a>
+        </div>` : ''}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  overlay.querySelector('#_btnFecharDetalhe').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
 async function loadPedidos() {
   const wrap = document.getElementById('tabelaPedidosWrap');
   try {
     const pedidos = await api.get('/pedidos');
+    pedidosCache = pedidos;
     if (pedidos.length === 0) {
       wrap.innerHTML = '<div class="loading-state">Nenhum pedido registrado ainda.</div>'; return;
     }
@@ -678,6 +761,7 @@ async function loadPedidos() {
               <td><span class="td-preco">${formatBRL(p.total)}</span></td>
               <td><span style="font-size:.82rem">${metodoIcon}</span></td>
               <td>
+                <div style="margin-bottom:4px;font-size:.75rem;font-weight:600;color:${st.color}">${st.label}</div>
                 <select class="pedido-status-select" data-id="${p.id}" onchange="salvarStatusPedido(${p.id})">
                   ${Object.entries(STATUS_PEDIDO).map(([val, info]) =>
                     `<option value="${val}" ${p.status === val ? 'selected' : ''}>${info.label}</option>`
@@ -694,9 +778,12 @@ async function loadPedidos() {
               </td>
               <td style="color:var(--text-muted);font-size:.82rem;white-space:nowrap">${new Date(p.created_at).toLocaleString('pt-BR')}</td>
               <td>
-                ${p.telefone_cliente ? `
-                <a href="https://wa.me/55${p.telefone_cliente.replace(/\D/g,'')}" target="_blank"
-                   class="btn btn--whatsapp btn--sm" title="Contatar cliente">💬</a>` : ''}
+                <div style="display:flex;gap:4px;flex-wrap:wrap">
+                  <button class="btn btn--outline btn--sm" onclick="verDetalhesPedido(${p.id})" title="Ver detalhes do pedido">🔍</button>
+                  ${p.telefone_cliente ? `
+                  <a href="https://wa.me/55${p.telefone_cliente.replace(/\D/g,'')}" target="_blank"
+                     class="btn btn--whatsapp btn--sm" title="Contatar cliente">💬</a>` : ''}
+                </div>
               </td>
             </tr>
           `}).join('')}

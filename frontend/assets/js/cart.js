@@ -56,7 +56,7 @@ function renderCart() {
     <div class="cart-item" data-id="${item.id}">
       <div class="cart-item__img">
         ${item.imagem
-          ? `<img src="${item.imagem}" alt="${item.nome}" loading="lazy" />`
+          ? `<img src="${item.imagem}" alt="${item.nome}" loading="lazy" decoding="async" />`
           : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:1.8rem;">⚽</div>`}
       </div>
       <div class="cart-item__info">
@@ -195,6 +195,19 @@ function renderCheckoutStep1() {
     </div>
   `;
 
+  // Pré-preenche com dados salvos do usuário
+  try {
+    const saved = JSON.parse(localStorage.getItem('fc_user') || 'null');
+    if (saved) {
+      if (saved.nome)         document.getElementById('co_nome').value = saved.nome;
+      if (saved.telefone)     document.getElementById('co_telefone').value = saved.telefone;
+      if (saved.email)        document.getElementById('co_email').value = saved.email;
+      if (saved.endereco_rua) document.getElementById('co_endereco').value = saved.endereco_rua;
+      if (saved.cidade)       document.getElementById('co_cidade').value = saved.cidade;
+      if (saved.cep)          document.getElementById('co_cep').value = saved.cep;
+    }
+  } catch(_) {}
+
   const btnFechar = document.getElementById('btnFecharCheckout');
   const btnConfirmar = document.getElementById('btnConfirmarPedido');
   // cloneNode remove quaisquer listeners antigos antes de adicionar novo
@@ -277,7 +290,7 @@ function abrirPixOverlay(pedidoId, total) {
     return;
   }
 
-  const PIX_CPF    = '03296271040';
+  const PIX_CPF    = '032.962.710-40';
   const PIX_NOME   = 'Fanaticos FC';
   const PIX_CIDADE = 'Caxias do Sul';
 

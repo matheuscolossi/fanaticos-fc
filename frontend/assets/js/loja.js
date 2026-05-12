@@ -9,7 +9,7 @@ function produtoCard(p) {
     <div class="produto-card" onclick="openProdutoModal(${p.id})">
       <div class="produto-card__img">
         ${img
-          ? `<img src="${img}" alt="${p.nome}" loading="lazy" />`
+          ? `<img src="${img}" alt="${p.nome}" loading="lazy" decoding="async" />`
           : `<div class="produto-card__placeholder">⚽</div>`}
         ${p.destaque ? `<span class="produto-card__badge">🔥 Destaque</span>` : ''}
       </div>
@@ -67,7 +67,7 @@ function produtoCardSafe(p) {
              <span class="gphoto-label">Ver Fotos</span>
            </div>`
         : img
-          ? `<img src="${img}" alt="${p.nome}" loading="lazy" />`
+          ? `<img src="${img}" alt="${p.nome}" loading="lazy" decoding="async" />`
           : `<div class="produto-card__placeholder">${emoji}</div>`}
       ${p.destaque ? `<span class="produto-card__badge">🔥 Destaque</span>` : ''}
       ${isJogador ? `<span class="produto-card__badge produto-card__badge--jogador">⭐ Jogador</span>` : ''}
@@ -235,7 +235,7 @@ async function openProdutoModal(id) {
                    </a>
                  </div>`
               : mainImg
-                ? `<img src="${mainImg}" alt="${p.nome}" id="mainImgEl" />`
+                ? `<img src="${mainImg}" alt="${p.nome}" id="mainImgEl" decoding="async" />`
                 : `<div style="height:300px;display:flex;align-items:center;justify-content:center;font-size:5rem;">${emoji2}</div>`}
           </div>
         </div>

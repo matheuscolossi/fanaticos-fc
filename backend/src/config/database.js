@@ -87,6 +87,16 @@ async function init() {
     try { await run(sql); } catch(e) { /* coluna já existe */ }
   }
 
+  const usuarioMigrations = [
+    `ALTER TABLE usuarios ADD COLUMN telefone TEXT`,
+    `ALTER TABLE usuarios ADD COLUMN endereco_rua TEXT`,
+    `ALTER TABLE usuarios ADD COLUMN cidade TEXT`,
+    `ALTER TABLE usuarios ADD COLUMN cep TEXT`,
+  ];
+  for (const sql of usuarioMigrations) {
+    try { await run(sql); } catch(e) { /* coluna já existe */ }
+  }
+
   const cats = await get('SELECT COUNT(*) as c FROM categorias');
   if (cats.c === 0) {
     for (const nome of [

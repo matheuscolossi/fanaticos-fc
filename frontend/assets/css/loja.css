@@ -42,10 +42,13 @@
 .co-resumo-item {
   display: flex;
   justify-content: space-between;
+  gap: 1rem;
   font-size: .85rem;
   color: var(--text-muted);
   padding: .2rem 0;
 }
+.co-resumo-item span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.co-resumo-item span:last-child { flex-shrink: 0; }
 .co-resumo-item em { color: var(--text-dim); font-style: normal; }
 .co-resumo-total {
   display: flex;
@@ -383,9 +386,47 @@
 }
 
 @media (max-width: 500px) {
+  .modal-overlay--checkout { padding: .75rem; }
+  .modal--checkout,
+  .modal--tracking { max-width: 100%; }
+  .co-header { padding: 1rem 1.1rem .85rem; }
+  .co-header h2 { font-size: 1.1rem; padding-right: 2rem; }
+  .co-resumo,
+  .co-form,
+  .pix-box,
+  .tracking-result,
+  .modal--tracking .co-header,
+  .modal--tracking .co-form { padding-left: 1rem; padding-right: 1rem; }
   .co-form-row { flex-direction: column; }
   .co-payment-opts { flex-direction: column; }
+  .co-payment-card { padding: .8rem; }
+  .pix-qr-img { width: min(220px, 72vw); height: min(220px, 72vw); }
+  .pix-key-wrap { padding: .85rem; }
+  .pix-key-value { font-size: 1rem; overflow-wrap: anywhere; }
   .pix-info-row { flex-direction: column; }
+  .co-pix-actions { padding: 0 1rem 1rem; }
+  .tracking-status-badge { align-items: flex-start; }
+  .tracking-steps {
+    flex-direction: column;
+    gap: .75rem;
+    margin-left: .25rem;
+  }
+  .tracking-steps::before {
+    top: 10px;
+    bottom: 10px;
+    left: 9px;
+    right: auto;
+    width: 2px;
+    height: auto;
+  }
+  .tracking-step {
+    flex-direction: row;
+    align-items: center;
+    text-align: left;
+  }
+  .tracking-step__label { text-align: left; font-size: .78rem; }
+  .tracking-code-box { align-items: flex-start; flex-direction: column; }
+  .tracking-code-box .btn { width: 100%; }
 }
 /* Produto card animation delay */
 .produto-card:nth-child(1) { animation-delay: 0ms; }
@@ -526,10 +567,34 @@
   .cart-page__summary { position: static; }
 }
 @media (max-width: 560px) {
+  .cart-page { padding: 1.5rem 0 3rem; }
+  .cart-page__header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: .75rem;
+  }
   .cart-page__items-header { display: none; }
-  .cart-page__item { grid-template-columns: 1fr auto; gap: .75rem; }
+  .cart-page__item {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: .75rem;
+    padding: 1rem;
+  }
   .cart-page__item-product { grid-column: 1 / -1; }
-  .cart-page__item-subtotal { color: var(--text-muted); font-size: .88rem; }
+  .cart-page__item-controls { justify-content: flex-start; }
+  .cart-page__item-subtotal {
+    color: var(--green);
+    font-size: .95rem;
+    min-width: 0;
+    text-align: left;
+  }
+  .cart-page__item-remove {
+    position: absolute;
+    right: .75rem;
+    top: .75rem;
+  }
+  .cart-page__item { position: relative; }
+  .cart-page__summary { padding: 1.1rem; }
 }
 
 /* ══════════════════════════════════════════════
@@ -672,7 +737,46 @@
 
 @media (max-width: 768px) {
   .conta-header { flex-direction: column; align-items: flex-start; }
+  .conta-header__actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .conta-header__actions .btn { flex: 1; }
+  .conta-header__email {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
   .pedido-conta-card__total { margin-left: 0; }
   .conta-tabs { overflow-x: auto; scrollbar-width: none; }
   .conta-tabs::-webkit-scrollbar { display: none; }
+  .pedido-conta-card__id {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: .25rem;
+  }
+  .pedido-conta-card__meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: .45rem;
+  }
+  .pedido-conta-card__item { min-width: 100%; }
+  .pedido-conta-card__rastreio strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 420px) {
+  .conta-page,
+  .cart-page { padding-top: 1rem; }
+  .conta-header,
+  .perfil-card,
+  .cart-page__items,
+  .cart-page__summary { border-radius: var(--radius-sm); }
+  .conta-tabs { margin-bottom: 1.25rem; }
+  .conta-tab {
+    flex: 0 0 auto;
+    padding: .8rem 1rem;
+  }
+  .perfil-card { padding: 1rem; }
 }

@@ -192,8 +192,16 @@ async function renderPedidosTab() {
 
 // ── Aba Perfil ────────────────────────────────────────────────────────────
 
-function renderPerfilTab() {
+async function renderPerfilTab() {
   const content = document.getElementById('contaTabContent');
+  content.innerHTML = `<div class="loading-state" style="padding:3rem 0"><div class="spinner"></div></div>`;
+
+  // Busca perfil completo (inclui endereço)
+  let perfil = contaUser;
+  try {
+    perfil = await api.get('/auth/perfil');
+  } catch(e) { /* usa dados do localStorage */ }
+
   content.innerHTML = `
     <div class="perfil-section">
       <div class="perfil-card">
@@ -201,15 +209,48 @@ function renderPerfilTab() {
         <div class="co-form-row">
           <div class="co-form-group">
             <label>Nome completo</label>
-            <input type="text" id="perfilNome" value="${contaUser.nome}" />
+            <input type="text" id="perfilNome" value="${perfil.nome}" />
           </div>
           <div class="co-form-group">
             <label>E-mail (não editável)</label>
-            <input type="email" value="${contaUser.email}" disabled />
+            <input type="email" value="${perfil.email}" disabled />
           </div>
         </div>
         <p id="perfilNomeMsg" class="perfil-msg" style="display:none"></p>
         <button class="btn btn--primary btn--sm" id="btnSalvarNome">Salvar alterações</button>
+      </div>
+
+      <div class="perfil-card">
+        <h2 class="perfil-card__title">📦 Endereço de Entrega</h2>
+        <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">
+          Seu endereço padrão será preenchido automaticamente no checkout.
+        </p>
+        <div class="co-form-row">
+          <div class="co-form-group" style="flex:2">
+            <label>Rua, Número e Bairro *</label>
+            <input type="text" id="endRua" placeholder="Rua das Flores, 123, Centro"
+              value="${perfil.endereco_rua || ''}" />
+          </div>
+          <div class="co-form-group">
+            <label>CEP *</label>
+            <input type="text" id="endCep" placeholder="00000-000" maxlength="9"
+              value="${perfil.cep || ''}" />
+          </div>
+        </div>
+        <div class="co-form-row">
+          <div class="co-form-group">
+            <label>Cidade / Estado *</label>
+            <input type="text" id="endCidade" placeholder="Porto Alegre / RS"
+              value="${perfil.cidade || ''}" />
+          </div>
+          <div class="co-form-group">
+            <label>WhatsApp / Telefone</label>
+            <input type="tel" id="endTelefone" placeholder="(54) 99999-9999"
+              value="${perfil.telefone || ''}" />
+          </div>
+        </div>
+        <p id="endMsg" class="perfil-msg" style="display:none"></p>
+        <button class="btn btn--primary btn--sm" id="btnSalvarEndereco">Salvar endereço</button>
       </div>
 
       <div class="perfil-card">
@@ -252,6 +293,28 @@ function renderPerfilTab() {
       showToast(e.message, 'error');
     }
     btn.disabled = false; btn.textContent = 'Salvar alterações';
+  });
+
+  document.getElementById('btnSalvarEndereco').addEventListener('click', async () => {
+    const rua     = document.getElementById('endRua').value.trim();
+    const cep     = document.getElementById('endCep').value.trim();
+    const cidade  = document.getElementById('endCidade').value.trim();
+    const telefone = document.getElementById('endTelefone').value.trim();
+    if (!rua || !cep || !cidade) { showToast('Preencha rua, CEP e cidade.', 'error'); return; }
+    const btn = document.getElementById('btnSalvarEndereco');
+    btn.disabled = true; btn.textContent = 'Salvando...';
+    try {
+      await api.put('/auth/perfil', { endereco_rua: rua, cidade, cep, telefone });
+      // Persiste no localStorage para o checkout usar
+      const user = JSON.parse(localStorage.getItem('fc_user') || '{}');
+      Object.assign(user, { endereco_rua: rua, cidade, cep, telefone });
+      localStorage.setItem('fc_user', JSON.stringify(user));
+      contaUser = user;
+      showToast('Endereço salvo com sucesso! 📦');
+    } catch(e) {
+      showToast(e.message, 'error');
+    }
+    btn.disabled = false; btn.textContent = 'Salvar endereço';
   });
 
   document.getElementById('btnAlterarSenha').addEventListener('click', async () => {

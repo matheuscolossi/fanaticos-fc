@@ -139,9 +139,20 @@ app.get('/api/pedidos/meus', authMiddleware, async (req, res) => {
 });
 
 // ── PERFIL DO USUÁRIO ─────────────────────────────────────────────────────
+app.get('/api/auth/perfil', authMiddleware, async (req, res) => {
+  try {
+    const user = await get(
+      'SELECT id, nome, email, perfil, telefone, endereco_rua, cidade, cep FROM usuarios WHERE id = ?',
+      [req.user.id]
+    );
+    if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
+    res.json(user);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.put('/api/auth/perfil', authMiddleware, async (req, res) => {
   try {
-    const { nome, senhaAtual, novaSenha } = req.body;
+    const { nome, senhaAtual, novaSenha, telefone, endereco_rua, cidade, cep } = req.body;
     const user = await get('SELECT * FROM usuarios WHERE id = ?', [req.user.id]);
     if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
     if (novaSenha) {
@@ -150,11 +161,19 @@ app.put('/api/auth/perfil', authMiddleware, async (req, res) => {
         return res.status(401).json({ error: 'Senha atual incorreta' });
       const hash = bcrypt.hashSync(novaSenha, 10);
       await run('UPDATE usuarios SET nome = ?, senha = ? WHERE id = ?', [nome || user.nome, hash, req.user.id]);
+    } else if (telefone !== undefined || endereco_rua !== undefined || cidade !== undefined || cep !== undefined) {
+      await run(
+        'UPDATE usuarios SET telefone = ?, endereco_rua = ?, cidade = ?, cep = ? WHERE id = ?',
+        [telefone ?? user.telefone, endereco_rua ?? user.endereco_rua, cidade ?? user.cidade, cep ?? user.cep, req.user.id]
+      );
     } else {
       if (!nome) return res.status(400).json({ error: 'Informe o nome' });
       await run('UPDATE usuarios SET nome = ? WHERE id = ?', [nome, req.user.id]);
     }
-    const updated = await get('SELECT id, nome, email, perfil FROM usuarios WHERE id = ?', [req.user.id]);
+    const updated = await get(
+      'SELECT id, nome, email, perfil, telefone, endereco_rua, cidade, cep FROM usuarios WHERE id = ?',
+      [req.user.id]
+    );
     res.json({ message: 'Perfil atualizado', user: updated });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

@@ -41,23 +41,9 @@ const CONFIG = {
 
   searches: [
     // Vá adicionando aqui, uma por uma:
-    { search: 'https://pedidoatacado.com/?s=ATLETICO+MINEIRO&post_type=product', pages: 2, mapTo: 'Brasileirão' },
-     { search: 'https://pedidoatacado.com/?s=BAHIA&post_type=product', pages: 2, mapTo: 'Brasileirão' },
-      { search: 'https://pedidoatacado.com/?s=BOTAFOGO&post_type=product', pages: 2, mapTo: 'Brasileirão' },
-       { search: 'https://pedidoatacado.com/?s=CORINTHIANS&post_type=product', pages: 5, mapTo: 'Brasileirão' },
-        { search: 'https://pedidoatacado.com/?s=CRUZEIRO&post_type=product', pages: 3, mapTo: 'Brasileirão' },
-         { search: 'https://pedidoatacado.com/?s=FLUMINENSE&post_type=product', pages: 2, mapTo: 'Brasileirão' },
-         { search: 'https://pedidoatacado.com/?s=GR%C3%8AMIO&post_type=product', pages: 1, mapTo: 'Brasileirão' },
-         { search: 'https://pedidoatacado.com/?s=INTERNACIONAL&post_type=product', pages: 2, mapTo: 'Brasileirão' },
-         { search: 'https://pedidoatacado.com/?s=PALMEIRAS&post_type=product', pages: 3, mapTo: 'Brasileirão' },
-         { search: 'https://pedidoatacado.com/?s=SANTOS&post_type=product', pages: 2, mapTo: 'Brasileirão' },
-         { search: 'https://pedidoatacado.com/?s=S%C3%83O+PAULO&post_type=product', pages: 3, mapTo: 'Brasileirão' },
-    // { search: 'CORINTHIANS', pages: 3, mapTo: 'Brasileirão' },
-    // { search: 'PALMEIRAS', pages: 3, mapTo: 'Brasileirão' },
-    // { search: 'SAO PAULO', pages: 3, mapTo: 'Brasileirão' },
-    // { search: 'BRASIL', pages: 3, mapTo: 'Seleções' },
-    // { search: 'REAL MADRID', pages: 3, mapTo: 'Times Internacionais' },
-    // { search: 'BARCELONA', pages: 3, mapTo: 'Times Internacionais' },
+    { search: 'https://pedidoatacado.com/?s=FORTALEZA&post_type=product', pages: 1, mapTo: 'Brasileirão' },
+  
+  
   ],
 
   defaultPrice: 149.90,

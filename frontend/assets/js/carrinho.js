@@ -37,7 +37,7 @@ function renderCartPage() {
             <div class="cart-page__item-product">
               <div class="cart-page__item-img">
                 ${item.imagem
-                  ? `<img src="${item.imagem}" alt="${item.nome}" loading="lazy" />`
+                  ? `<img src="${item.imagem}" alt="${item.nome}" loading="lazy" decoding="async" />`
                   : `<div class="cart-page__item-placeholder">⚽</div>`}
               </div>
               <div class="cart-page__item-info">
