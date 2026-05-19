@@ -3,11 +3,11 @@ const cors = require('cors');
 const { init } = require('./src/config/database');
 const { buildAdminMiddleware, buildAuthMiddleware } = require('./src/middleware/auth');
 const { errorHandler } = require('./src/utils/http');
-const authRoutes = require('./src/routes/auth');
-const categoriesRoutes = require('./src/routes/categories');
-const ordersRoutes = require('./src/routes/orders');
-const productsRoutes = require('./src/routes/produtos');
-const usersRoutes = require('./src/routes/users');
+const authRoutes = require('./src/routes/authRoutes');
+const categoryRoutes = require('./src/routes/categoryRoutes');
+const orderRoutes = require('./src/routes/orderRoutes');
+const productRoutes = require('./src/routes/productRoutes');
+const userRoutes = require('./src/routes/userRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -19,10 +19,10 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 app.use('/api/auth', authRoutes({ authMiddleware, jwtSecret: JWT_SECRET }));
-app.use('/api/categorias', categoriesRoutes);
-app.use('/api/produtos', productsRoutes(adminMiddleware));
-app.use('/api/pedidos', ordersRoutes({ adminMiddleware, authMiddleware }));
-app.use('/api/admin/usuarios', usersRoutes({ adminMiddleware }));
+app.use('/api/categorias', categoryRoutes);
+app.use('/api/produtos', productRoutes(adminMiddleware));
+app.use('/api/pedidos', orderRoutes({ adminMiddleware, authMiddleware }));
+app.use('/api/admin/usuarios', userRoutes({ adminMiddleware }));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

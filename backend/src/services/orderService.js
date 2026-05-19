@@ -1,7 +1,8 @@
-const { run, get, all } = require('../config/database');
+const orderModel = require('../models/orderModel');
 const { createHttpError } = require('../utils/http');
 
 function parseOrderItems(order) {
+  if (Array.isArray(order.itens)) return order;
   return { ...order, itens: JSON.parse(order.itens || '[]') };
 }
 
@@ -15,56 +16,42 @@ async function createOrder(data) {
     throw createHttpError(400, 'Order items and total are required.', 'VALIDATION_ERROR');
   }
 
-  const result = await run(
-    `INSERT INTO pedidos (usuario_id, itens, total, nome_cliente, email_cliente, telefone_cliente, endereco, metodo_pagamento, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      usuario_id || null,
-      JSON.stringify(itens),
-      total,
-      nome_cliente || null,
-      email_cliente || null,
-      telefone_cliente || null,
-      endereco || null,
-      metodo_pagamento || 'whatsapp',
-      getInitialOrderStatus(metodo_pagamento),
-    ]
-  );
+  const result = await orderModel.create({
+    usuario_id: usuario_id || null,
+    itens: JSON.stringify(itens),
+    total,
+    nome_cliente: nome_cliente || null,
+    email_cliente: email_cliente || null,
+    telefone_cliente: telefone_cliente || null,
+    endereco: endereco || null,
+    metodo_pagamento: metodo_pagamento || 'whatsapp',
+    status: getInitialOrderStatus(metodo_pagamento),
+  });
 
   return { message: 'Order created.', id: result.lastID };
 }
 
 async function listOrders() {
-  const orders = await all('SELECT * FROM pedidos ORDER BY created_at DESC');
+  const orders = await orderModel.list();
   return orders.map(parseOrderItems);
 }
 
 async function listOrdersByUser(user) {
-  const orders = await all(
-    'SELECT * FROM pedidos WHERE email_cliente = ? OR usuario_id = ? ORDER BY created_at DESC',
-    [user.email, user.id]
-  );
+  const orders = await orderModel.listByUser(user);
   return orders.map(parseOrderItems);
 }
 
 async function getTrackingById(orderId) {
-  const order = await get(
-    'SELECT id, status, codigo_rastreio, metodo_pagamento, total, nome_cliente, created_at FROM pedidos WHERE id = ?',
-    [orderId]
-  );
+  const order = await orderModel.findTrackingById(orderId);
   if (!order) throw createHttpError(404, 'Order not found.', 'ORDER_NOT_FOUND');
   return order;
 }
 
-async function updateOrder(orderId, { status, codigo_rastreio }) {
-  const existingOrder = await get('SELECT id FROM pedidos WHERE id = ?', [orderId]);
+async function updateOrder(orderId, data) {
+  const existingOrder = await orderModel.exists(orderId);
   if (!existingOrder) throw createHttpError(404, 'Order not found.', 'ORDER_NOT_FOUND');
 
-  await run(
-    'UPDATE pedidos SET status = COALESCE(?, status), codigo_rastreio = COALESCE(?, codigo_rastreio) WHERE id = ?',
-    [status || null, codigo_rastreio !== undefined ? codigo_rastreio : null, orderId]
-  );
-
+  await orderModel.updateTracking(orderId, data);
   return { message: 'Order updated.' };
 }
 
