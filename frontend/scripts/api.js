@@ -1,4 +1,4 @@
-const API_BASE = window.FANATICOS_API_BASE || 'http://localhost:3001/api';
+const API_BASE = window.FANATICOS_API_BASE || 'https://fanaticos-fc.onrender.com/api';
 
 async function apiFetch(path, options = {}) {
   const token = localStorage.getItem('fc_token');
