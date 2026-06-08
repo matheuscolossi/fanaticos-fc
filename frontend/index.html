@@ -14,6 +14,31 @@
 <body>
 
 
+  <div class="promo-bar">
+    <div class="promo-bar__track">
+      <span>🎽 Nova Coleção 2026</span>
+      <span class="promo-bar__dot">·</span>
+      <span>Frete grátis acima de R$300</span>
+      <span class="promo-bar__dot">·</span>
+      <span>Qualidade 1:1 garantida</span>
+      <span class="promo-bar__dot">·</span>
+      <span>Camisas originais e retrô</span>
+      <span class="promo-bar__dot">·</span>
+      <span>Pagamento via PIX ou WhatsApp</span>
+      <span class="promo-bar__dot">·</span>
+      <span>🎽 Nova Coleção 2026</span>
+      <span class="promo-bar__dot">·</span>
+      <span>Frete grátis acima de R$300</span>
+      <span class="promo-bar__dot">·</span>
+      <span>Qualidade 1:1 garantida</span>
+      <span class="promo-bar__dot">·</span>
+      <span>Camisas originais e retrô</span>
+      <span class="promo-bar__dot">·</span>
+      <span>Pagamento via PIX ou WhatsApp</span>
+      <span class="promo-bar__dot">·</span>
+    </div>
+  </div>
+
   <header class="header" id="header">
     <div class="header__inner">
       <a href="index.html" class="logo">
@@ -90,11 +115,68 @@
             <svg class="nav__chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
           </button>
           <div class="nav__dropdown">
-            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('Bundesliga')">Bundesliga <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
-            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('La Liga')">La Liga <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
-            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('Ligue 1')">Ligue 1 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
-            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('Premier League')">Premier League <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
-            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('Serie A')">Serie A <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+            <div class="nav__item nav__item--nested">
+              <a class="nav__drop-item nav__drop-item--arrow">Premier League <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+              <div class="nav__dropdown nav__dropdown--sub">
+                <a class="nav__drop-item" onclick="openTime('Arsenal')">Arsenal</a>
+                <a class="nav__drop-item" onclick="openTime('Aston Villa')">Aston Villa</a>
+                <a class="nav__drop-item" onclick="openTime('Chelsea')">Chelsea</a>
+                <a class="nav__drop-item" onclick="openTime('Everton')">Everton</a>
+                <a class="nav__drop-item" onclick="openTime('Liverpool')">Liverpool</a>
+                <a class="nav__drop-item" onclick="openTime('Manchester City')">Manchester City</a>
+                <a class="nav__drop-item" onclick="openTime('Manchester United')">Manchester United</a>
+                <a class="nav__drop-item" onclick="openTime('Newcastle')">Newcastle</a>
+                <a class="nav__drop-item" onclick="openTime('Tottenham')">Tottenham</a>
+                <a class="nav__drop-item" onclick="openTime('West Ham')">West Ham</a>
+              </div>
+            </div>
+            <div class="nav__item nav__item--nested">
+              <a class="nav__drop-item nav__drop-item--arrow">La Liga <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+              <div class="nav__dropdown nav__dropdown--sub">
+                <a class="nav__drop-item" onclick="openTime('Athletic Bilbao')">Athletic Bilbao</a>
+                <a class="nav__drop-item" onclick="openTime('Atlético de Madrid')">Atlético de Madrid</a>
+                <a class="nav__drop-item" onclick="openTime('Barcelona')">Barcelona</a>
+                <a class="nav__drop-item" onclick="openTime('Betis')">Betis</a>
+                <a class="nav__drop-item" onclick="openTime('Real Madrid')">Real Madrid</a>
+                <a class="nav__drop-item" onclick="openTime('Sevilla')">Sevilla</a>
+                <a class="nav__drop-item" onclick="openTime('Valencia')">Valencia</a>
+                <a class="nav__drop-item" onclick="openTime('Villarreal')">Villarreal</a>
+              </div>
+            </div>
+            <div class="nav__item nav__item--nested">
+              <a class="nav__drop-item nav__drop-item--arrow">Bundesliga <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+              <div class="nav__dropdown nav__dropdown--sub">
+                <a class="nav__drop-item" onclick="openTime('Bayer Leverkusen')">Bayer Leverkusen</a>
+                <a class="nav__drop-item" onclick="openTime('Bayern de Munique')">Bayern de Munique</a>
+                <a class="nav__drop-item" onclick="openTime('Borussia Dortmund')">Borussia Dortmund</a>
+                <a class="nav__drop-item" onclick="openTime('RB Leipzig')">RB Leipzig</a>
+                <a class="nav__drop-item" onclick="openTime('Schalke')">Schalke</a>
+                <a class="nav__drop-item" onclick="openTime('Wolfsburg')">Wolfsburg</a>
+              </div>
+            </div>
+            <div class="nav__item nav__item--nested">
+              <a class="nav__drop-item nav__drop-item--arrow">Serie A <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+              <div class="nav__dropdown nav__dropdown--sub">
+                <a class="nav__drop-item" onclick="openTime('AC Milan')">AC Milan</a>
+                <a class="nav__drop-item" onclick="openTime('AS Roma')">AS Roma</a>
+                <a class="nav__drop-item" onclick="openTime('Fiorentina')">Fiorentina</a>
+                <a class="nav__drop-item" onclick="openTime('Inter de Milão')">Inter de Milão</a>
+                <a class="nav__drop-item" onclick="openTime('Juventus')">Juventus</a>
+                <a class="nav__drop-item" onclick="openTime('Lazio')">Lazio</a>
+                <a class="nav__drop-item" onclick="openTime('Napoli')">Napoli</a>
+              </div>
+            </div>
+            <div class="nav__item nav__item--nested">
+              <a class="nav__drop-item nav__drop-item--arrow">Ligue 1 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+              <div class="nav__dropdown nav__dropdown--sub">
+                <a class="nav__drop-item" onclick="openTime('Lens')">Lens</a>
+                <a class="nav__drop-item" onclick="openTime('Lyon')">Lyon</a>
+                <a class="nav__drop-item" onclick="openTime('Marseille')">Marseille</a>
+                <a class="nav__drop-item" onclick="openTime('Monaco')">Monaco</a>
+                <a class="nav__drop-item" onclick="openTime('Paris Saint-Germain')">Paris Saint-Germain</a>
+                <a class="nav__drop-item" onclick="openTime('Rennes')">Rennes</a>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -105,11 +187,72 @@
             <svg class="nav__chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
           </button>
           <div class="nav__dropdown">
-            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('África')">África <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
-            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('América do Sul')">América do Sul <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
-            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('América do Norte')">América do Norte <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
-            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('Ásia')">Ásia <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
-            <a class="nav__drop-item nav__drop-item--arrow" onclick="openTime('Europa')">Europa <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+            <div class="nav__item nav__item--nested">
+              <a class="nav__drop-item nav__drop-item--arrow">Europa <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+              <div class="nav__dropdown nav__dropdown--sub">
+                <a class="nav__drop-item" onclick="openTime('Alemanha')">Alemanha</a>
+                <a class="nav__drop-item" onclick="openTime('Bélgica')">Bélgica</a>
+                <a class="nav__drop-item" onclick="openTime('Croácia')">Croácia</a>
+                <a class="nav__drop-item" onclick="openTime('Dinamarca')">Dinamarca</a>
+                <a class="nav__drop-item" onclick="openTime('Espanha')">Espanha</a>
+                <a class="nav__drop-item" onclick="openTime('França')">França</a>
+                <a class="nav__drop-item" onclick="openTime('Inglaterra')">Inglaterra</a>
+                <a class="nav__drop-item" onclick="openTime('Itália')">Itália</a>
+                <a class="nav__drop-item" onclick="openTime('Holanda')">Holanda</a>
+                <a class="nav__drop-item" onclick="openTime('Portugal')">Portugal</a>
+                <a class="nav__drop-item" onclick="openTime('Sérvia')">Sérvia</a>
+                <a class="nav__drop-item" onclick="openTime('Suíça')">Suíça</a>
+              </div>
+            </div>
+            <div class="nav__item nav__item--nested">
+              <a class="nav__drop-item nav__drop-item--arrow">América do Sul <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+              <div class="nav__dropdown nav__dropdown--sub">
+                <a class="nav__drop-item" onclick="openTime('Argentina')">Argentina</a>
+                <a class="nav__drop-item" onclick="openTime('Bolivia')">Bolivia</a>
+                <a class="nav__drop-item" onclick="openTime('Brasil')">Brasil</a>
+                <a class="nav__drop-item" onclick="openTime('Chile')">Chile</a>
+                <a class="nav__drop-item" onclick="openTime('Colômbia')">Colômbia</a>
+                <a class="nav__drop-item" onclick="openTime('Equador')">Equador</a>
+                <a class="nav__drop-item" onclick="openTime('Paraguai')">Paraguai</a>
+                <a class="nav__drop-item" onclick="openTime('Peru')">Peru</a>
+                <a class="nav__drop-item" onclick="openTime('Uruguai')">Uruguai</a>
+                <a class="nav__drop-item" onclick="openTime('Venezuela')">Venezuela</a>
+              </div>
+            </div>
+            <div class="nav__item nav__item--nested">
+              <a class="nav__drop-item nav__drop-item--arrow">América do Norte <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+              <div class="nav__dropdown nav__dropdown--sub">
+                <a class="nav__drop-item" onclick="openTime('Costa Rica')">Costa Rica</a>
+                <a class="nav__drop-item" onclick="openTime('Estados Unidos')">Estados Unidos</a>
+                <a class="nav__drop-item" onclick="openTime('Honduras')">Honduras</a>
+                <a class="nav__drop-item" onclick="openTime('Jamaica')">Jamaica</a>
+                <a class="nav__drop-item" onclick="openTime('México')">México</a>
+                <a class="nav__drop-item" onclick="openTime('Panamá')">Panamá</a>
+              </div>
+            </div>
+            <div class="nav__item nav__item--nested">
+              <a class="nav__drop-item nav__drop-item--arrow">África <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+              <div class="nav__dropdown nav__dropdown--sub">
+                <a class="nav__drop-item" onclick="openTime('Camarões')">Camarões</a>
+                <a class="nav__drop-item" onclick="openTime('Costa do Marfim')">Costa do Marfim</a>
+                <a class="nav__drop-item" onclick="openTime('Egito')">Egito</a>
+                <a class="nav__drop-item" onclick="openTime('Gana')">Gana</a>
+                <a class="nav__drop-item" onclick="openTime('Marrocos')">Marrocos</a>
+                <a class="nav__drop-item" onclick="openTime('Nigéria')">Nigéria</a>
+                <a class="nav__drop-item" onclick="openTime('Senegal')">Senegal</a>
+                <a class="nav__drop-item" onclick="openTime('Tunísia')">Tunísia</a>
+              </div>
+            </div>
+            <div class="nav__item nav__item--nested">
+              <a class="nav__drop-item nav__drop-item--arrow">Ásia <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></a>
+              <div class="nav__dropdown nav__dropdown--sub">
+                <a class="nav__drop-item" onclick="openTime('Arábia Saudita')">Arábia Saudita</a>
+                <a class="nav__drop-item" onclick="openTime('Coreia do Sul')">Coreia do Sul</a>
+                <a class="nav__drop-item" onclick="openTime('Irã')">Irã</a>
+                <a class="nav__drop-item" onclick="openTime('Japão')">Japão</a>
+                <a class="nav__drop-item" onclick="openTime('Qatar')">Qatar</a>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -123,6 +266,11 @@
   <section class="hero">
     <div class="hero__bg">
       <div class="hero__pattern"></div>
+    </div>
+    <div class="hero__promo-card">
+      <span class="hero__promo-tag">🔥 Novidade</span>
+      <span class="hero__promo-text">Coleção 2026 disponível — camisas de R179,99 a R$300</span>
+      <a href="#catalogo" class="hero__promo-link">Ver agora →</a>
     </div>
     <div class="hero__content">
       <p class="hero__eyebrow">Qualidade premium · Acabamento 1:1</p>
@@ -249,7 +397,6 @@
           <strong id="cartTotal">R$ 0,00</strong>
         </div>
         <button class="btn btn--whatsapp" id="btnCheckout">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg>
           Confirmar pagamento
         </button>
       </div>
@@ -299,7 +446,12 @@
   <script src="scripts/loja.js"></script>
   <script>
     function openTime(nome) {
-      window.open('index.html?time=' + encodeURIComponent(nome), '_blank');
+      const input = document.getElementById('inputBusca');
+      if (input) {
+        input.value = nome;
+        if (typeof applyFilters === 'function') applyFilters();
+        document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' });
+      }
     }
   </script>
 </body>

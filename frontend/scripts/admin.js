@@ -469,23 +469,20 @@ function openNewModal() {
   document.getElementById('modalOverlay').style.display = 'flex';
 }
 
-async function openEditModal(id) {
-  try {
-    const p = await api.get(`/produtos/${id}`);
-    editingImages = [...(p.imagens || [])];
-    document.getElementById('produtoId').value   = p.id;
-    document.getElementById('pNome').value       = p.nome;
-    document.getElementById('pPreco').value      = p.preco;
-    document.getElementById('pCategoria').value  = p.categoria_id || '';
-    document.getElementById('pEstoque').value    = p.estoque;
-    document.getElementById('pDescricao').value  = p.descricao || '';
-    document.getElementById('pDestaque').checked = !!p.destaque;
-    document.getElementById('modalFormTitle').textContent = 'Editar Produto';
-    renderImagePreview();
-    document.getElementById('modalOverlay').style.display = 'flex';
-  } catch(e) {
-    showToast('Erro ao carregar produto.', 'error');
-  }
+function openEditModal(id) {
+  const p = allProdutosAdmin.find(p => String(p.id) === String(id));
+  if (!p) { showToast('Produto não encontrado.', 'error'); return; }
+  editingImages = [...(p.imagens || [])];
+  document.getElementById('produtoId').value   = p.id;
+  document.getElementById('pNome').value       = p.nome;
+  document.getElementById('pPreco').value      = p.preco;
+  document.getElementById('pCategoria').value  = p.categoria_id || '';
+  document.getElementById('pEstoque').value    = p.estoque;
+  document.getElementById('pDescricao').value  = p.descricao || '';
+  document.getElementById('pDestaque').checked = !!p.destaque;
+  document.getElementById('modalFormTitle').textContent = 'Editar Produto';
+  renderImagePreview();
+  document.getElementById('modalOverlay').style.display = 'flex';
 }
 
 function closeFormModal() {
@@ -592,18 +589,30 @@ async function saveProduto(e) {
   if (!data.nome || isNaN(data.preco)) {
     showToast('Nome e preço são obrigatórios.', 'error'); return;
   }
+  const btnSalvar = document.getElementById('btnSalvarProduto');
+  if (btnSalvar) { btnSalvar.disabled = true; btnSalvar.textContent = 'Salvando...'; }
   try {
+    const cat = categoriasAdmin.find(c => String(c.id) === String(data.categoria_id));
     if (id) {
-      await api.put(`/produtos/${id}`, data);
-      showToast('Produto atualizado com sucesso! ');
+      const updated = await api.put(`/produtos/${id}`, data);
+      const merged = { ...(updated || {}), ...data, id: Number(id), categoria_nome: cat?.nome || '' };
+      const idx = allProdutosAdmin.findIndex(p => String(p.id) === String(id));
+      if (idx !== -1) allProdutosAdmin[idx] = merged;
+      showToast('Produto atualizado com sucesso!');
     } else {
-      await api.post('/produtos', data);
-      showToast('Produto criado com sucesso! ');
+      const created = await api.post('/produtos', data);
+      const newP = { ...(created || {}), ...data, categoria_nome: cat?.nome || '' };
+      allProdutosAdmin.unshift(newP);
+      showToast('Produto criado com sucesso!');
     }
     closeFormModal();
-    await loadProdutosAdmin();
+    filteredProdutos = [...allProdutosAdmin];
+    currentPage = 1;
+    renderTabelaProdutos();
   } catch(e) {
     showToast(e.message, 'error');
+  } finally {
+    if (btnSalvar) { btnSalvar.disabled = false; btnSalvar.textContent = 'Salvar'; }
   }
 }
 
@@ -614,14 +623,20 @@ function confirmDelete(id) {
 
 async function doDelete() {
   if (!deleteTargetId) return;
+  const btn = document.getElementById('btnConfirmDelete');
+  if (btn) { btn.disabled = true; btn.textContent = 'Excluindo...'; }
   try {
     await api.delete(`/produtos/${deleteTargetId}`);
-    showToast('Produto excluído.', 'success');
+    allProdutosAdmin = allProdutosAdmin.filter(p => String(p.id) !== String(deleteTargetId));
+    filteredProdutos = filteredProdutos.filter(p => String(p.id) !== String(deleteTargetId));
     document.getElementById('deleteOverlay').style.display = 'none';
     deleteTargetId = null;
-    await loadProdutosAdmin();
+    showToast('Produto excluído.', 'success');
+    renderTabelaProdutos();
   } catch(e) {
     showToast(e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Excluir'; }
   }
 }
 
@@ -932,6 +947,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   if (!checkAdminAuth()) return;
+
+  // Acorda o banco (Neon dorme após inatividade)
+  api.get('/health').catch(() => {});
 
   await loadCategoriasAdmin();
   await loadProdutosAdmin();

@@ -171,7 +171,7 @@ function renderCheckoutStep1() {
   content.innerHTML = `
     <div class="co-header">
       <h2>Finalizar pedido</h2>
-      <button class="modal__close" id="btnFecharCheckout">Fechar</button>
+      <button class="modal__close" id="btnFecharCheckout">×</button>
     </div>
     <div class="co-resumo">
       ${linhasResumo}
@@ -352,7 +352,7 @@ function abrirPixOverlay(pedidoId, total) {
     <div class="modal modal--checkout" style="margin:auto;width:100%;max-width:640px">
       <div class="co-header">
         <h2>Pague via PIX</h2>
-        <button class="modal__close" id="_btnFecharPix">Fechar</button>
+        <button class="modal__close" id="_btnFecharPix">×</button>
       </div>
       <div class="pix-box">
         <div class="pix-qr-wrap">
@@ -428,7 +428,7 @@ function openTrackingModal() {
   document.getElementById('trackingContent').innerHTML = `
     <div class="co-header">
       <h2>Rastrear pedido</h2>
-      <button class="modal__close" id="btnFecharRastreio">Fechar</button>
+      <button class="modal__close" id="btnFecharRastreio">×</button>
     </div>
     <p class="tracking-hint">Informe o número do seu pedido para ver o status da entrega.</p>
     <div class="co-form">

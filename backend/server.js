@@ -11,11 +11,20 @@ const userRoutes = require('./src/routes/userRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'fanaticosfc_secret_key_2026';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) { console.error('[api] JWT_SECRET não definido'); process.exit(1); }
 const authMiddleware = buildAuthMiddleware(JWT_SECRET);
 const adminMiddleware = buildAdminMiddleware(authMiddleware);
 
-app.use(cors());
+const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:5500,http://127.0.0.1:5500')
+  .split(',').map(o => o.trim());
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error('Origem não permitida'));
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '10mb' }));
 
 app.use('/api/auth', authRoutes({ authMiddleware, jwtSecret: JWT_SECRET }));

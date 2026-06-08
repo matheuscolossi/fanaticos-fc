@@ -150,6 +150,73 @@ input:focus, textarea:focus, select:focus {
 input::placeholder, textarea::placeholder { color: var(--text-dim); }
 select option { background: var(--bg-card2); }
 
+/* ══════════ PROMO BAR ══════════ */
+.promo-bar {
+  background: var(--green);
+  color: #000;
+  height: 36px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  position: relative;
+  z-index: 101;
+}
+.promo-bar__track {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  white-space: nowrap;
+  animation: promoMarquee 30s linear infinite;
+  font-family: var(--font-title);
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding-right: 1.5rem;
+}
+.promo-bar__dot { opacity: .45; }
+@keyframes promoMarquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* ══════════ HERO PROMO CARD ══════════ */
+.hero__promo-card {
+  position: relative; z-index: 1;
+  display: inline-flex; align-items: center; gap: .75rem;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 99px;
+  padding: .45rem 1.1rem;
+  margin-bottom: 1.75rem;
+  backdrop-filter: blur(8px);
+  animation: fadeUp .5s ease both;
+}
+.hero__promo-tag {
+  background: var(--green);
+  color: #000;
+  font-family: var(--font-title);
+  font-size: .65rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: .2rem .6rem;
+  border-radius: 99px;
+}
+.hero__promo-text {
+  font-size: .82rem;
+  color: var(--text-muted);
+}
+.hero__promo-link {
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--green);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: var(--transition);
+}
+.hero__promo-link:hover { color: var(--white); }
+
 /* ══════════ HEADER ══════════ */
 .header {
   position: sticky; top: 0; z-index: 100;
@@ -204,10 +271,23 @@ select option { background: var(--bg-card2); }
   transition: opacity var(--transition), transform var(--transition), visibility var(--transition);
   z-index: 300;
 }
-.nav__item:hover .nav__dropdown {
+.nav__item:hover > .nav__dropdown {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
+}
+
+/* ── Sub-menu aninhado ── */
+.nav__item--nested { position: relative; }
+.nav__dropdown--sub {
+  top: -8px;
+  left: 100%;
+  transform: translateX(8px);
+}
+.nav__item--nested:hover > .nav__dropdown--sub {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
 }
 
 .nav__dropdown--brasileirao .nav__dropdown-inner {
@@ -247,8 +327,7 @@ select option { background: var(--bg-card2); }
 .header__cats-inner {
   max-width: 1280px; margin: 0 auto; padding: 0 1.5rem;
   display: flex; align-items: stretch; gap: 0;
-  overflow-x: auto;
-  overflow-y: visible;
+  overflow: visible;
   scrollbar-width: none;
 }
 .header__cats-inner::-webkit-scrollbar { display: none; }
@@ -304,6 +383,7 @@ select option { background: var(--bg-card2); }
   line-height: .9; color: var(--white);
   text-shadow: 0 0 80px rgba(255,107,0,0.1);
   margin-bottom: 1.5rem;
+  padding-top: .35em;
 }
 .hero__title--accent { 
   color: var(--green);
@@ -478,7 +558,7 @@ select option { background: var(--bg-card2); }
   position: fixed; inset: 0; z-index: 200;
   background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center;
-  padding: 1rem;
+  padding: 1rem; padding-top: 80px;
 }
 .modal {
   background: var(--bg-card); border: 1px solid var(--border);
@@ -642,7 +722,7 @@ select option { background: var(--bg-card2); }
   .nav__link { padding: .45rem .7rem; font-size: .82rem; }
   .header__actions { margin-left: auto; gap: .25rem; }
   .user-name-display { display: none; }
-  .header__cats-inner { padding: 0 .75rem; }
+  .header__cats-inner { padding: 0 .75rem; overflow-x: auto; }
   .cat-nav-btn { padding: .6rem .8rem; font-size: .72rem; }
   .hero {
     min-height: auto;
