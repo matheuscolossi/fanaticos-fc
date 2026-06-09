@@ -276,6 +276,7 @@ async function runOptionalMigration(sql) {
 
 async function runMigrations() {
   if (isPostgres) {
+    await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS cpf TEXT');
     await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefone TEXT');
     await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS endereco_rua TEXT');
     await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS cidade TEXT');
@@ -289,6 +290,7 @@ async function runMigrations() {
     return;
   }
 
+  await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN cpf TEXT');
   await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN telefone TEXT');
   await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN endereco_rua TEXT');
   await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN cidade TEXT');

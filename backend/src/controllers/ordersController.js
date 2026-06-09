@@ -8,7 +8,7 @@ const {
 } = require('../services/orderService');
 
 async function store(req, res) {
-  sendCreated(res, await createOrder(req.body));
+  sendCreated(res, await createOrder({ ...req.body, usuario_id: req.user.id }));
 }
 
 async function index(req, res) {

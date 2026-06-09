@@ -38,15 +38,20 @@ function openAuthModal(defaultTab = 'login') {
       <input type="password" id="loginSenha" placeholder="••••••••" />
       <p id="loginError" class="auth-error" style="display:none"></p>
       <button class="btn btn--primary" id="btnLoginSubmit">Entrar</button>
-      <p class="auth-link">Admin padrão: admin@fanaticosfc.com / admin123</p>
     </div>
     <div id="registerForm" class="auth-form" style="display:${defaultTab === 'register' ? 'flex' : 'none'}">
-      <label>Nome</label>
-      <input type="text" id="regNome" placeholder="Seu nome" />
+      <label>Nome completo</label>
+      <input type="text" id="regNome" placeholder="Seu nome completo" />
       <label>E-mail</label>
       <input type="email" id="regEmail" placeholder="seu@email.com" />
+      <label>CPF</label>
+      <input type="text" id="regCpf" placeholder="000.000.000-00" maxlength="14" />
+      <label>Telefone</label>
+      <input type="tel" id="regTelefone" placeholder="(00) 99999-9999" maxlength="15" />
       <label>Senha</label>
       <input type="password" id="regSenha" placeholder="Mínimo 6 caracteres" />
+      <label>Confirmar senha</label>
+      <input type="password" id="regSenhaConf" placeholder="Repita a senha" />
       <p id="regError" class="auth-error" style="display:none"></p>
       <button class="btn btn--primary" id="btnRegSubmit">Criar Conta</button>
     </div>
@@ -89,13 +94,43 @@ function openAuthModal(defaultTab = 'login') {
     }
   });
 
+  document.getElementById('regCpf').addEventListener('input', (e) => {
+    let v = e.target.value.replace(/\D/g, '').slice(0, 11);
+    if (v.length > 9) v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4');
+    else if (v.length > 6) v = v.replace(/(\d{3})(\d{3})(\d{0,3})/, '$1.$2.$3');
+    else if (v.length > 3) v = v.replace(/(\d{3})(\d{0,3})/, '$1.$2');
+    e.target.value = v;
+  });
+
+  document.getElementById('regTelefone').addEventListener('input', (e) => {
+    let v = e.target.value.replace(/\D/g, '').slice(0, 11);
+    if (v.length > 6) v = v.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
+    else if (v.length > 2) v = v.replace(/(\d{2})(\d{0,5})/, '($1) $2');
+    e.target.value = v;
+  });
+
   document.getElementById('btnRegSubmit').addEventListener('click', async () => {
-    const nome = document.getElementById('regNome').value.trim();
-    const email = document.getElementById('regEmail').value.trim();
-    const senha = document.getElementById('regSenha').value;
-    const errEl = document.getElementById('regError');
+    const nome     = document.getElementById('regNome').value.trim();
+    const email    = document.getElementById('regEmail').value.trim();
+    const cpf      = document.getElementById('regCpf').value.trim();
+    const telefone = document.getElementById('regTelefone').value.trim();
+    const senha    = document.getElementById('regSenha').value;
+    const senhaConf = document.getElementById('regSenhaConf').value;
+    const errEl    = document.getElementById('regError');
+
+    if (senha !== senhaConf) {
+      errEl.textContent = 'As senhas não coincidem.';
+      errEl.style.display = 'block';
+      return;
+    }
+    if (senha.length < 6) {
+      errEl.textContent = 'A senha deve ter no mínimo 6 caracteres.';
+      errEl.style.display = 'block';
+      return;
+    }
+
     try {
-      await api.post('/auth/register', { nome, email, senha });
+      await api.post('/auth/register', { nome, email, senha, cpf, telefone });
       showToast('Conta criada com sucesso! Faça login.');
       document.getElementById('tabLogin').click();
     } catch (e) {

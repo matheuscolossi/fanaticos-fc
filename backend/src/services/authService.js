@@ -12,16 +12,16 @@ function toPublicUser(user) {
   };
 }
 
-async function registerUser({ nome, email, senha }) {
-  if (!nome || !email || !senha) {
-    throw createHttpError(400, 'Name, email and password are required.', 'VALIDATION_ERROR');
+async function registerUser({ nome, email, senha, cpf, telefone }) {
+  if (!nome || !email || !senha || !cpf || !telefone) {
+    throw createHttpError(400, 'Nome, email, senha, CPF e telefone são obrigatórios.', 'VALIDATION_ERROR');
   }
 
   const existingUser = await userModel.findByEmail(email);
   if (existingUser) throw createHttpError(409, 'Email already registered.', 'EMAIL_ALREADY_EXISTS');
 
   const passwordHash = bcrypt.hashSync(senha, 10);
-  const result = await userModel.create({ nome, email, senha: passwordHash });
+  const result = await userModel.create({ nome, email, senha: passwordHash, cpf, telefone });
   return { message: 'User created.', id: result.lastID };
 }
 

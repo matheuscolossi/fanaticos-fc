@@ -152,6 +152,12 @@ function gerarPixPayload(chave, nomeLoja, cidade, valor) {
 
 function checkout() {
   if (cartItems.length === 0) return;
+  if (!localStorage.getItem('fc_token')) {
+    closeCart();
+    showToast('Faça login para finalizar o pedido.', 'error');
+    openAuthModal('login');
+    return;
+  }
   closeCart();
   const overlay = document.getElementById('checkoutOverlay');
   renderCheckoutStep1();

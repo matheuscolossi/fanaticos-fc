@@ -1,6 +1,6 @@
 const { all, get, run } = require('../config/database');
 
-const PUBLIC_USER_FIELDS = 'id, nome, email, perfil, telefone, endereco_rua, cidade, cep';
+const PUBLIC_USER_FIELDS = 'id, nome, email, perfil, cpf, telefone, endereco_rua, cidade, cep';
 
 function findByEmail(email) {
   return get('SELECT * FROM usuarios WHERE email = ?', [email]);
@@ -18,8 +18,11 @@ function listAdminsView() {
   return all('SELECT id, nome, email, perfil, created_at FROM usuarios ORDER BY created_at DESC');
 }
 
-function create({ nome, email, senha }) {
-  return run('INSERT INTO usuarios (nome, email, senha) VALUES (?, ?, ?)', [nome, email, senha]);
+function create({ nome, email, senha, cpf, telefone }) {
+  return run(
+    'INSERT INTO usuarios (nome, email, senha, cpf, telefone) VALUES (?, ?, ?, ?, ?)',
+    [nome, email, senha, cpf || null, telefone || null]
+  );
 }
 
 function updateNameAndPassword(userId, { nome, senha }) {
