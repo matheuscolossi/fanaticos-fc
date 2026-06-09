@@ -3,6 +3,24 @@ let categorias = [];
 let catAtiva = '';
 let currentProduto = null;
 
+const CACHE_KEY = 'fc_produtos_v1';
+const CACHE_TTL = 10 * 60 * 1000; // 10 min
+
+function readCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const { ts, data } = JSON.parse(raw);
+    return Date.now() - ts < CACHE_TTL ? data : null;
+  } catch (_) { return null; }
+}
+
+function writeCache(data) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+  } catch (_) {}
+}
+
 function produtoCard(p) {
   const img = (p.imagens || [])[0];
   return `
@@ -275,17 +293,35 @@ function closeModal() {
   document.getElementById('modalOverlay').style.display = 'none';
 }
 
+function renderProdutoGrids(produtos) {
+  const destaques = produtos.filter(p => p.destaque);
+  const gridD = document.getElementById('gridDestaques');
+  const gridP = document.getElementById('gridProdutos');
+  if (gridD) renderGrid(gridD, destaques);
+  if (gridP) {
+    const hasFilters = catAtiva || document.getElementById('inputBusca')?.value
+      || document.getElementById('precoMin')?.value || document.getElementById('precoMax')?.value;
+    hasFilters ? applyFilters() : renderGrid(gridP, produtos);
+  }
+}
+
 async function loadProdutos() {
+  const cached = readCache();
+  if (cached) {
+    allProdutos = cached;
+    renderProdutoGrids(allProdutos);
+  }
+
   try {
-    allProdutos = await api.get('/produtos');
-    const destaques = allProdutos.filter(p => p.destaque);
-    const gridD = document.getElementById('gridDestaques');
-    if (gridD) renderGrid(gridD, destaques);
-    const gridP = document.getElementById('gridProdutos');
-    if (gridP) renderGrid(gridP, allProdutos);
-  } catch(e) {
-    const grid = document.getElementById('gridProdutos');
-    if (grid) grid.innerHTML = `<div class="loading-state" style="color:var(--danger)">Não foi possível conectar ao servidor. Certifique-se que o backend está rodando em http://localhost:3001</div>`;
+    const fresh = await api.get('/produtos');
+    writeCache(fresh);
+    allProdutos = fresh;
+    renderProdutoGrids(allProdutos);
+  } catch (e) {
+    if (!allProdutos.length) {
+      const grid = document.getElementById('gridProdutos');
+      if (grid) grid.innerHTML = `<div class="loading-state" style="color:var(--danger)">Não foi possível conectar ao servidor. Certifique-se que o backend está rodando em http://localhost:3001</div>`;
+    }
   }
 }
 
