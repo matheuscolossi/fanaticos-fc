@@ -216,6 +216,16 @@ async function loadProdutoPage() {
   }
 
   try {
+    const cached = JSON.parse(sessionStorage.getItem('fc_produto_cache') || 'null');
+    if (cached && String(cached.id) === String(id)) {
+      sessionStorage.removeItem('fc_produto_cache');
+      renderProduto(cached);
+      api.get(`/produtos/${id}`).then(p => renderProduto(p)).catch(() => {});
+      return;
+    }
+  } catch (_) {}
+
+  try {
     const produto = await api.get(`/produtos/${id}`);
     renderProduto(produto);
   } catch (err) {

@@ -82,6 +82,7 @@ function produtoCardSafe(p) {
   }
 
   card.addEventListener('click', () => {
+    try { sessionStorage.setItem('fc_produto_cache', JSON.stringify(p)); } catch (_) {}
     window.location.href = `pages/produto.html?id=${encodeURIComponent(p.id)}`;
   });
   card.querySelector('.produto-card__btn').addEventListener('click', (e) => {
@@ -289,8 +290,7 @@ async function loadProdutos() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  await loadCategorias();
-  await loadProdutos();
+  await Promise.all([loadCategorias(), loadProdutos()]);
 
   let searchTimer;
   document.getElementById('inputBusca')?.addEventListener('input', () => {
