@@ -157,6 +157,43 @@ Para testar sem salvar no banco:
 npm run import:produtos:dry
 ```
 
+## Keep-alive no Render (free tier)
+
+O plano gratuito do Render hiberna o serviço após ~15 minutos sem requisições, causando um cold start de 30–50 segundos na primeira visita. Para evitar isso, configure um monitor externo que pinga a rota de saúde da API a cada 10 minutos.
+
+A rota já existe no backend:
+
+```
+GET https://fanaticos-fc.onrender.com/api/health
+→ { "status": "ok", "timestamp": "..." }
+```
+
+### Configurar com UptimeRobot (gratuito)
+
+1. Acesse [uptimerobot.com](https://uptimerobot.com) e crie uma conta gratuita.
+2. Clique em **Add New Monitor**.
+3. Preencha:
+   - **Monitor Type:** HTTP(s)
+   - **Friendly Name:** Fanáticos FC API
+   - **URL:** `https://fanaticos-fc.onrender.com/api/health`
+   - **Monitoring Interval:** 10 minutes
+4. Clique em **Create Monitor**.
+
+A partir daí o UptimeRobot pinga a API a cada 10 minutos, mantendo o servidor ativo 24h.
+
+### Alternativa: cron-job.org (gratuito)
+
+1. Acesse [cron-job.org](https://cron-job.org) e crie uma conta.
+2. Clique em **Create cronjob**.
+3. Preencha:
+   - **URL:** `https://fanaticos-fc.onrender.com/api/health`
+   - **Schedule:** Every 10 minutes
+4. Salve.
+
+### Alternativa paga
+
+Faça upgrade para o plano **Starter** do Render (US$ 7/mês) e o serviço nunca hiberna.
+
 ## Fluxo de Arquitetura
 
 ```txt
