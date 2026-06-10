@@ -27,24 +27,36 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 
+// Sempre disponível — usada pelo keep-alive e pelo Render para health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', db: dbReady, timestamp: new Date().toISOString() });
+});
+
+// Bloqueia rotas de dados enquanto o banco não está pronto
+let dbReady = false;
+app.use('/api', (req, res, next) => {
+  if (!dbReady) return res.status(503).json({ error: 'Servidor iniciando, tente novamente em instantes.' });
+  next();
+});
+
 app.use('/api/auth', authRoutes({ authMiddleware, jwtSecret: JWT_SECRET }));
 app.use('/api/categorias', categoryRoutes);
 app.use('/api/produtos', productRoutes(adminMiddleware));
 app.use('/api/pedidos', orderRoutes({ adminMiddleware, authMiddleware }));
 app.use('/api/admin/usuarios', userRoutes({ adminMiddleware }));
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
 app.use(errorHandler);
 
+// Porta abre imediatamente — Render considera o deploy bem-sucedido
+app.listen(PORT, () => {
+  console.log(`[api] Fanaticos FC API listening on http://localhost:${PORT}`);
+});
+
+// Banco conecta em segundo plano com retentativas
 init()
   .then(() => {
-    app.listen(PORT, () => {
-      console.log(`[api] Fanaticos FC API listening on http://localhost:${PORT}`);
-      console.log('[api] Default admin: admin@fanaticosfc.com');
-    });
+    dbReady = true;
+    console.log('[api] Database ready. Default admin: admin@fanaticosfc.com');
   })
   .catch((err) => {
     console.error('[api:init:error]', err);
