@@ -52,13 +52,16 @@ app.listen(PORT, () => {
   console.log(`[api] Fanaticos FC API listening on http://localhost:${PORT}`);
 });
 
-// Banco conecta em segundo plano com retentativas
-init()
-  .then(() => {
+// Banco conecta em segundo plano com retentativas infinitas
+async function connectWithRetry(delaySec = 30) {
+  try {
+    await init();
     dbReady = true;
     console.log('[api] Database ready. Default admin: admin@fanaticosfc.com');
-  })
-  .catch((err) => {
-    console.error('[api:init:error]', err);
-    process.exit(1);
-  });
+  } catch (err) {
+    console.error(`[api:init:error] ${err.message} — retrying in ${delaySec}s`);
+    setTimeout(() => connectWithRetry(Math.min(delaySec * 2, 300)), delaySec * 1000);
+  }
+}
+
+connectWithRetry();
