@@ -40,7 +40,7 @@ async function initPostgresClient() {
   const { Pool } = require('pg');
   pgPool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    connectionTimeoutMillis: Number(process.env.DB_CONNECTION_TIMEOUT_MS) || 5000,
+    connectionTimeoutMillis: Number(process.env.DB_CONNECTION_TIMEOUT_MS) || 15000,
     ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
   });
 
@@ -52,22 +52,23 @@ function canFallbackToSqlite() {
   return process.env.DB_REQUIRE_POSTGRES !== 'true' && process.env.NODE_ENV !== 'production';
 }
 
-async function tryInitPostgresClient() {
-  try {
-    await initPostgresClient();
-  } catch (err) {
-    if (!canFallbackToSqlite()) throw err;
-
-    if (pgPool) {
-      await pgPool.end().catch(() => {});
-      pgPool = null;
+async function tryInitPostgresClient(retries = 4, delayMs = 5000) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      if (pgPool) { await pgPool.end().catch(() => {}); pgPool = null; }
+      await initPostgresClient();
+      return;
+    } catch (err) {
+      console.warn(`[database] PostgreSQL attempt ${attempt}/${retries} failed: ${err.message}`);
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, delayMs * attempt));
+      } else {
+        if (!canFallbackToSqlite()) throw err;
+        isPostgres = false;
+        console.warn('[database] Falling back to local SQLite.');
+        await initSqliteClient();
+      }
     }
-
-    isPostgres = false;
-    console.warn(
-      `[database] PostgreSQL unavailable (${err.code || err.message}). Falling back to local SQLite.`
-    );
-    await initSqliteClient();
   }
 }
 

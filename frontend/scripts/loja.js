@@ -320,7 +320,10 @@ async function loadProdutos() {
   } catch (e) {
     if (!allProdutos.length) {
       const grid = document.getElementById('gridProdutos');
-      if (grid) grid.innerHTML = `<div class="loading-state" style="color:var(--danger)">Não foi possível conectar ao servidor. Certifique-se que o backend está rodando em http://localhost:3001</div>`;
+      if (grid) grid.innerHTML = `<div class="loading-state" style="text-align:center;padding:2rem">
+        <p style="color:var(--danger);margin-bottom:1rem">Estamos com dificuldades técnicas. Tente novamente em instantes.</p>
+        <button onclick="loadProdutos()" class="btn btn--primary">Tentar novamente</button>
+      </div>`;
     }
   }
 }
