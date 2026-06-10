@@ -45,6 +45,16 @@ async function listProducts(query) {
   return products.map(serializeProduct);
 }
 
+function serializeProductForList(product) {
+  const imgs = parseImages(product.imagens);
+  return { ...product, imagens: imgs.slice(0, 1) };
+}
+
+async function listProductsPaginated(query) {
+  const { produtos, total, page, totalPages } = await productModel.listPaginated(query);
+  return { produtos: produtos.map(serializeProductForList), total, page, totalPages };
+}
+
 async function getProduct(productId) {
   const product = await productModel.findById(productId);
   if (!product) throw createHttpError(404, 'Product not found.', 'PRODUCT_NOT_FOUND');
@@ -75,5 +85,6 @@ module.exports = {
   deleteProduct,
   getProduct,
   listProducts,
+  listProductsPaginated,
   updateProduct,
 };

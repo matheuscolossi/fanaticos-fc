@@ -4,11 +4,15 @@ const {
   deleteProduct,
   getProduct,
   listProducts,
+  listProductsPaginated,
   updateProduct,
 } = require('../services/productService');
 
 async function index(req, res) {
-  res.json(await listProducts(req.query));
+  if (req.query.admin === 'true') {
+    return res.json(await listProducts(req.query));
+  }
+  res.json(await listProductsPaginated(req.query));
 }
 
 async function show(req, res) {

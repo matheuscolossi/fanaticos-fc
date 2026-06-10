@@ -42,15 +42,36 @@ function buildFilters(query) {
 function list(query = {}) {
   const { where, params, orderBy } = buildFilters(query);
   return all(
-    `
-      SELECT p.*, c.nome as categoria_nome
-      FROM produtos p
-      LEFT JOIN categorias c ON p.categoria_id = c.id
-      ${where}
-      ORDER BY ${orderBy}
-    `,
+    `SELECT p.*, c.nome as categoria_nome
+     FROM produtos p
+     LEFT JOIN categorias c ON p.categoria_id = c.id
+     ${where}
+     ORDER BY ${orderBy}`,
     params
   );
+}
+
+async function listPaginated(query = {}) {
+  const { where, params, orderBy } = buildFilters(query);
+  const limit = Math.min(Math.max(Number(query.limit) || 24, 1), 100);
+  const page  = Math.max(Number(query.page) || 1, 1);
+  const offset = (page - 1) * limit;
+
+  const [rows, countRow] = await Promise.all([
+    all(
+      `SELECT p.id, p.nome, p.preco, p.categoria_id, p.destaque, p.estoque, p.imagens, c.nome as categoria_nome
+       FROM produtos p
+       LEFT JOIN categorias c ON p.categoria_id = c.id
+       ${where}
+       ORDER BY ${orderBy}
+       LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    ),
+    get(`SELECT COUNT(*) as total FROM produtos p ${where}`, params),
+  ]);
+
+  const total = Number(countRow?.total || 0);
+  return { produtos: rows, total, page, totalPages: Math.ceil(total / limit) };
 }
 
 function findById(productId) {
@@ -96,6 +117,7 @@ module.exports = {
   exists,
   findById,
   list,
+  listPaginated,
   remove,
   update,
 };

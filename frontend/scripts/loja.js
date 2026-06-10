@@ -2,6 +2,9 @@ let allProdutos = [];
 let categorias = [];
 let catAtiva = '';
 let currentProduto = null;
+let currentPage = 1;
+let totalPages = 1;
+let isLoadingMore = false;
 
 const CACHE_KEY = 'fc_produtos_v1';
 const CACHE_TTL = 10 * 60 * 1000; // 10 min
@@ -293,30 +296,53 @@ function closeModal() {
   document.getElementById('modalOverlay').style.display = 'none';
 }
 
-function renderProdutoGrids(produtos) {
-  const destaques = produtos.filter(p => p.destaque);
-  const gridD = document.getElementById('gridDestaques');
-  const gridP = document.getElementById('gridProdutos');
-  if (gridD) renderGrid(gridD, destaques);
-  if (gridP) {
-    const hasFilters = catAtiva || document.getElementById('inputBusca')?.value
-      || document.getElementById('precoMin')?.value || document.getElementById('precoMax')?.value;
-    hasFilters ? applyFilters() : renderGrid(gridP, produtos);
-  }
+function updateLoadMoreBtn() {
+  const container = document.getElementById('loadMoreContainer');
+  if (container) container.style.display = currentPage < totalPages ? 'block' : 'none';
+}
+
+function buildApiParams(page = 1) {
+  const params = new URLSearchParams({ page, limit: 24 });
+  const busca = document.getElementById('inputBusca')?.value.trim();
+  const precoMin = document.getElementById('precoMin')?.value;
+  const precoMax = document.getElementById('precoMax')?.value;
+  const ordem = document.getElementById('selectOrdem')?.value || 'recente';
+  if (busca) params.set('busca', busca);
+  if (catAtiva) params.set('categoria', catAtiva);
+  if (precoMin) params.set('precoMin', precoMin);
+  if (precoMax) params.set('precoMax', precoMax);
+  if (ordem) params.set('ordem', ordem);
+  return params.toString();
 }
 
 async function loadProdutos() {
+  currentPage = 1;
+
   const cached = readCache();
   if (cached) {
-    allProdutos = cached;
-    renderProdutoGrids(allProdutos);
+    allProdutos = cached.produtos || cached;
+    totalPages = cached.totalPages || 1;
+    const gridP = document.getElementById('gridProdutos');
+    if (gridP) renderGrid(gridP, allProdutos);
+    updateLoadMoreBtn();
+    const gridD = document.getElementById('gridDestaques');
+    if (gridD) renderGrid(gridD, allProdutos.filter(p => p.destaque));
   }
 
   try {
-    const fresh = await api.get('/produtos');
-    writeCache(fresh);
-    allProdutos = fresh;
-    renderProdutoGrids(allProdutos);
+    const fresh = await api.get(`/produtos?${buildApiParams(1)}`);
+    const { produtos, totalPages: tp } = fresh;
+    totalPages = tp || 1;
+    allProdutos = produtos;
+    writeCache({ produtos, totalPages });
+    const gridP = document.getElementById('gridProdutos');
+    if (gridP) renderGrid(gridP, allProdutos);
+    updateLoadMoreBtn();
+    const gridD = document.getElementById('gridDestaques');
+    if (gridD) renderGrid(gridD, allProdutos.filter(p => p.destaque));
+    const countEl = document.getElementById('filtrosCount');
+    if (countEl) countEl.textContent = allProdutos.length > 0
+      ? `${allProdutos.length} de ${fresh.total} produto${fresh.total !== 1 ? 's' : ''}` : '';
   } catch (e) {
     if (!allProdutos.length) {
       const grid = document.getElementById('gridProdutos');
@@ -328,6 +354,25 @@ async function loadProdutos() {
   }
 }
 
+async function loadMais() {
+  if (isLoadingMore || currentPage >= totalPages) return;
+  isLoadingMore = true;
+  const btn = document.getElementById('btnLoadMore');
+  if (btn) btn.textContent = 'Carregando...';
+
+  try {
+    const { produtos } = await api.get(`/produtos?${buildApiParams(currentPage + 1)}`);
+    currentPage++;
+    allProdutos = [...allProdutos, ...produtos];
+    const grid = document.getElementById('gridProdutos');
+    if (grid) produtos.forEach(p => grid.appendChild(produtoCardSafe(p)));
+    updateLoadMoreBtn();
+  } catch (e) { /* mantém botão */ }
+
+  isLoadingMore = false;
+  if (btn) btn.textContent = 'Carregar mais';
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   await Promise.all([loadCategorias(), loadProdutos()]);
 
@@ -337,10 +382,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     searchTimer = setTimeout(applyFilters, 300);
   });
 
-  document.getElementById('selectOrdem')?.addEventListener('change', applyFilters);
-  document.getElementById('btnFiltrar')?.addEventListener('click', applyFilters);
+  document.getElementById('selectOrdem')?.addEventListener('change', loadProdutos);
+  document.getElementById('btnFiltrar')?.addEventListener('click', loadProdutos);
   document.getElementById('btnLimpar')?.addEventListener('click', clearFilters);
   document.getElementById('btnLimpar2')?.addEventListener('click', clearFilters);
+  document.getElementById('btnLoadMore')?.addEventListener('click', loadMais);
 
   document.querySelector('.cat-btn[data-cat=""]')?.addEventListener('click', () => {
     filterByCategory('');
