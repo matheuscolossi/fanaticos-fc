@@ -344,7 +344,7 @@ function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 async function loadProdutosAdmin() {
   try {
-    allProdutosAdmin = await api.get('/produtos');
+    allProdutosAdmin = await api.get('/produtos?admin=true');
     filteredProdutos = [...allProdutosAdmin];
     currentPage = 1;
     renderTabelaProdutos();
