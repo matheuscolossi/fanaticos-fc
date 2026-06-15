@@ -288,6 +288,31 @@ async function runMigrations() {
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS endereco TEXT');
     await runOptionalMigration("ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS metodo_pagamento TEXT DEFAULT 'whatsapp'");
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS codigo_rastreio TEXT');
+    // Extended product fields
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS slug TEXT');
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS sku TEXT');
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS descricao_curta TEXT');
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS time TEXT');
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS pais TEXT');
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS competicao TEXT');
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS temporada TEXT');
+    await runOptionalMigration("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS tipo TEXT DEFAULT 'torcedor'");
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS marca TEXT');
+    await runOptionalMigration("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS genero TEXT DEFAULT 'masculino'");
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco_promocional NUMERIC(10,2)');
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS custo NUMERIC(10,2)');
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque_minimo INTEGER DEFAULT 0');
+    await runOptionalMigration("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS tamanhos JSONB DEFAULT '[]'::jsonb");
+    await runOptionalMigration("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS cores JSONB DEFAULT '[]'::jsonb");
+    await runOptionalMigration("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ativo'");
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS produto_novo BOOLEAN DEFAULT false');
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS produto_promocional BOOLEAN DEFAULT false');
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS peso NUMERIC(8,3)');
+    await runOptionalMigration("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS dimensoes JSONB DEFAULT '{}'::jsonb");
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS info_lavagem TEXT');
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS keywords TEXT');
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS meta_titulo TEXT');
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS meta_descricao TEXT');
     return;
   }
 
@@ -302,6 +327,31 @@ async function runMigrations() {
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN endereco TEXT');
   await runOptionalMigration("ALTER TABLE pedidos ADD COLUMN metodo_pagamento TEXT DEFAULT 'whatsapp'");
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN codigo_rastreio TEXT');
+  // Extended product fields
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN slug TEXT');
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN sku TEXT');
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN descricao_curta TEXT');
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN time TEXT');
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN pais TEXT');
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN competicao TEXT');
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN temporada TEXT');
+  await runOptionalMigration("ALTER TABLE produtos ADD COLUMN tipo TEXT DEFAULT 'torcedor'");
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN marca TEXT');
+  await runOptionalMigration("ALTER TABLE produtos ADD COLUMN genero TEXT DEFAULT 'masculino'");
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN preco_promocional REAL');
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN custo REAL');
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN estoque_minimo INTEGER DEFAULT 0');
+  await runOptionalMigration("ALTER TABLE produtos ADD COLUMN tamanhos TEXT DEFAULT '[]'");
+  await runOptionalMigration("ALTER TABLE produtos ADD COLUMN cores TEXT DEFAULT '[]'");
+  await runOptionalMigration("ALTER TABLE produtos ADD COLUMN status TEXT DEFAULT 'ativo'");
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN produto_novo INTEGER DEFAULT 0');
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN produto_promocional INTEGER DEFAULT 0');
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN peso REAL');
+  await runOptionalMigration("ALTER TABLE produtos ADD COLUMN dimensoes TEXT DEFAULT '{}'");
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN info_lavagem TEXT');
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN keywords TEXT');
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN meta_titulo TEXT');
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN meta_descricao TEXT');
 }
 
 async function seedDefaults() {

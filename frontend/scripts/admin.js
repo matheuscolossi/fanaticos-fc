@@ -1,4 +1,4 @@
-const ITEMS_PER_PAGE = 15;
+﻿const ITEMS_PER_PAGE = 15;
 const ORDERS_PER_PAGE = 25;
 let allProdutosAdmin = [];
 let filteredProdutos = [];
@@ -13,6 +13,16 @@ let viewMode = 'ligas'; // 'ligas' | 'lista'
 let dashPeriodo = '30d';
 let _chartReceita = null;
 let _chartStatus = null;
+
+// ── Product extended state ──────────────────────────────────────────────────
+let selectedProdutoIds = new Set();
+let _slugDirty = false;
+
+function parseAdminJson(value, fallback) {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === 'object') return value;
+  try { return JSON.parse(value || JSON.stringify(fallback)); } catch { return fallback; }
+}
 
 function getOpenIds() {
   try { return new Set(JSON.parse(sessionStorage.getItem('fc_open_accordions') || '[]')); }
@@ -265,7 +275,7 @@ function renderLigaView(produtos) {
                     <th>Nome</th>
                     <th>Preço</th>
                     <th>Est.</th>
-                    <th>Destaque</th>
+                    <th>Status</th>
                     <th>Ações</th>
                   </tr>
                 </thead>
@@ -274,6 +284,9 @@ function renderLigaView(produtos) {
 
       for (const p of prods) {
         const img = (p.imagens || [])[0];
+        const isAtivo = (p.status || 'ativo') === 'ativo';
+        const ddId = `dd_liga_${p.id}`;
+        const hasPromo = p.preco_promocional && Number(p.preco_promocional) > 0;
         html += `
                   <tr>
                     <td>
@@ -283,18 +296,34 @@ function renderLigaView(produtos) {
                           : `<div class="td-img-placeholder"></div>`}
                       </div>
                     </td>
-                    <td><span class="td-nome" title="${p.nome}">${p.nome}</span></td>
-                    <td><span class="td-preco">${formatBRL(p.preco)}</span></td>
-                    <td>${p.estoque}</td>
                     <td>
-                      <span class="td-badge ${p.destaque ? '' : 'td-badge--off'}">
-                        ${p.destaque ? 'Sim' : 'Não'}
-                      </span>
+                      <span class="td-nome" title="${p.nome}">${p.nome}</span>
+                      ${p.sku ? `<div class="td-sku">${p.sku}</div>` : ''}
                     </td>
                     <td>
-                      <div class="td-actions">
-                        <button class="btn btn--outline btn--sm" onclick="openEditModal(${p.id})">Editar</button>
-                        <button class="btn btn--danger btn--sm"  onclick="confirmDelete(${p.id})">Excluir</button>
+                      ${hasPromo
+                        ? `<div class="td-preco td-preco--riscado">${formatBRL(p.preco)}</div><div class="td-preco td-preco--promo">${formatBRL(p.preco_promocional)}</div>`
+                        : `<span class="td-preco">${formatBRL(p.preco)}</span>`}
+                    </td>
+                    <td>${p.estoque}</td>
+                    <td><span class="td-status ${isAtivo ? 'td-status-ativo' : 'td-status-inativo'}">${isAtivo ? 'Ativo' : 'Inativo'}</span></td>
+                    <td>
+                      <div class="action-dropdown" id="${ddId}">
+                        <button class="btn btn--outline btn--sm" onclick="toggleDropdown('${ddId}')">Ações ▾</button>
+                        <div class="action-dropdown__menu">
+                          <div class="action-dropdown__item" onclick="closeAllDropdowns();openEditModal(${p.id})">Editar</div>
+                          <div class="action-dropdown__item" onclick="closeAllDropdowns();duplicateProduto(${p.id})">Duplicar</div>
+                          <div class="action-dropdown__item" onclick="closeAllDropdowns();toggleStatus(${p.id},'${p.status||'ativo'}')">
+                            ${isAtivo ? 'Desativar' : 'Ativar'}
+                          </div>
+                          <div class="action-dropdown__item" onclick="closeAllDropdowns();toggleDestaque(${p.id},${!!p.destaque})">
+                            ${p.destaque ? 'Remover destaque' : 'Marcar destaque'}
+                          </div>
+                          <div class="action-dropdown__sep"></div>
+                          <div class="action-dropdown__item" onclick="closeAllDropdowns();window.open('../pages/produto.html?id=${p.id}','_blank')">Ver na loja</div>
+                          <div class="action-dropdown__sep"></div>
+                          <div class="action-dropdown__item action-dropdown__item--danger" onclick="closeAllDropdowns();confirmDelete(${p.id})">Excluir</div>
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -605,24 +634,37 @@ function renderTabelaProdutos() {
     return;
   }
 
+  const allChecked = page.length > 0 && page.every(p => selectedProdutoIds.has(String(p.id)));
+
   wrap.innerHTML = `
     <table>
       <thead>
         <tr>
-          <th>Foto</th>
-          <th>Nome</th>
-          <th>Categoria</th>
+          <th style="width:32px"><input type="checkbox" id="chkAll" ${allChecked ? 'checked' : ''} onchange="toggleAllSelection(this.checked)" title="Selecionar página"></th>
+          <th style="width:48px">Foto</th>
+          <th>Nome / SKU</th>
+          <th>Time</th>
+          <th>Tipo</th>
           <th>Preço</th>
-          <th>Estoque</th>
-          <th>Destaque</th>
+          <th>Est.</th>
+          <th>Status</th>
+          <th>Dest.</th>
           <th>Ações</th>
         </tr>
       </thead>
       <tbody>
         ${page.map(p => {
           const img = (p.imagens || [])[0];
+          const isAtivo = (p.status || 'ativo') === 'ativo';
+          const estoqueZero  = p.estoque === 0;
+          const estoqueBaixo = p.estoque > 0 && p.estoque <= (p.estoque_minimo || 5);
+          const estoqueCls = estoqueZero ? 'td-estoque--zero' : estoqueBaixo ? 'td-estoque--baixo' : '';
+          const hasPromo = p.preco_promocional && Number(p.preco_promocional) > 0;
+          const selected = selectedProdutoIds.has(String(p.id));
+          const ddId = `dd_${p.id}`;
           return `
-          <tr>
+          <tr class="${selected ? 'tr--selected' : ''}">
+            <td><input type="checkbox" class="chk-produto" data-id="${p.id}" ${selected ? 'checked' : ''} onchange="toggleProdutoSelection('${p.id}')"></td>
             <td>
               <div class="td-img">
                 ${img
@@ -630,19 +672,37 @@ function renderTabelaProdutos() {
                   : `<div class="td-img-placeholder"></div>`}
               </div>
             </td>
-            <td><span class="td-nome" title="${p.nome}">${p.nome}</span></td>
-            <td><span class="td-cat">${p.categoria_nome || '—'}</span></td>
-            <td><span class="td-preco">${formatBRL(p.preco)}</span></td>
-            <td>${p.estoque}</td>
             <td>
-              <span class="td-badge ${p.destaque ? '' : 'td-badge--off'}">
-                ${p.destaque ? 'Sim' : 'Não'}
-              </span>
+              <span class="td-nome" title="${p.nome}">${p.nome}</span>
+              ${p.sku ? `<div class="td-sku">${p.sku}</div>` : ''}
             </td>
+            <td><span class="td-cat">${p.time || '—'}</span></td>
+            <td><span class="td-cat">${p.tipo || '—'}</span></td>
             <td>
-              <div class="td-actions">
-                <button class="btn btn--outline btn--sm" onclick="openEditModal(${p.id})">Editar</button>
-                <button class="btn btn--danger btn--sm"  onclick="confirmDelete(${p.id})">Excluir</button>
+              ${hasPromo
+                ? `<div class="td-preco td-preco--riscado">${formatBRL(p.preco)}</div><div class="td-preco td-preco--promo">${formatBRL(p.preco_promocional)}</div>`
+                : `<span class="td-preco">${formatBRL(p.preco)}</span>`}
+            </td>
+            <td><span class="td-estoque ${estoqueCls}">${p.estoque}</span></td>
+            <td><span class="td-status ${isAtivo ? 'td-status-ativo' : 'td-status-inativo'}">${isAtivo ? 'Ativo' : 'Inativo'}</span></td>
+            <td><span class="td-badge ${p.destaque ? '' : 'td-badge--off'}">${p.destaque ? 'Sim' : 'Não'}</span></td>
+            <td>
+              <div class="action-dropdown" id="${ddId}">
+                <button class="btn btn--outline btn--sm" onclick="toggleDropdown('${ddId}')">Ações ▾</button>
+                <div class="action-dropdown__menu">
+                  <div class="action-dropdown__item" onclick="closeAllDropdowns();openEditModal(${p.id})">Editar</div>
+                  <div class="action-dropdown__item" onclick="closeAllDropdowns();duplicateProduto(${p.id})">Duplicar</div>
+                  <div class="action-dropdown__item" onclick="closeAllDropdowns();toggleStatus(${p.id},'${p.status||'ativo'}')">
+                    ${isAtivo ? 'Desativar' : 'Ativar'}
+                  </div>
+                  <div class="action-dropdown__item" onclick="closeAllDropdowns();toggleDestaque(${p.id},${!!p.destaque})">
+                    ${p.destaque ? 'Remover destaque' : 'Marcar destaque'}
+                  </div>
+                  <div class="action-dropdown__sep"></div>
+                  <div class="action-dropdown__item" onclick="closeAllDropdowns();window.open('../pages/produto.html?id=${p.id}','_blank')">Ver na loja</div>
+                  <div class="action-dropdown__sep"></div>
+                  <div class="action-dropdown__item action-dropdown__item--danger" onclick="closeAllDropdowns();confirmDelete(${p.id})">Excluir</div>
+                </div>
               </div>
             </td>
           </tr>`;
@@ -678,16 +738,28 @@ async function loadCategoriasAdmin() {
   } catch(e) {}
 }
 
+function _resetFormFields() {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+  const chk = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val; };
+  set('produtoId', ''); set('pNome', ''); set('pSku', ''); set('pSlug', '');
+  set('pPreco', '149.90'); set('pPrecoPromo', ''); set('pCusto', '');
+  set('pCategoria', ''); set('pTime', ''); set('pPais', '');
+  set('pCompeticao', ''); set('pTemporada', '');
+  set('pTipo', 'torcedor'); set('pMarca', ''); set('pGenero', 'masculino');
+  set('pEstoque', ''); set('pEstoqueMin', '');
+  set('pDescricao', ''); set('pDescricaoCurta', ''); set('pInfoLavagem', '');
+  set('pStatus', 'ativo'); set('pCores', ''); set('pImagemUrl', '');
+  set('pPeso', ''); set('pDimComp', ''); set('pDimLarg', ''); set('pDimAlt', '');
+  set('pKeywords', ''); set('pMetaTitulo', ''); set('pMetaDescricao', '');
+  chk('pDestaque', false); chk('pProdutoNovo', false); chk('pProdutoPromo', false);
+  document.querySelectorAll('#sizePicker input').forEach(cb => { cb.checked = false; });
+  const prev = document.getElementById('imagePreview'); if (prev) prev.innerHTML = '';
+}
+
 function openNewModal() {
   editingImages = [];
-  document.getElementById('produtoId').value = '';
-  document.getElementById('pNome').value = '';
-  document.getElementById('pPreco').value = '149.90';
-  document.getElementById('pCategoria').value = '';
-  document.getElementById('pEstoque').value = '';
-  document.getElementById('pDescricao').value = '';
-  document.getElementById('pDestaque').checked = false;
-  document.getElementById('imagePreview').innerHTML = '';
+  _slugDirty = false;
+  _resetFormFields();
   document.getElementById('modalFormTitle').textContent = 'Novo Produto';
   document.getElementById('modalOverlay').style.display = 'flex';
 }
@@ -695,14 +767,33 @@ function openNewModal() {
 function openEditModal(id) {
   const p = allProdutosAdmin.find(p => String(p.id) === String(id));
   if (!p) { showToast('Produto não encontrado.', 'error'); return; }
-  editingImages = [...(p.imagens || [])];
-  document.getElementById('produtoId').value   = p.id;
-  document.getElementById('pNome').value       = p.nome;
-  document.getElementById('pPreco').value      = p.preco;
-  document.getElementById('pCategoria').value  = p.categoria_id || '';
-  document.getElementById('pEstoque').value    = p.estoque;
-  document.getElementById('pDescricao').value  = p.descricao || '';
-  document.getElementById('pDestaque').checked = !!p.destaque;
+  _slugDirty = true; // editing: don't auto-overwrite slug
+  editingImages = [...parseAdminJson(p.imagens, [])];
+
+  const set = (elId, val) => { const el = document.getElementById(elId); if (el) el.value = val ?? ''; };
+  const chk = (elId, val) => { const el = document.getElementById(elId); if (el) el.checked = !!val; };
+
+  set('produtoId', p.id);
+  set('pNome', p.nome);          set('pSku', p.sku);        set('pSlug', p.slug);
+  set('pPreco', p.preco);        set('pPrecoPromo', p.preco_promocional ?? ''); set('pCusto', p.custo ?? '');
+  set('pCategoria', p.categoria_id); set('pTime', p.time); set('pPais', p.pais);
+  set('pCompeticao', p.competicao);  set('pTemporada', p.temporada);
+  set('pTipo', p.tipo || 'torcedor'); set('pMarca', p.marca); set('pGenero', p.genero || 'masculino');
+  set('pEstoque', p.estoque);    set('pEstoqueMin', p.estoque_minimo ?? '');
+  set('pDescricao', p.descricao); set('pDescricaoCurta', p.descricao_curta); set('pInfoLavagem', p.info_lavagem);
+  set('pStatus', p.status || 'ativo');
+  chk('pDestaque', p.destaque);  chk('pProdutoNovo', p.produto_novo); chk('pProdutoPromo', p.produto_promocional);
+  set('pPeso', p.peso ?? '');
+  const dim = parseAdminJson(p.dimensoes, {});
+  set('pDimComp', dim.comprimento ?? ''); set('pDimLarg', dim.largura ?? ''); set('pDimAlt', dim.altura ?? '');
+  set('pKeywords', p.keywords); set('pMetaTitulo', p.meta_titulo); set('pMetaDescricao', p.meta_descricao);
+
+  const tamanhos = parseAdminJson(p.tamanhos, []);
+  document.querySelectorAll('#sizePicker input').forEach(cb => { cb.checked = tamanhos.includes(cb.value); });
+
+  const cores = parseAdminJson(p.cores, []);
+  set('pCores', Array.isArray(cores) ? cores.join(', ') : '');
+
   document.getElementById('modalFormTitle').textContent = 'Editar Produto';
   renderImagePreview();
   document.getElementById('modalOverlay').style.display = 'flex';
@@ -716,20 +807,29 @@ function closeFormModal() {
 function renderImagePreview() {
   const preview = document.getElementById('imagePreview');
   if (!preview) return;
-  if (editingImages.length === 0) {
-    preview.innerHTML = '';
-    return;
-  }
+  if (editingImages.length === 0) { preview.innerHTML = ''; return; }
   preview.innerHTML = editingImages.map((img, i) => {
-    const isUrl = img.startsWith('http') && !img.startsWith('data:');
+    const isUrl = img && img.startsWith('http') && !img.startsWith('data:');
     return `
-    <div class="preview-img" onclick="removePreviewImg(${i})" title="${isUrl ? img : 'Upload'}">
-      <img src="${img}" alt="Foto ${i+1}" onerror="this.parentElement.querySelector('.preview-img__err').style.display='flex'" />
-      <div class="preview-img__err" style="display:none;position:absolute;inset:0;background:var(--bg-card2);align-items:center;justify-content:center;font-size:.65rem;color:var(--text-muted);text-align:center;padding:.2rem">Erro ao carregar</div>
-      <div class="preview-img__remove"></div>
+    <div class="preview-img" title="${isUrl ? img : 'Upload local'}">
+      <img src="${img}" alt="Foto ${i+1}" onerror="this.style.display='none'" />
+      <div class="preview-img__err" style="display:none;position:absolute;inset:0;background:var(--bg-card2);align-items:center;justify-content:center;font-size:.65rem;color:var(--text-muted);text-align:center;padding:.2rem">Erro</div>
+      <div class="preview-img__remove" onclick="removePreviewImg(${i})"></div>
+      <div class="preview-img__move">
+        ${i > 0 ? `<button type="button" onclick="movePreviewImg(${i},-1)" title="Mover para cima">↑</button>` : ''}
+        ${i < editingImages.length - 1 ? `<button type="button" onclick="movePreviewImg(${i},1)" title="Mover para baixo">↓</button>` : ''}
+      </div>
+      ${i === 0 ? '<div class="preview-img__main">Principal</div>' : ''}
       ${isUrl ? '<div class="preview-img__badge">URL</div>' : '<div class="preview-img__badge preview-img__badge--up">UP</div>'}
-    </div>
-  `}).join('');
+    </div>`;
+  }).join('');
+}
+
+function movePreviewImg(index, direction) {
+  const newIndex = index + direction;
+  if (newIndex < 0 || newIndex >= editingImages.length) return;
+  [editingImages[index], editingImages[newIndex]] = [editingImages[newIndex], editingImages[index]];
+  renderImagePreview();
 }
 
 function removePreviewImg(index) {
@@ -799,43 +899,76 @@ async function saveProduto(e) {
     urlInput.value = '';
     renderImagePreview();
   }
+
   const id = document.getElementById('produtoId').value;
+  const v = id => document.getElementById(id)?.value?.trim() ?? '';
+  const n = id => { const val = document.getElementById(id)?.value; return val !== '' && val != null ? Number(val) : null; };
+
+  const tamanhos = [...document.querySelectorAll('#sizePicker input:checked')].map(c => c.value);
+  const coresText = v('pCores');
+  const cores = coresText ? coresText.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const dimensoes = { comprimento: n('pDimComp'), largura: n('pDimLarg'), altura: n('pDimAlt') };
+
   const data = {
-    nome:        document.getElementById('pNome').value.trim(),
-    preco:       parseFloat(document.getElementById('pPreco').value),
-    categoria_id:document.getElementById('pCategoria').value || null,
-    estoque:     parseInt(document.getElementById('pEstoque').value) || 0,
-    descricao:   document.getElementById('pDescricao').value.trim(),
-    destaque:    document.getElementById('pDestaque').checked,
-    imagens:     editingImages,
+    nome:               v('pNome'),
+    sku:                v('pSku') || null,
+    slug:               v('pSlug') || null,
+    preco:              n('pPreco'),
+    preco_promocional:  n('pPrecoPromo'),
+    custo:              n('pCusto'),
+    categoria_id:       v('pCategoria') || null,
+    descricao:          v('pDescricao'),
+    descricao_curta:    v('pDescricaoCurta'),
+    time:               v('pTime') || null,
+    pais:               v('pPais') || null,
+    competicao:         v('pCompeticao') || null,
+    temporada:          v('pTemporada') || null,
+    tipo:               v('pTipo') || 'torcedor',
+    marca:              v('pMarca') || null,
+    genero:             v('pGenero') || 'masculino',
+    imagens:            editingImages,
+    estoque:            n('pEstoque') ?? 0,
+    estoque_minimo:     n('pEstoqueMin') ?? 0,
+    tamanhos,
+    cores,
+    status:             v('pStatus') || 'ativo',
+    destaque:           !!document.getElementById('pDestaque')?.checked,
+    produto_novo:       !!document.getElementById('pProdutoNovo')?.checked,
+    produto_promocional:!!document.getElementById('pProdutoPromo')?.checked,
+    peso:               n('pPeso'),
+    dimensoes,
+    info_lavagem:       v('pInfoLavagem') || null,
+    keywords:           v('pKeywords') || null,
+    meta_titulo:        v('pMetaTitulo') || null,
+    meta_descricao:     v('pMetaDescricao') || null,
   };
-  if (!data.nome || isNaN(data.preco)) {
+
+  if (!data.nome || data.preco == null || isNaN(data.preco)) {
     showToast('Nome e preço são obrigatórios.', 'error'); return;
   }
+
   const btnSalvar = document.getElementById('btnSalvarProduto');
   if (btnSalvar) { btnSalvar.disabled = true; btnSalvar.textContent = 'Salvando...'; }
   try {
     const cat = categoriasAdmin.find(c => String(c.id) === String(data.categoria_id));
     if (id) {
-      const updated = await api.put(`/produtos/${id}`, data);
-      const merged = { ...(updated || {}), ...data, id: Number(id), categoria_nome: cat?.nome || '' };
+      await api.put(`/produtos/${id}`, data);
+      const merged = { ...data, id: Number(id), categoria_nome: cat?.nome || '', imagens: editingImages };
       const idx = allProdutosAdmin.findIndex(p => String(p.id) === String(id));
       if (idx !== -1) allProdutosAdmin[idx] = merged;
       showToast('Produto atualizado com sucesso!');
     } else {
       const created = await api.post('/produtos', data);
-      const newP = { ...(created || {}), ...data, categoria_nome: cat?.nome || '' };
+      const newP = { ...data, id: created.id, categoria_nome: cat?.nome || '', imagens: editingImages };
       allProdutosAdmin.unshift(newP);
       showToast('Produto criado com sucesso!');
     }
     closeFormModal();
-    filteredProdutos = [...allProdutosAdmin];
-    currentPage = 1;
-    renderTabelaProdutos();
-  } catch(e) {
-    showToast(e.message, 'error');
+    applyAdminFilters();
+  } catch(err) {
+    showToast(err.message, 'error');
   } finally {
-    if (btnSalvar) { btnSalvar.disabled = false; btnSalvar.textContent = 'Salvar'; }
+    if (btnSalvar) { btnSalvar.disabled = false; btnSalvar.textContent = 'Salvar Produto'; }
   }
 }
 
@@ -1138,13 +1271,198 @@ async function loadUsuarios() {
   }
 }
 
-function filterAdminProdutos(term) {
-  const q = normalizeText(term);
-  filteredProdutos = q
-    ? allProdutosAdmin.filter(p => normalizeText(p.nome).includes(q) || normalizeText(p.categoria_nome || '').includes(q))
-    : [...allProdutosAdmin];
+function applyAdminFilters() {
+  const q = normalizeText(document.getElementById('adminBusca')?.value || '');
+  const statusFilter = document.getElementById('adminFiltroStatus')?.value || '';
+  const tipoFilter   = document.getElementById('adminFiltroTipo')?.value   || '';
+  const ordem        = document.getElementById('adminOrdem')?.value         || 'recente';
+
+  let list = [...allProdutosAdmin];
+  if (q) list = list.filter(p =>
+    normalizeText(p.nome).includes(q) ||
+    normalizeText(p.sku  || '').includes(q) ||
+    normalizeText(p.time || '').includes(q)
+  );
+  if (statusFilter) list = list.filter(p => (p.status || 'ativo') === statusFilter);
+  if (tipoFilter)   list = list.filter(p => p.tipo === tipoFilter);
+
+  switch (ordem) {
+    case 'preco_asc':  list.sort((a, b) => a.preco - b.preco); break;
+    case 'preco_desc': list.sort((a, b) => b.preco - a.preco); break;
+    case 'estoque':    list.sort((a, b) => a.estoque - b.estoque); break;
+    case 'nome':       list.sort((a, b) => (a.nome||'').localeCompare(b.nome||'','pt-BR')); break;
+    default:           list.sort((a, b) => b.id - a.id); break;
+  }
+
+  filteredProdutos = list;
   currentPage = 1;
+  selectedProdutoIds.clear();
+  updateBulkBar();
   renderTabelaProdutos();
+}
+
+// ── Product actions ───────────────────────────────────────────────────────────
+
+async function duplicateProduto(id) {
+  try {
+    const novo = await api.post(`/produtos/${id}/duplicar`, {});
+    allProdutosAdmin.unshift(novo);
+    applyAdminFilters();
+    showToast('Produto duplicado!');
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function toggleStatus(id, currentStatus) {
+  const novoStatus = currentStatus === 'ativo' ? 'inativo' : 'ativo';
+  try {
+    await api.patch(`/produtos/${id}/status`, { status: novoStatus });
+    const p = allProdutosAdmin.find(p => String(p.id) === String(id));
+    if (p) p.status = novoStatus;
+    applyAdminFilters();
+    showToast(novoStatus === 'ativo' ? 'Produto ativado.' : 'Produto desativado.');
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function toggleDestaque(id, currentDestaque) {
+  const novoDestaque = !currentDestaque;
+  try {
+    await api.patch(`/produtos/${id}/destaque`, { destaque: novoDestaque });
+    const p = allProdutosAdmin.find(p => String(p.id) === String(id));
+    if (p) p.destaque = novoDestaque;
+    applyAdminFilters();
+    showToast(novoDestaque ? 'Marcado como destaque.' : 'Destaque removido.');
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+// ── Bulk selection ────────────────────────────────────────────────────────────
+
+function toggleProdutoSelection(id) {
+  const sid = String(id);
+  if (selectedProdutoIds.has(sid)) selectedProdutoIds.delete(sid);
+  else selectedProdutoIds.add(sid);
+  updateBulkBar();
+}
+
+function toggleAllSelection(checked) {
+  const start = (currentPage - 1) * ITEMS_PER_PAGE;
+  const page = filteredProdutos.slice(start, start + ITEMS_PER_PAGE);
+  page.forEach(p => {
+    if (checked) selectedProdutoIds.add(String(p.id));
+    else selectedProdutoIds.delete(String(p.id));
+  });
+  updateBulkBar();
+  renderTabelaProdutos();
+}
+
+function updateBulkBar() {
+  const bar = document.getElementById('bulkBar');
+  if (!bar) return;
+  const count = selectedProdutoIds.size;
+  bar.classList.toggle('visible', count > 0);
+  const countEl = bar.querySelector('.bulk-bar__count');
+  if (countEl) countEl.textContent = `${count} produto${count !== 1 ? 's' : ''} selecionado${count !== 1 ? 's' : ''}`;
+}
+
+function clearSelection() {
+  selectedProdutoIds.clear();
+  updateBulkBar();
+  renderTabelaProdutos();
+}
+
+// ── Export / Import CSV ───────────────────────────────────────────────────────
+
+async function exportarCSV() {
+  try {
+    const token = localStorage.getItem('fc_token');
+    const res = await fetch(`${API_BASE}/produtos/export`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Erro ao exportar');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `produtos_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('CSV exportado!');
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function importarCSV(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    try {
+      await api.post('/produtos/import', { csv: ev.target.result });
+      showToast('Importação concluída! Recarregando...');
+      await loadProdutosAdmin();
+    } catch(e) {
+      showToast(e.message, 'error');
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+// ── Bulk Price ────────────────────────────────────────────────────────────────
+
+function openBulkPriceModal() {
+  if (selectedProdutoIds.size === 0) {
+    showToast('Selecione ao menos um produto.', 'error'); return;
+  }
+  document.getElementById('bulkPriceOverlay').style.display = 'flex';
+}
+
+async function salvarBulkPrice() {
+  const tipo  = document.getElementById('bulkPriceTipo')?.value;
+  const valor = parseFloat(document.getElementById('bulkPriceValor')?.value);
+  if (!tipo || isNaN(valor) || valor <= 0) {
+    showToast('Preencha tipo e valor.', 'error'); return;
+  }
+  const ids = [...selectedProdutoIds].map(Number);
+  const btn = document.getElementById('btnConfirmBulkPrice');
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+  try {
+    await api.post('/produtos/bulk-price', { ids, tipo, valor });
+    await loadProdutosAdmin();
+    clearSelection();
+    document.getElementById('bulkPriceOverlay').style.display = 'none';
+    showToast('Preços atualizados!');
+  } catch(e) {
+    showToast(e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Aplicar'; }
+  }
+}
+
+// ── Form section toggle (Logística / SEO) ─────────────────────────────────────
+
+function toggleFormSection(id) {
+  const body = document.getElementById(id);
+  if (!body) return;
+  body.style.display = body.style.display === 'none' ? '' : 'none';
+}
+
+// ── Action dropdown ───────────────────────────────────────────────────────────
+
+function toggleDropdown(id) {
+  const dd = document.getElementById(id);
+  if (!dd) return;
+  const isOpen = dd.classList.contains('open');
+  closeAllDropdowns();
+  if (!isOpen) dd.classList.add('open');
+}
+
+function closeAllDropdowns() {
+  document.querySelectorAll('.action-dropdown.open').forEach(d => d.classList.remove('open'));
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -1225,11 +1543,47 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btnViewLigas')?.addEventListener('click', () => setViewMode('ligas'));
   document.getElementById('btnViewLista')?.addEventListener('click', () => setViewMode('lista'));
 
-  let st;
-  document.getElementById('adminBusca')?.addEventListener('input', (e) => {
-    clearTimeout(st);
-    st = setTimeout(() => filterAdminProdutos(e.target.value), 300);
+  // Filters
+  let _searchTimer;
+  document.getElementById('adminBusca')?.addEventListener('input', () => {
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(applyAdminFilters, 300);
   });
+  document.getElementById('adminFiltroStatus')?.addEventListener('change', applyAdminFilters);
+  document.getElementById('adminFiltroTipo')?.addEventListener('change', applyAdminFilters);
+  document.getElementById('adminOrdem')?.addEventListener('change', applyAdminFilters);
+
+  // Export / Import
+  document.getElementById('btnExportarCSV')?.addEventListener('click', exportarCSV);
+  document.getElementById('importCSVInput')?.addEventListener('change', (e) => {
+    importarCSV(e.target.files[0]);
+    e.target.value = '';
+  });
+
+  // Bulk price
+  document.getElementById('btnBulkPrice')?.addEventListener('click', openBulkPriceModal);
+  document.getElementById('btnBulkDeselect')?.addEventListener('click', clearSelection);
+  document.getElementById('btnConfirmBulkPrice')?.addEventListener('click', salvarBulkPrice);
+  document.getElementById('btnCancelBulkPrice')?.addEventListener('click', () => {
+    document.getElementById('bulkPriceOverlay').style.display = 'none';
+  });
+  document.getElementById('btnCloseBulkPrice')?.addEventListener('click', () => {
+    document.getElementById('bulkPriceOverlay').style.display = 'none';
+  });
+
+  // Close dropdowns on outside click
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.action-dropdown')) closeAllDropdowns();
+  });
+
+  // Auto-slug from nome
+  document.getElementById('pNome')?.addEventListener('input', (e) => {
+    if (_slugDirty) return;
+    const slug = normalizeText(e.target.value).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const slugEl = document.getElementById('pSlug');
+    if (slugEl) slugEl.value = slug;
+  });
+  document.getElementById('pSlug')?.addEventListener('input', () => { _slugDirty = true; });
 
   document.getElementById('btnLogout')?.addEventListener('click', () => {
     if (confirm('Deseja sair do painel?')) {

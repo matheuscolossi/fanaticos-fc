@@ -103,14 +103,48 @@
     </div>
 
     <div id="tabProdutos" class="tab-content">
-      <div class="tab-actions">
-        <button class="btn btn--primary" id="btnNovoProduto">+ Novo Produto</button>
-        <input type="text" id="adminBusca" placeholder="Buscar produto..." class="input-busca admin-search" />
-        <div class="view-toggle">
-          <button class="btn active" id="btnViewLigas">Por Time</button>
-          <button class="btn" id="btnViewLista">Lista</button>
+      <div class="products-actions-row">
+        <div class="products-actions-left">
+          <button class="btn btn--primary" id="btnNovoProduto">+ Novo Produto</button>
+          <button class="btn btn--outline" id="btnExportarCSV" title="Exportar CSV">↓ Exportar</button>
+          <label class="btn btn--outline" style="cursor:pointer" title="Importar CSV">↑ Importar<input type="file" id="importCSVInput" accept=".csv" style="display:none"></label>
+        </div>
+        <div class="products-filters">
+          <input type="text" id="adminBusca" placeholder="Nome, time ou SKU..." class="input-busca admin-search-new" />
+          <select id="adminFiltroStatus" class="admin-filter-select">
+            <option value="">Todos os status</option>
+            <option value="ativo">Ativo</option>
+            <option value="inativo">Inativo</option>
+          </select>
+          <select id="adminFiltroTipo" class="admin-filter-select">
+            <option value="">Todos os tipos</option>
+            <option value="torcedor">Torcedor</option>
+            <option value="jogador">Jogador</option>
+            <option value="retro">Retrô</option>
+            <option value="infantil">Infantil</option>
+          </select>
+          <select id="adminOrdem" class="admin-filter-select">
+            <option value="recente">Mais recente</option>
+            <option value="az">Nome A–Z</option>
+            <option value="za">Nome Z–A</option>
+            <option value="preco_asc">Menor preço</option>
+            <option value="preco_desc">Maior preço</option>
+            <option value="estoque_asc">Menor estoque</option>
+          </select>
+          <div class="view-toggle">
+            <button class="btn active" id="btnViewLista">Lista</button>
+            <button class="btn" id="btnViewLigas">Por Time</button>
+          </div>
         </div>
       </div>
+
+      <!-- Bulk action bar (visible when rows selected) -->
+      <div class="bulk-bar" id="bulkBar">
+        <span class="bulk-bar__count" id="bulkCount">0 selecionados</span>
+        <button class="btn btn--outline btn--sm" id="btnBulkPrice">Alterar preço</button>
+        <button class="btn btn--outline btn--sm" id="btnBulkDeselect">Limpar seleção</button>
+      </div>
+
       <div class="table-wrap" id="tabelaProdutosWrap">
         <div class="loading-state"><div class="spinner"></div><p>Carregando...</p></div>
       </div>
@@ -136,63 +170,294 @@
 
   <!-- Modal Produto -->
   <div class="modal-overlay" id="modalOverlay" style="display:none">
-    <div class="modal modal--form" id="modalForm">
+    <div class="modal modal--form modal--form--xl" id="modalForm">
       <div class="modal__header">
         <h2 id="modalFormTitle">Novo Produto</h2>
         <button class="modal__close" id="btnCloseForm">Fechar</button>
       </div>
       <form id="formProduto" class="product-form">
         <input type="hidden" id="produtoId" />
-        <div class="form-row">
-          <div class="form-group">
-            <label>Nome da Camisa *</label>
-            <input type="text" id="pNome" placeholder="Ex: Flamengo - Titular 2024" required />
-          </div>
-          <div class="form-group form-group--sm">
-            <label>Preço (R$) *</label>
-            <input type="number" id="pPreco" placeholder="149.90" step="0.01" min="0" required />
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Categoria</label>
-            <select id="pCategoria"><option value="">Selecione...</option></select>
-          </div>
-          <div class="form-group form-group--sm">
-            <label>Estoque</label>
-            <input type="number" id="pEstoque" placeholder="0" min="0" />
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Descrição</label>
-          <textarea id="pDescricao" rows="3" placeholder="Descreva a camisa..."></textarea>
-        </div>
-        <div class="form-group">
-          <label>Imagens (até 4)</label>
-          <div class="img-input-group">
-            <div class="img-url-row">
-              <input type="url" id="pImagemUrl" placeholder="Cole uma URL de imagem (https://...)" class="img-url-input" />
-              <button type="button" class="btn btn--outline btn--sm" id="btnAddUrl">+ Adicionar URL</button>
+
+        <!-- 1. Identificação -->
+        <div class="form-section">
+          <div class="form-section__title">Identificação</div>
+          <div class="form-section__body">
+            <div class="form-cols-2">
+              <div class="form-group">
+                <label>Nome da Camisa *</label>
+                <input type="text" id="pNome" placeholder="Ex: Flamengo Titular 2024/25" required />
+              </div>
+              <div class="form-group">
+                <label>SKU</label>
+                <input type="text" id="pSku" placeholder="FLA-TIT-24" />
+              </div>
             </div>
-            <div class="img-divider"><span>ou</span></div>
-            <label class="upload-label" for="pImagens">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              Fazer upload de imagem
-            </label>
-            <input type="file" id="pImagens" accept="image/*" multiple style="display:none" />
+            <div class="form-group">
+              <label>Slug</label>
+              <input type="text" id="pSlug" placeholder="flamengo-titular-2024" />
+              <p class="form-hint">URL amigável — gerado automaticamente do nome.</p>
+            </div>
           </div>
-          <p class="form-hint">Até 4 imagens por produto. Aceitamos URL externa ou upload direto.</p>
-          <div class="image-preview" id="imagePreview"></div>
         </div>
-        <div class="form-group form-group--check">
-          <input type="checkbox" id="pDestaque" />
-          <label for="pDestaque">Produto em destaque na página inicial</label>
+
+        <!-- 2. Classificação -->
+        <div class="form-section">
+          <div class="form-section__title">Classificação</div>
+          <div class="form-section__body">
+            <div class="form-cols-3">
+              <div class="form-group">
+                <label>Categoria</label>
+                <select id="pCategoria"><option value="">Selecione...</option></select>
+              </div>
+              <div class="form-group">
+                <label>Time</label>
+                <input type="text" id="pTime" placeholder="Flamengo" />
+              </div>
+              <div class="form-group">
+                <label>País</label>
+                <input type="text" id="pPais" placeholder="Brasil" />
+              </div>
+            </div>
+            <div class="form-cols-3">
+              <div class="form-group">
+                <label>Competição</label>
+                <input type="text" id="pCompeticao" placeholder="Brasileirão" />
+              </div>
+              <div class="form-group">
+                <label>Temporada</label>
+                <input type="text" id="pTemporada" placeholder="2024/25" />
+              </div>
+              <div class="form-group">
+                <label>Tipo</label>
+                <select id="pTipo">
+                  <option value="torcedor">Torcedor</option>
+                  <option value="jogador">Jogador</option>
+                  <option value="retro">Retrô</option>
+                  <option value="infantil">Infantil</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-cols-2">
+              <div class="form-group">
+                <label>Marca</label>
+                <input type="text" id="pMarca" placeholder="Adidas" />
+              </div>
+              <div class="form-group">
+                <label>Gênero</label>
+                <select id="pGenero">
+                  <option value="masculino">Masculino</option>
+                  <option value="feminino">Feminino</option>
+                  <option value="infantil">Infantil</option>
+                  <option value="unissex">Unissex</option>
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="form-actions">
+
+        <!-- 3. Preços -->
+        <div class="form-section">
+          <div class="form-section__title">Preços</div>
+          <div class="form-section__body">
+            <div class="form-cols-3">
+              <div class="form-group">
+                <label>Preço Normal (R$) *</label>
+                <input type="number" id="pPreco" placeholder="149.90" step="0.01" min="0" required />
+              </div>
+              <div class="form-group">
+                <label>Preço Promocional (R$)</label>
+                <input type="number" id="pPrecoPromo" placeholder="—" step="0.01" min="0" />
+              </div>
+              <div class="form-group">
+                <label>Custo (R$)</label>
+                <input type="number" id="pCusto" placeholder="—" step="0.01" min="0" />
+                <p class="form-hint">Uso interno, não exibido ao cliente.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Estoque -->
+        <div class="form-section">
+          <div class="form-section__title">Estoque</div>
+          <div class="form-section__body">
+            <div class="form-cols-2">
+              <div class="form-group">
+                <label>Quantidade em Estoque</label>
+                <input type="number" id="pEstoque" placeholder="0" min="0" />
+              </div>
+              <div class="form-group">
+                <label>Estoque Mínimo</label>
+                <input type="number" id="pEstoqueMin" placeholder="5" min="0" />
+                <p class="form-hint">Alerta quando abaixo deste valor.</p>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Tamanhos Disponíveis</label>
+              <div class="size-chips" id="sizePicker">
+                <label class="size-chip"><input type="checkbox" value="PP" /> PP</label>
+                <label class="size-chip"><input type="checkbox" value="P" /> P</label>
+                <label class="size-chip"><input type="checkbox" value="M" /> M</label>
+                <label class="size-chip"><input type="checkbox" value="G" /> G</label>
+                <label class="size-chip"><input type="checkbox" value="GG" /> GG</label>
+                <label class="size-chip"><input type="checkbox" value="XG" /> XG</label>
+                <label class="size-chip"><input type="checkbox" value="XGG" /> XGG</label>
+                <label class="size-chip"><input type="checkbox" value="Único" /> Único</label>
+                <label class="size-chip"><input type="checkbox" value="P/M" /> P/M</label>
+                <label class="size-chip"><input type="checkbox" value="G/GG" /> G/GG</label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Cores</label>
+              <input type="text" id="pCores" placeholder="Vermelho, Preto, Branco" />
+              <p class="form-hint">Separe com vírgula.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Imagens -->
+        <div class="form-section">
+          <div class="form-section__title">Imagens (até 4)</div>
+          <div class="form-section__body">
+            <div class="img-input-group">
+              <div class="img-url-row">
+                <input type="url" id="pImagemUrl" placeholder="Cole uma URL (https://...)" class="img-url-input" />
+                <button type="button" class="btn btn--outline btn--sm" id="btnAddUrl">+ URL</button>
+              </div>
+              <div class="img-divider"><span>ou</span></div>
+              <label class="upload-label" for="pImagens">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Upload de imagem
+              </label>
+              <input type="file" id="pImagens" accept="image/*" multiple style="display:none" />
+            </div>
+            <p class="form-hint">A 1ª imagem é a principal. Use ↑↓ para reordenar. Clique no × para remover.</p>
+            <div class="image-preview" id="imagePreview"></div>
+          </div>
+        </div>
+
+        <!-- 6. Descrição -->
+        <div class="form-section">
+          <div class="form-section__title">Descrição</div>
+          <div class="form-section__body">
+            <div class="form-group">
+              <label>Descrição Curta</label>
+              <input type="text" id="pDescricaoCurta" placeholder="Resumo em uma linha (até 160 caracteres)" maxlength="160" />
+            </div>
+            <div class="form-group">
+              <label>Descrição Completa</label>
+              <textarea id="pDescricao" rows="4" placeholder="Descreva o produto detalhadamente..."></textarea>
+            </div>
+            <div class="form-group">
+              <label>Informações de Lavagem</label>
+              <textarea id="pInfoLavagem" rows="2" placeholder="Ex: Lavar à mão, não usar alvejante, secar à sombra..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- 7. Status e Opções -->
+        <div class="form-section">
+          <div class="form-section__title">Status e Opções</div>
+          <div class="form-section__body">
+            <div class="form-cols-2">
+              <div class="form-group">
+                <label>Status do Produto</label>
+                <select id="pStatus">
+                  <option value="ativo">Ativo — visível na loja</option>
+                  <option value="inativo">Inativo — oculto</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-checks">
+              <label class="check-label"><input type="checkbox" id="pDestaque" /> Em destaque</label>
+              <label class="check-label"><input type="checkbox" id="pProdutoNovo" /> Produto novo</label>
+              <label class="check-label"><input type="checkbox" id="pProdutoPromo" /> Promoção</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 8. Logística (colapsível) -->
+        <div class="form-section" id="sectionLogistica">
+          <div class="form-section__title form-section__title--toggle" onclick="toggleFormSection('sectionLogistica')">
+            Logística <span class="form-section__arrow">▶</span>
+          </div>
+          <div class="form-section__body" style="display:none">
+            <div class="form-cols-4">
+              <div class="form-group">
+                <label>Peso (kg)</label>
+                <input type="number" id="pPeso" step="0.001" min="0" placeholder="0.300" />
+              </div>
+              <div class="form-group">
+                <label>Comp. (cm)</label>
+                <input type="number" id="pDimComp" step="0.1" min="0" placeholder="30" />
+              </div>
+              <div class="form-group">
+                <label>Larg. (cm)</label>
+                <input type="number" id="pDimLarg" step="0.1" min="0" placeholder="25" />
+              </div>
+              <div class="form-group">
+                <label>Alt. (cm)</label>
+                <input type="number" id="pDimAlt" step="0.1" min="0" placeholder="5" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 9. SEO (colapsível) -->
+        <div class="form-section" id="sectionSeo">
+          <div class="form-section__title form-section__title--toggle" onclick="toggleFormSection('sectionSeo')">
+            SEO <span class="form-section__arrow">▶</span>
+          </div>
+          <div class="form-section__body" style="display:none">
+            <div class="form-group">
+              <label>Palavras-chave</label>
+              <input type="text" id="pKeywords" placeholder="camisa flamengo, camisa titular, camiseta futebol" />
+            </div>
+            <div class="form-group">
+              <label>Meta Título <span style="color:var(--text-dim);font-weight:400">(max 70 char)</span></label>
+              <input type="text" id="pMetaTitulo" maxlength="70" />
+            </div>
+            <div class="form-group">
+              <label>Meta Descrição <span style="color:var(--text-dim);font-weight:400">(max 160 char)</span></label>
+              <textarea id="pMetaDescricao" rows="2" maxlength="160"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions" style="padding:1.25rem 1.5rem;border-top:1px solid var(--border)">
           <button type="button" class="btn btn--outline" id="btnCancelarForm">Cancelar</button>
-          <button type="submit" class="btn btn--primary">Salvar Produto</button>
+          <button type="submit" class="btn btn--primary" id="btnSalvarProduto">Salvar Produto</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Modal Preço em Massa -->
+  <div class="modal-overlay" id="bulkPriceOverlay" style="display:none">
+    <div class="modal modal--sm">
+      <div class="modal__header">
+        <h2>Alterar Preço em Massa</h2>
+        <button class="modal__close" id="btnCloseBulkPrice">Fechar</button>
+      </div>
+      <div style="padding:1.25rem 1.5rem;display:flex;flex-direction:column;gap:1rem">
+        <p style="font-size:.85rem;color:var(--text-muted)">Aplica a alteração nos <strong id="bulkPriceCount">todos os</strong> produtos filtrados atualmente.</p>
+        <div class="form-group">
+          <label>Tipo de alteração</label>
+          <select id="bulkPriceTipo" class="admin-filter-select" style="width:100%">
+            <option value="fixo">Definir preço fixo (R$)</option>
+            <option value="desconto_pct">Desconto percentual (%)</option>
+            <option value="acrescimo_pct">Acréscimo percentual (%)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label id="bulkPriceValorLabel">Valor (R$)</label>
+          <input type="number" id="bulkPriceValor" step="0.01" min="0" placeholder="Ex: 149.90" />
+        </div>
+        <div class="form-actions">
+          <button class="btn btn--outline" id="btnCancelBulkPrice">Cancelar</button>
+          <button class="btn btn--primary" id="btnConfirmBulkPrice">Aplicar</button>
+        </div>
+      </div>
     </div>
   </div>
 
