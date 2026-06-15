@@ -103,39 +103,44 @@
     </div>
 
     <div id="tabProdutos" class="tab-content">
-      <div class="products-actions-row">
-        <div class="products-actions-left">
+      <!-- Linha 1: ações principais -->
+      <div class="prod-toolbar-top">
+        <div class="prod-toolbar-top__left">
           <button class="btn btn--primary" id="btnNovoProduto">+ Novo Produto</button>
-          <button class="btn btn--outline" id="btnExportarCSV" title="Exportar CSV">↓ Exportar</button>
-          <label class="btn btn--outline" style="cursor:pointer" title="Importar CSV">↑ Importar<input type="file" id="importCSVInput" accept=".csv" style="display:none"></label>
+          <button class="btn btn--outline btn--sm" id="btnExportarCSV">↓ Exportar CSV</button>
+          <label class="btn btn--outline btn--sm" style="cursor:pointer">↑ Importar CSV<input type="file" id="importCSVInput" accept=".csv" style="display:none"></label>
         </div>
-        <div class="products-filters">
-          <input type="text" id="adminBusca" placeholder="Nome, time ou SKU..." class="input-busca admin-search-new" />
-          <select id="adminFiltroStatus" class="admin-filter-select">
-            <option value="">Todos os status</option>
-            <option value="ativo">Ativo</option>
-            <option value="inativo">Inativo</option>
-          </select>
-          <select id="adminFiltroTipo" class="admin-filter-select">
-            <option value="">Todos os tipos</option>
-            <option value="torcedor">Torcedor</option>
-            <option value="jogador">Jogador</option>
-            <option value="retro">Retrô</option>
-            <option value="infantil">Infantil</option>
-          </select>
-          <select id="adminOrdem" class="admin-filter-select">
-            <option value="recente">Mais recente</option>
-            <option value="az">Nome A–Z</option>
-            <option value="za">Nome Z–A</option>
-            <option value="preco_asc">Menor preço</option>
-            <option value="preco_desc">Maior preço</option>
-            <option value="estoque_asc">Menor estoque</option>
-          </select>
-          <div class="view-toggle">
-            <button class="btn active" id="btnViewLista">Lista</button>
-            <button class="btn" id="btnViewLigas">Por Time</button>
-          </div>
+        <div class="view-toggle">
+          <button class="btn active" id="btnViewLista">Lista</button>
+          <button class="btn" id="btnViewLigas">Por Time</button>
         </div>
+      </div>
+
+      <!-- Linha 2: busca + filtros -->
+      <div class="prod-toolbar-filters">
+        <div class="prod-search-wrap">
+          <svg class="prod-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="adminBusca" placeholder="Nome, time ou SKU…" class="prod-search-input" />
+        </div>
+        <select id="adminFiltroStatus" class="admin-filter-select">
+          <option value="">Status</option>
+          <option value="ativo">Ativo</option>
+          <option value="inativo">Inativo</option>
+        </select>
+        <select id="adminFiltroTipo" class="admin-filter-select">
+          <option value="">Tipo</option>
+          <option value="torcedor">Torcedor</option>
+          <option value="jogador">Jogador</option>
+          <option value="retro">Retrô</option>
+          <option value="infantil">Infantil</option>
+        </select>
+        <select id="adminOrdem" class="admin-filter-select">
+          <option value="recente">Mais recente</option>
+          <option value="nome">Nome A–Z</option>
+          <option value="preco_asc">Menor preço</option>
+          <option value="preco_desc">Maior preço</option>
+          <option value="estoque">Menor estoque</option>
+        </select>
       </div>
 
       <!-- Bulk action bar (visible when rows selected) -->
