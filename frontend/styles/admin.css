@@ -151,6 +151,140 @@ td { padding: .85rem 1rem; color: var(--text); vertical-align: middle; }
 .admin-stat__val { font-family: var(--font-title); font-size: 1.8rem; color: var(--white); font-weight: 700; }
 .admin-stat__val--green { color: var(--green); }
 
+/* ── Dashboard ── */
+.dash-period-bar {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.dash-period-btn {
+  padding: .38rem .9rem;
+  font-size: .82rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition);
+  font-family: var(--font-body);
+}
+.dash-period-btn:hover { background: var(--bg-card2); color: var(--text); }
+.dash-period-btn.active {
+  background: rgba(255,107,0,.12);
+  color: var(--green);
+  border-color: var(--border-green);
+  font-weight: 600;
+}
+
+.dash-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.dash-kpi-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+}
+.dash-kpi-card--alert { border-color: rgba(255,68,68,.35); background: rgba(255,68,68,.04); }
+.dash-kpi-label {
+  font-size: .7rem;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--text-dim);
+}
+.dash-kpi-val {
+  font-family: var(--font-title);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--white);
+  line-height: 1;
+}
+.dash-kpi-val--green { color: var(--green); }
+.dash-kpi-val--danger { color: var(--danger); }
+.dash-kpi-sub { font-size: .72rem; color: var(--text-dim); }
+
+.dash-charts-row {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.dash-chart-box, .dash-table-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.4rem;
+}
+.dash-chart-wrap { height: 220px; position: relative; }
+
+.dash-section-title {
+  font-family: var(--font-title);
+  font-size: .85rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: 1rem;
+}
+
+.dash-tables-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.dash-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .82rem;
+}
+.dash-table th {
+  text-align: left;
+  padding: .4rem .5rem;
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.dash-table td {
+  padding: .55rem .5rem;
+  color: var(--text);
+  border-bottom: 1px solid rgba(255,255,255,.04);
+  vertical-align: middle;
+}
+.dash-table tr:last-child td { border-bottom: none; }
+.dash-table tbody tr:hover { background: var(--bg-card2); }
+.dash-rank { color: var(--text-dim); font-weight: 700; width: 24px; }
+
+.dash-empty {
+  color: var(--text-dim);
+  font-size: .85rem;
+  padding: 1.5rem 0;
+  text-align: center;
+}
+
+.dash-quick-actions {
+  display: flex;
+  gap: .75rem;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 1.25rem 1.4rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 1.5rem;
+}
+
 /* ── Tema Claro — Admin ── */
 [data-theme="light"] .admin-body  { background: #f2f2f2; }
 [data-theme="light"] .sidebar     { background: #ffffff; border-right-color: rgba(0,0,0,0.10); }
@@ -180,6 +314,15 @@ td { padding: .85rem 1rem; color: var(--text); vertical-align: middle; }
 
 [data-theme="light"] .modal { background: #ffffff; }
 [data-theme="light"] .modal__header { border-bottom-color: rgba(0,0,0,0.10); }
+[data-theme="light"] .dash-kpi-card { background: #fff; border-color: rgba(0,0,0,.1); }
+[data-theme="light"] .dash-chart-box { background: #fff; border-color: rgba(0,0,0,.1); }
+[data-theme="light"] .dash-table-box { background: #fff; border-color: rgba(0,0,0,.1); }
+[data-theme="light"] .dash-quick-actions { background: #fff; border-color: rgba(0,0,0,.1); }
+[data-theme="light"] .dash-kpi-val { color: #111; }
+[data-theme="light"] .dash-table td { color: #1a1a1a; }
+[data-theme="light"] .dash-table tbody tr:hover { background: #f5f5f5; }
+[data-theme="light"] .dash-period-btn { border-color: rgba(0,0,0,.15); color: #555; }
+[data-theme="light"] .dash-period-btn:hover { background: #f0f0f0; color: #111; }
 
 @media (max-width: 900px) {
   .admin-body { grid-template-columns: 1fr; }
@@ -241,6 +384,9 @@ td { padding: .85rem 1rem; color: var(--text); vertical-align: middle; }
   table { min-width: 760px; }
   .ligas-view table { min-width: 680px; }
   .admin-stats { grid-template-columns: 1fr; }
+  .dash-charts-row { grid-template-columns: 1fr; }
+  .dash-tables-row { grid-template-columns: 1fr; }
+  .dash-kpi-grid { grid-template-columns: repeat(2, 1fr); }
   .modal--form { max-width: calc(100vw - 1.5rem); }
   .product-form,
   .modal__header { padding: 1rem; }

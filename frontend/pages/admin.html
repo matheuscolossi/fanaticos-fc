@@ -17,7 +17,11 @@
       <span>FANÁTICOS <em>FC</em></span>
     </div>
     <nav class="sidebar__nav">
-      <a href="#" class="sidebar__link active" data-tab="produtos">
+      <a href="#" class="sidebar__link active" data-tab="dashboard">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a href="#" class="sidebar__link" data-tab="produtos">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
         Produtos
       </a>
@@ -46,15 +50,59 @@
   <main class="admin-main" id="adminMain">
     <div class="admin-topbar">
       <div>
-        <h1 class="admin-title" id="adminTabTitle">Gerenciar Produtos</h1>
-        <p class="admin-subtitle" id="adminTabSub">Cadastre, edite e remova produtos do catálogo</p>
+        <h1 class="admin-title" id="adminTabTitle">Dashboard</h1>
+        <p class="admin-subtitle" id="adminTabSub">Visão geral das métricas e vendas</p>
       </div>
       <div class="admin-topbar__actions">
         <span class="admin-user" id="adminUserName"></span>
       </div>
     </div>
 
-    <div id="tabProdutos" class="tab-content active">
+    <!-- ── Dashboard ── -->
+    <div id="tabDashboard" class="tab-content active">
+      <div class="dash-period-bar" id="dashPeriodBar">
+        <button class="dash-period-btn" data-periodo="hoje">Hoje</button>
+        <button class="dash-period-btn" data-periodo="7d">7 dias</button>
+        <button class="dash-period-btn active" data-periodo="30d">30 dias</button>
+        <button class="dash-period-btn" data-periodo="mes">Este mês</button>
+        <button class="dash-period-btn" data-periodo="ano">Este ano</button>
+      </div>
+
+      <div class="dash-kpi-grid" id="dashKpiGrid">
+        <div class="loading-state" style="grid-column:1/-1"><div class="spinner"></div><p>Carregando métricas...</p></div>
+      </div>
+
+      <div class="dash-charts-row" id="dashChartsRow">
+        <div class="dash-chart-box">
+          <div class="dash-section-title">Receita por Dia</div>
+          <div class="dash-chart-wrap"><canvas id="chartReceita"></canvas></div>
+        </div>
+        <div class="dash-chart-box">
+          <div class="dash-section-title">Pedidos por Status</div>
+          <div class="dash-chart-wrap"><canvas id="chartStatus"></canvas></div>
+        </div>
+      </div>
+
+      <div class="dash-tables-row">
+        <div class="dash-table-box">
+          <div class="dash-section-title">Top Produtos Vendidos</div>
+          <div id="dashTopProdutos"><div class="dash-empty">Carregando...</div></div>
+        </div>
+        <div class="dash-table-box">
+          <div class="dash-section-title">Últimos Pedidos</div>
+          <div id="dashUltimosPedidos"><div class="dash-empty">Carregando...</div></div>
+        </div>
+      </div>
+
+      <div class="dash-quick-actions">
+        <div class="dash-section-title" style="width:100%;margin-bottom:.25rem">Ações Rápidas</div>
+        <button class="btn btn--primary" id="dashBtnNovoProduto">+ Novo Produto</button>
+        <button class="btn btn--outline" id="dashBtnVerPedidos">Ver Pedidos</button>
+        <button class="btn btn--outline" id="dashBtnVerClientes">Ver Clientes</button>
+      </div>
+    </div>
+
+    <div id="tabProdutos" class="tab-content">
       <div class="tab-actions">
         <button class="btn btn--primary" id="btnNovoProduto">+ Novo Produto</button>
         <input type="text" id="adminBusca" placeholder="Buscar produto..." class="input-busca admin-search" />
@@ -177,6 +225,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="../scripts/api.js"></script>
   <script src="../scripts/admin.js"></script>
 </body>

@@ -9,6 +9,11 @@ let categoriasAdmin = [];
 let editingImages = [];
 let viewMode = 'ligas'; // 'ligas' | 'lista'
 
+// ── Dashboard state ────────────────────────────────────────────────────────
+let dashPeriodo = '30d';
+let _chartReceita = null;
+let _chartStatus = null;
+
 function getOpenIds() {
   try { return new Set(JSON.parse(sessionStorage.getItem('fc_open_accordions') || '[]')); }
   catch { return new Set(); }
@@ -329,18 +334,235 @@ function setTab(name) {
   document.querySelector(`.sidebar__link[data-tab="${name}"]`)?.classList.add('active');
 
   const titles = {
-    produtos: ['Gerenciar Produtos', 'Cadastre, edite e remova produtos do catálogo'],
-    pedidos:  ['Pedidos Recebidos',  'Visualize todos os pedidos finalizados via WhatsApp'],
-    usuarios: ['Usuários Cadastrados','Gerencie as contas de usuários'],
+    dashboard: ['Dashboard',           'Visão geral das métricas e vendas'],
+    produtos:  ['Gerenciar Produtos',  'Cadastre, edite e remova produtos do catálogo'],
+    pedidos:   ['Pedidos Recebidos',   'Visualize todos os pedidos finalizados via WhatsApp'],
+    usuarios:  ['Usuários Cadastrados','Gerencie as contas de usuários'],
   };
-  document.getElementById('adminTabTitle').textContent = titles[name][0];
-  document.getElementById('adminTabSub').textContent   = titles[name][1];
+  document.getElementById('adminTabTitle').textContent = titles[name]?.[0] ?? name;
+  document.getElementById('adminTabSub').textContent   = titles[name]?.[1] ?? '';
 
-  if (name === 'pedidos')  loadPedidos();
-  if (name === 'usuarios') loadUsuarios();
+  if (name === 'dashboard') loadDashboard();
+  if (name === 'pedidos')   loadPedidos();
+  if (name === 'usuarios')  loadUsuarios();
+  if (name === 'produtos' && allProdutosAdmin.length === 0) loadProdutosAdmin();
 }
 
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+
+async function loadDashboard(periodo) {
+  if (periodo) dashPeriodo = periodo;
+
+  document.querySelectorAll('.dash-period-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.periodo === dashPeriodo);
+  });
+
+  document.getElementById('dashKpiGrid').innerHTML =
+    '<div class="loading-state" style="grid-column:1/-1"><div class="spinner"></div><p>Carregando métricas...</p></div>';
+  document.getElementById('dashTopProdutos').innerHTML = '<div class="dash-empty">Carregando...</div>';
+  document.getElementById('dashUltimosPedidos').innerHTML = '<div class="dash-empty">Carregando...</div>';
+
+  try {
+    const data = await api.get(`/admin/dashboard?periodo=${dashPeriodo}`);
+    renderDashboard(data);
+  } catch(e) {
+    document.getElementById('dashKpiGrid').innerHTML =
+      `<div class="loading-state" style="grid-column:1/-1;color:var(--danger)">Erro ao carregar métricas.</div>`;
+  }
+}
+
+function renderDashboard(data) {
+  // ── KPI Cards ──
+  const grid = document.getElementById('dashKpiGrid');
+  const pendentes = (data.por_status?.pendente || 0) + (data.por_status?.aguardando_pagamento || 0);
+  grid.innerHTML = `
+    <div class="dash-kpi-card">
+      <div class="dash-kpi-label">Receita do Período</div>
+      <div class="dash-kpi-val dash-kpi-val--green">${formatBRL(data.receita)}</div>
+    </div>
+    <div class="dash-kpi-card">
+      <div class="dash-kpi-label">Pedidos no Período</div>
+      <div class="dash-kpi-val">${data.total_pedidos}</div>
+      ${pendentes > 0 ? `<div class="dash-kpi-sub" style="color:#ffd740">${pendentes} aguardando</div>` : ''}
+    </div>
+    <div class="dash-kpi-card">
+      <div class="dash-kpi-label">Ticket Médio</div>
+      <div class="dash-kpi-val">${formatBRL(data.ticket_medio)}</div>
+    </div>
+    <div class="dash-kpi-card">
+      <div class="dash-kpi-label">Clientes Cadastrados</div>
+      <div class="dash-kpi-val">${data.total_clientes}</div>
+    </div>
+    <div class="dash-kpi-card">
+      <div class="dash-kpi-label">Produtos no Catálogo</div>
+      <div class="dash-kpi-val">${data.total_produtos}</div>
+      ${data.estoque_baixo > 0 ? `<div class="dash-kpi-sub">${data.estoque_baixo} com estoque baixo</div>` : ''}
+    </div>
+    <div class="dash-kpi-card ${data.sem_estoque > 0 ? 'dash-kpi-card--alert' : ''}">
+      <div class="dash-kpi-label">Sem Estoque</div>
+      <div class="dash-kpi-val ${data.sem_estoque > 0 ? 'dash-kpi-val--danger' : ''}">${data.sem_estoque}</div>
+    </div>
+  `;
+
+  // ── Charts ──
+  _renderChartReceita(data.grafico);
+  _renderChartStatus(data.por_status);
+
+  // ── Top Products ──
+  const topDiv = document.getElementById('dashTopProdutos');
+  if (!data.top_produtos || data.top_produtos.length === 0) {
+    topDiv.innerHTML = '<div class="dash-empty">Nenhum produto vendido neste período.</div>';
+  } else {
+    topDiv.innerHTML = `
+      <table class="dash-table">
+        <thead><tr><th>#</th><th>Produto</th><th>Qtd</th><th>Receita</th></tr></thead>
+        <tbody>
+          ${data.top_produtos.map((p, i) => `
+            <tr>
+              <td class="dash-rank">${i + 1}</td>
+              <td title="${p.nome}" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.nome}</td>
+              <td><strong>${p.vendido}</strong></td>
+              <td class="td-preco">${formatBRL(p.receita)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  // ── Recent Orders ──
+  const recDiv = document.getElementById('dashUltimosPedidos');
+  if (!data.pedidos_recentes || data.pedidos_recentes.length === 0) {
+    recDiv.innerHTML = '<div class="dash-empty">Nenhum pedido registrado ainda.</div>';
+  } else {
+    recDiv.innerHTML = `
+      <table class="dash-table">
+        <thead><tr><th>#</th><th>Cliente</th><th>Total</th><th>Status</th></tr></thead>
+        <tbody>
+          ${data.pedidos_recentes.map(p => {
+            const st = STATUS_PEDIDO[p.status] || { label: p.status, color: '#888' };
+            return `
+            <tr>
+              <td><strong>#${p.id}</strong></td>
+              <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.nome_cliente || '—'}</td>
+              <td class="td-preco">${formatBRL(p.total)}</td>
+              <td><span style="color:${st.color};font-size:.76rem;font-weight:600">${st.label}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  }
+}
+
+function _renderChartReceita(grafico) {
+  const canvas = document.getElementById('chartReceita');
+  if (!canvas) return;
+  if (_chartReceita) { _chartReceita.destroy(); _chartReceita = null; }
+
+  if (!grafico || grafico.length === 0) {
+    canvas.parentElement.innerHTML = '<div class="dash-empty">Sem dados no período.</div>';
+    return;
+  }
+
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const gridColor = isDark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.08)';
+  const tickColor = isDark ? '#777' : '#999';
+
+  _chartReceita = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: grafico.map(g => {
+        const [, m, d] = g.dia.split('-');
+        return `${d}/${m}`;
+      }),
+      datasets: [{
+        label: 'Receita (R$)',
+        data: grafico.map(g => g.receita),
+        borderColor: '#ff6b00',
+        backgroundColor: 'rgba(255,107,0,.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: grafico.length <= 14 ? 4 : 2,
+        pointBackgroundColor: '#ff6b00',
+        borderWidth: 2,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { label: ctx => ' R$ ' + ctx.parsed.y.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) }
+      }},
+      scales: {
+        x: { ticks: { color: tickColor, font: { size: 11 } }, grid: { color: gridColor } },
+        y: {
+          ticks: { color: tickColor, font: { size: 11 },
+            callback: v => 'R$ ' + v.toLocaleString('pt-BR') },
+          grid: { color: gridColor },
+          beginAtZero: true,
+        },
+      },
+    },
+  });
+}
+
+function _renderChartStatus(porStatus) {
+  const canvas = document.getElementById('chartStatus');
+  if (!canvas) return;
+  if (_chartStatus) { _chartStatus.destroy(); _chartStatus = null; }
+
+  const STATUS_COLORS = {
+    pendente: '#888',
+    aguardando_pagamento: '#ffd740',
+    pago: '#66bb6a',
+    em_separacao: '#42a5f5',
+    enviado: '#ff9800',
+    entregue: '#4caf50',
+    cancelado: '#ff4444',
+  };
+
+  const labels = [], values = [], colors = [];
+  for (const [status, count] of Object.entries(porStatus || {})) {
+    if (Number(count) > 0) {
+      labels.push(STATUS_PEDIDO[status]?.label || status);
+      values.push(Number(count));
+      colors.push(STATUS_COLORS[status] || '#888');
+    }
+  }
+
+  if (values.length === 0) {
+    canvas.parentElement.innerHTML = '<div class="dash-empty">Nenhum pedido no período.</div>';
+    return;
+  }
+
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  _chartStatus = new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors.map(c => c + 'bb'),
+        borderColor: colors,
+        borderWidth: 2,
+        hoverOffset: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: isDark ? '#aaa' : '#555', font: { size: 11 }, padding: 10, boxWidth: 12 },
+        },
+      },
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function loadProdutosAdmin() {
   try {
@@ -940,7 +1162,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('loginRequired').style.display = 'none';
       document.getElementById('adminUserName').textContent = `${data.user.nome}`;
       await loadCategoriasAdmin();
-      await loadProdutosAdmin();
+      loadDashboard();
+      loadProdutosAdmin();
     } catch(err) {
       errEl.textContent = err.message;
       errEl.style.display = 'block';
@@ -953,7 +1176,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   api.get('/health').catch(() => {});
 
   await loadCategoriasAdmin();
-  await loadProdutosAdmin();
+
+  // Dashboard é a aba inicial — produtos carregam em background
+  loadDashboard();
+  loadProdutosAdmin();
 
   document.querySelectorAll('.sidebar__link[data-tab]').forEach(link => {
     link.addEventListener('click', (e) => {
@@ -961,6 +1187,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       setTab(link.dataset.tab);
     });
   });
+
+  // Filtros de período do dashboard
+  document.getElementById('dashPeriodBar')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.dash-period-btn');
+    if (btn) loadDashboard(btn.dataset.periodo);
+  });
+
+  // Ações rápidas do dashboard
+  document.getElementById('dashBtnNovoProduto')?.addEventListener('click', () => {
+    setTab('produtos');
+    setTimeout(() => openNewModal(), 100);
+  });
+  document.getElementById('dashBtnVerPedidos')?.addEventListener('click', () => setTab('pedidos'));
+  document.getElementById('dashBtnVerClientes')?.addEventListener('click', () => setTab('usuarios'));
 
   document.getElementById('btnNovoProduto')?.addEventListener('click', openNewModal);
   document.getElementById('formProduto')?.addEventListener('submit', saveProduto);

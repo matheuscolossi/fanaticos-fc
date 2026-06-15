@@ -8,6 +8,7 @@ const categoryRoutes = require('./src/routes/categoryRoutes');
 const orderRoutes = require('./src/routes/orderRoutes');
 const productRoutes = require('./src/routes/productRoutes');
 const userRoutes = require('./src/routes/userRoutes');
+const dashboardRoutes = require('./src/routes/dashboardRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -44,6 +45,7 @@ app.use('/api/categorias', categoryRoutes);
 app.use('/api/produtos', productRoutes(adminMiddleware));
 app.use('/api/pedidos', orderRoutes({ adminMiddleware, authMiddleware }));
 app.use('/api/admin/usuarios', userRoutes({ adminMiddleware }));
+app.use('/api/admin/dashboard', dashboardRoutes(adminMiddleware));
 
 app.use(errorHandler);
 
