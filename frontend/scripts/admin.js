@@ -1,8 +1,10 @@
 ﻿const ITEMS_PER_PAGE = 15;
+const TEAMS_PER_PAGE = 8;
 const ORDERS_PER_PAGE = 25;
 let allProdutosAdmin = [];
 let filteredProdutos = [];
 let currentPage = 1;
+let ligaPage = 1;
 let pedidosPage = 1;
 let deleteTargetId = null;
 let categoriasAdmin = [];
@@ -223,10 +225,10 @@ function toggleAccordion(bodyId, arrowId) {
 function renderLigaView(produtos) {
   const wrap = document.getElementById('tabelaProdutosWrap');
   const pag  = document.getElementById('paginacaoProdutos');
-  if (pag) pag.style.display = 'none';
 
   if (produtos.length === 0) {
     wrap.innerHTML = '<div class="loading-state">Nenhum produto encontrado.</div>';
+    if (pag) pag.style.display = 'none';
     return;
   }
 
@@ -249,13 +251,31 @@ function renderLigaView(produtos) {
     return a.time.localeCompare(b.time, 'pt-BR');
   });
 
+  // ── Paginação por times ──
+  const totalPages = Math.max(1, Math.ceil(sortedTeams.length / TEAMS_PER_PAGE));
+  ligaPage = Math.min(ligaPage, totalPages);
+  const pageStart = (ligaPage - 1) * TEAMS_PER_PAGE;
+  const pageTeams = sortedTeams.slice(pageStart, pageStart + TEAMS_PER_PAGE);
+
+  if (pag) {
+    if (totalPages > 1) {
+      pag.style.display = 'flex';
+      document.getElementById('paginaInfo').textContent =
+        `Página ${ligaPage} de ${totalPages} · ${sortedTeams.length} times · ${produtos.length} produtos`;
+      document.getElementById('btnAnterior').disabled = ligaPage === 1;
+      document.getElementById('btnProximo').disabled  = ligaPage === totalPages;
+    } else {
+      pag.style.display = 'none';
+    }
+  }
+
   const openIds = getOpenIds();
   let html = '<div class="ligas-view">';
 
-  for (const group of sortedTeams) {
+  for (const group of pageTeams) {
       const { liga, time, produtos: prods } = group;
       const timeId  = 'time_' + normalizeText(`${liga}_${time}`).replace(/[^a-z0-9]/g, '_');
-      const timeOpen = openIds.has(`${timeId}_body`) || sortedTeams.length <= 8;
+      const timeOpen = openIds.has(`${timeId}_body`) || pageTeams.length <= 4;
 
       html += `
           <div class="time-section time-section--top">
@@ -608,10 +628,10 @@ async function loadProdutosAdmin() {
 
 function setViewMode(mode) {
   viewMode = mode;
+  currentPage = 1;
+  ligaPage = 1;
   document.getElementById('btnViewLigas')?.classList.toggle('active', mode === 'ligas');
   document.getElementById('btnViewLista')?.classList.toggle('active', mode === 'lista');
-  const pag = document.getElementById('paginacaoProdutos');
-  if (pag) pag.style.display = mode === 'lista' ? '' : 'none';
   renderTabelaProdutos();
 }
 
@@ -1296,6 +1316,7 @@ function applyAdminFilters() {
 
   filteredProdutos = list;
   currentPage = 1;
+  ligaPage = 1;
   selectedProdutoIds.clear();
   updateBulkBar();
   renderTabelaProdutos();
@@ -1532,12 +1553,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   document.getElementById('btnAnterior')?.addEventListener('click', () => {
-    if (currentPage > 1) { currentPage--; renderTabelaProdutos(); }
+    if (viewMode === 'ligas') { if (ligaPage > 1) { ligaPage--; renderTabelaProdutos(); window.scrollTo(0,0); } }
+    else { if (currentPage > 1) { currentPage--; renderTabelaProdutos(); window.scrollTo(0,0); } }
   });
   document.getElementById('btnProximo')?.addEventListener('click', () => {
-    if (currentPage < Math.ceil(filteredProdutos.length / ITEMS_PER_PAGE)) {
-      currentPage++; renderTabelaProdutos();
-    }
+    if (viewMode === 'ligas') { ligaPage++; renderTabelaProdutos(); window.scrollTo(0,0); }
+    else if (currentPage < Math.ceil(filteredProdutos.length / ITEMS_PER_PAGE)) { currentPage++; renderTabelaProdutos(); window.scrollTo(0,0); }
   });
 
   document.getElementById('btnViewLigas')?.addEventListener('click', () => setViewMode('ligas'));
