@@ -367,11 +367,7 @@ select option { background: var(--bg-card2); }
     radial-gradient(ellipse 60% 40% at 80% 80%, rgba(230,90,0,0.08) 0%, transparent 60%),
     var(--bg);
 }
-.hero__pattern {
-  position: absolute; inset: 0;
-  background-image: repeating-linear-gradient(0deg, transparent, transparent 48px, rgba(255,255,255,0.02) 48px, rgba(255,255,255,0.02) 50px),
-    repeating-linear-gradient(90deg, transparent, transparent 48px, rgba(255,255,255,0.02) 48px, rgba(255,255,255,0.02) 50px);
-}
+.hero__pattern { display: none; }
 .hero__content { position: relative; z-index: 1; }
 .hero__eyebrow {
   font-family: var(--font-title); font-size: .9rem; font-weight: 500;
