@@ -1036,3 +1036,39 @@
   }
   .perfil-card { padding: 1rem; }
 }
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  margin-top: 2rem;
+  flex-wrap: wrap;
+}
+
+.pagination__page {
+  min-width: 2.4rem;
+  height: 2.4rem;
+  padding: 0 .5rem;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: .85rem;
+  transition: border-color .2s, color .2s;
+}
+
+.pagination__page:hover { border-color: var(--gold); color: var(--gold); }
+
+.pagination__page.active {
+  background: var(--gold);
+  color: #000;
+  border-color: var(--gold);
+  font-weight: 600;
+}
+
+.pagination__ellipsis {
+  color: var(--text-dim);
+  padding: 0 .25rem;
+}
