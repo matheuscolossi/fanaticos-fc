@@ -315,6 +315,17 @@ function buildApiParams(page = 1) {
   return params.toString();
 }
 
+async function loadDestaques() {
+  const gridD = document.getElementById('gridDestaques');
+  if (!gridD) return;
+  try {
+    const { produtos } = await api.get('/produtos?destaque=true&limit=12');
+    renderGrid(gridD, produtos);
+  } catch (e) {
+    console.warn('[destaques:error]', e);
+  }
+}
+
 async function loadProdutos() {
   currentPage = 1;
 
@@ -325,8 +336,6 @@ async function loadProdutos() {
     const gridP = document.getElementById('gridProdutos');
     if (gridP) renderGrid(gridP, allProdutos);
     updateLoadMoreBtn();
-    const gridD = document.getElementById('gridDestaques');
-    if (gridD) renderGrid(gridD, allProdutos.filter(p => p.destaque));
   }
 
   try {
@@ -338,8 +347,6 @@ async function loadProdutos() {
     const gridP = document.getElementById('gridProdutos');
     if (gridP) renderGrid(gridP, allProdutos);
     updateLoadMoreBtn();
-    const gridD = document.getElementById('gridDestaques');
-    if (gridD) renderGrid(gridD, allProdutos.filter(p => p.destaque));
     const countEl = document.getElementById('filtrosCount');
     if (countEl) countEl.textContent = allProdutos.length > 0
       ? `${allProdutos.length} de ${fresh.total} produto${fresh.total !== 1 ? 's' : ''}` : '';
@@ -374,7 +381,7 @@ async function loadMais() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  await Promise.all([loadCategorias(), loadProdutos()]);
+  await Promise.all([loadCategorias(), loadProdutos(), loadDestaques()]);
 
   let searchTimer;
   document.getElementById('inputBusca')?.addEventListener('input', () => {
