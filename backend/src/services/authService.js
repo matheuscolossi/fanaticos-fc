@@ -2,6 +2,9 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const userModel = require('../models/userModel');
 const { createHttpError } = require('../utils/http');
+const { enviarCodigoVerificacao } = require('./emailService');
+
+const CODE_TTL_MINUTES = 15;
 
 function toPublicUser(user) {
   return {
@@ -10,6 +13,25 @@ function toPublicUser(user) {
     email: user.email,
     perfil: user.perfil,
   };
+}
+
+function gerarCodigo() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function codigoExpiraEm() {
+  return new Date(Date.now() + CODE_TTL_MINUTES * 60 * 1000).toISOString();
+}
+
+async function enviarCodigoParaUsuario(user) {
+  const codigo = gerarCodigo();
+  await userModel.setVerificationCode(user.id, codigo, codigoExpiraEm());
+  try {
+    await enviarCodigoVerificacao(user.email, codigo);
+  } catch (err) {
+    console.error('[auth:email:error]', err.message);
+    throw createHttpError(502, 'Não foi possível enviar o código de verificação.', 'EMAIL_SEND_FAILED');
+  }
 }
 
 async function registerUser({ nome, email, senha, cpf, telefone }) {
@@ -22,7 +44,45 @@ async function registerUser({ nome, email, senha, cpf, telefone }) {
 
   const passwordHash = bcrypt.hashSync(senha, 10);
   const result = await userModel.create({ nome, email, senha: passwordHash, cpf, telefone });
-  return { message: 'User created.', id: result.lastID };
+  const userId = result.lastID;
+
+  await enviarCodigoParaUsuario({ id: userId, email });
+
+  return { message: 'User created. Verification code sent.', id: userId, requiresVerification: true };
+}
+
+async function verificarCodigoEmail({ email, codigo }, jwtSecret) {
+  if (!email || !codigo) {
+    throw createHttpError(400, 'Email e código são obrigatórios.', 'VALIDATION_ERROR');
+  }
+
+  const user = await userModel.findByEmail(email);
+  if (!user) throw createHttpError(404, 'Usuário não encontrado.', 'USER_NOT_FOUND');
+  if (user.email_verificado) throw createHttpError(409, 'E-mail já verificado.', 'ALREADY_VERIFIED');
+
+  if (!user.codigo_verificacao || user.codigo_verificacao !== String(codigo)) {
+    throw createHttpError(400, 'Código inválido.', 'INVALID_CODE');
+  }
+  if (!user.codigo_expira_em || new Date(user.codigo_expira_em) < new Date()) {
+    throw createHttpError(400, 'Código expirado. Solicite um novo.', 'CODE_EXPIRED');
+  }
+
+  await userModel.markEmailVerified(user.id);
+
+  const publicUser = toPublicUser(user);
+  const token = jwt.sign(publicUser, jwtSecret, { expiresIn: '7d' });
+  return { token, user: publicUser };
+}
+
+async function reenviarCodigoEmail({ email }) {
+  if (!email) throw createHttpError(400, 'Email é obrigatório.', 'VALIDATION_ERROR');
+
+  const user = await userModel.findByEmail(email);
+  if (!user) throw createHttpError(404, 'Usuário não encontrado.', 'USER_NOT_FOUND');
+  if (user.email_verificado) throw createHttpError(409, 'E-mail já verificado.', 'ALREADY_VERIFIED');
+
+  await enviarCodigoParaUsuario(user);
+  return { message: 'Código reenviado.' };
 }
 
 async function loginUser({ email, senha }, jwtSecret) {
@@ -81,5 +141,7 @@ module.exports = {
   getProfile,
   loginUser,
   registerUser,
+  reenviarCodigoEmail,
   updateProfile,
+  verificarCodigoEmail,
 };

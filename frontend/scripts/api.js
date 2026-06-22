@@ -52,7 +52,25 @@ function normalizeText(str) {
   return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
-// ── Theme ──────────────────────────────────────────────────────────────────
+// --- CEP (ViaCEP) -----------------------------------------------------------
+async function buscarCep(cep) {
+  const cleaned = String(cep || '').replace(/\D/g, '');
+  if (cleaned.length !== 8) return null;
+  try {
+    const res = await fetch(`https://viacep.com.br/ws/${cleaned}/json/`);
+    const data = await res.json();
+    if (data.erro) return null;
+    return data; // { logradouro, bairro, localidade, uf, ... }
+  } catch {
+    return null;
+  }
+}
+
+function maskCep(value) {
+  return value.replace(/\D/g, '').slice(0, 8).replace(/(\d{5})(\d{0,3})/, '$1-$2').replace(/-$/, '');
+}
+
+// --- CEP (ViaCEP) -----------------------------------------------------------
 (function () {
   const saved = localStorage.getItem('fc_theme') || 'dark';
   document.documentElement.setAttribute('data-theme', saved);

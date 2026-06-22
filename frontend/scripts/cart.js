@@ -258,6 +258,21 @@ function renderCheckoutStep1() {
   btnConfirmar.parentNode.replaceChild(btnConfirmarClean, btnConfirmar);
   btnFechar.addEventListener('click', closeCheckoutModal);
   btnConfirmarClean.addEventListener('click', confirmarPedido);
+
+  const cepInput = document.getElementById('co_cep');
+  cepInput?.addEventListener('input', (e) => { e.target.value = maskCep(e.target.value); });
+  cepInput?.addEventListener('blur', async (e) => {
+    const data = await buscarCep(e.target.value);
+    if (!data) return;
+    const enderecoEl = document.getElementById('co_endereco');
+    const cidadeEl = document.getElementById('co_cidade');
+    if (enderecoEl && !enderecoEl.value.trim()) {
+      enderecoEl.value = [data.logradouro, data.bairro].filter(Boolean).join(', ');
+    }
+    if (cidadeEl && !cidadeEl.value.trim()) {
+      cidadeEl.value = `${data.localidade} / ${data.uf}`;
+    }
+  });
 }
 
 async function confirmarPedido() {

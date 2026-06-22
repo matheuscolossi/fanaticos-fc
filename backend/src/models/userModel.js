@@ -1,6 +1,6 @@
 const { all, get, run } = require('../config/database');
 
-const PUBLIC_USER_FIELDS = 'id, nome, email, perfil, cpf, telefone, endereco_rua, cidade, cep';
+const PUBLIC_USER_FIELDS = 'id, nome, email, perfil, cpf, telefone, endereco_rua, cidade, cep, email_verificado';
 
 function findByEmail(email) {
   return get('SELECT * FROM usuarios WHERE email = ?', [email]);
@@ -40,12 +40,28 @@ function updateName(userId, nome) {
   return run('UPDATE usuarios SET nome = ? WHERE id = ?', [nome, userId]);
 }
 
+function setVerificationCode(userId, codigo, expiraEm) {
+  return run(
+    'UPDATE usuarios SET codigo_verificacao = ?, codigo_expira_em = ? WHERE id = ?',
+    [codigo, expiraEm, userId]
+  );
+}
+
+function markEmailVerified(userId) {
+  return run(
+    'UPDATE usuarios SET email_verificado = ?, codigo_verificacao = NULL, codigo_expira_em = NULL WHERE id = ?',
+    [1, userId]
+  );
+}
+
 module.exports = {
   create,
   findByEmail,
   findById,
   findPublicById,
   listAdminsView,
+  markEmailVerified,
+  setVerificationCode,
   updateAddress,
   updateName,
   updateNameAndPassword,

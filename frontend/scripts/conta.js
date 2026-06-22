@@ -295,6 +295,21 @@ async function renderPerfilTab() {
     btn.disabled = false; btn.textContent = 'Salvar alterações';
   });
 
+  const endCepInput = document.getElementById('endCep');
+  endCepInput?.addEventListener('input', (e) => { e.target.value = maskCep(e.target.value); });
+  endCepInput?.addEventListener('blur', async (e) => {
+    const data = await buscarCep(e.target.value);
+    if (!data) return;
+    const ruaEl = document.getElementById('endRua');
+    const cidadeEl = document.getElementById('endCidade');
+    if (ruaEl && !ruaEl.value.trim()) {
+      ruaEl.value = [data.logradouro, data.bairro].filter(Boolean).join(', ');
+    }
+    if (cidadeEl && !cidadeEl.value.trim()) {
+      cidadeEl.value = `${data.localidade} / ${data.uf}`;
+    }
+  });
+
   document.getElementById('btnSalvarEndereco').addEventListener('click', async () => {
     const rua     = document.getElementById('endRua').value.trim();
     const cep     = document.getElementById('endCep').value.trim();

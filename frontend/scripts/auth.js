@@ -131,8 +131,8 @@ function openAuthModal(defaultTab = 'login') {
 
     try {
       await api.post('/auth/register', { nome, email, senha, cpf, telefone });
-      showToast('Conta criada com sucesso! Faça login.');
-      document.getElementById('tabLogin').click();
+      showToast('Conta criada! Enviamos um código para seu e-mail.');
+      openVerificationStep(email);
     } catch (e) {
       errEl.textContent = e.message;
       errEl.style.display = 'block';
@@ -140,17 +140,77 @@ function openAuthModal(defaultTab = 'login') {
   });
 
   overlay.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      const activeForm = document.getElementById('loginForm').style.display !== 'none'
-        ? 'btnLoginSubmit' : 'btnRegSubmit';
-      document.getElementById(activeForm)?.click();
+    if (e.key !== 'Enter') return;
+    if (document.getElementById('btnVerifSubmit')) {
+      document.getElementById('btnVerifSubmit').click();
+      return;
     }
+    const activeForm = document.getElementById('loginForm').style.display !== 'none'
+      ? 'btnLoginSubmit' : 'btnRegSubmit';
+    document.getElementById(activeForm)?.click();
   });
 }
 
 function closeAuthModal() {
   const overlay = document.getElementById('authOverlay');
   if (overlay) overlay.style.display = 'none';
+}
+
+function openVerificationStep(email) {
+  const content = document.getElementById('authContent');
+  if (!content) return;
+
+  content.innerHTML = `
+    <div class="auth-tabs">
+      <button class="auth-tab active" disabled>Confirme seu e-mail</button>
+    </div>
+    <div class="auth-form" style="display:flex">
+      <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:.5rem">
+        Enviamos um código de 6 dígitos para <strong>${email}</strong>. Confira sua caixa de entrada (e o spam).
+      </p>
+      <label>Código de verificação</label>
+      <input type="text" id="verifCodigo" placeholder="000000" maxlength="6" inputmode="numeric" style="letter-spacing:6px;font-size:1.2rem;text-align:center" />
+      <p id="verifError" class="auth-error" style="display:none"></p>
+      <button class="btn btn--primary" id="btnVerifSubmit">Confirmar código</button>
+      <button class="btn btn--outline" id="btnVerifReenviar" style="margin-top:.5rem">Reenviar código</button>
+    </div>
+  `;
+
+  document.getElementById('verifCodigo')?.addEventListener('input', (e) => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+  });
+
+  document.getElementById('btnVerifSubmit').addEventListener('click', async () => {
+    const codigo = document.getElementById('verifCodigo').value.trim();
+    const errEl = document.getElementById('verifError');
+    if (codigo.length !== 6) {
+      errEl.textContent = 'Informe os 6 dígitos do código.';
+      errEl.style.display = 'block';
+      return;
+    }
+    try {
+      const data = await api.post('/auth/verificar-email', { email, codigo });
+      setSession(data.token, data.user);
+      updateUserUI();
+      closeAuthModal();
+      showToast(`E-mail confirmado! Bem-vindo, ${data.user.nome.split(' ')[0]}!`);
+    } catch (e) {
+      errEl.textContent = e.message;
+      errEl.style.display = 'block';
+    }
+  });
+
+  document.getElementById('btnVerifReenviar').addEventListener('click', async () => {
+    const btn = document.getElementById('btnVerifReenviar');
+    btn.disabled = true; btn.textContent = 'Enviando...';
+    try {
+      await api.post('/auth/reenviar-codigo', { email });
+      showToast('Código reenviado para seu e-mail.');
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
+    btn.disabled = false; btn.textContent = 'Reenviar código';
+  });
 }
 
 document.addEventListener('DOMContentLoaded', () => {

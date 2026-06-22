@@ -282,6 +282,9 @@ async function runMigrations() {
     await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS endereco_rua TEXT');
     await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS cidade TEXT');
     await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS cep TEXT');
+    await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email_verificado BOOLEAN DEFAULT false');
+    await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS codigo_verificacao TEXT');
+    await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS codigo_expira_em TIMESTAMP');
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS nome_cliente TEXT');
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS email_cliente TEXT');
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS telefone_cliente TEXT');
@@ -321,6 +324,9 @@ async function runMigrations() {
   await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN endereco_rua TEXT');
   await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN cidade TEXT');
   await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN cep TEXT');
+  await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN email_verificado INTEGER DEFAULT 0');
+  await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN codigo_verificacao TEXT');
+  await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN codigo_expira_em TEXT');
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN nome_cliente TEXT');
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN email_cliente TEXT');
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN telefone_cliente TEXT');

@@ -1,5 +1,12 @@
 const { sendCreated } = require('../utils/http');
-const { getProfile, loginUser, registerUser, updateProfile } = require('../services/authService');
+const {
+  getProfile,
+  loginUser,
+  registerUser,
+  reenviarCodigoEmail,
+  updateProfile,
+  verificarCodigoEmail,
+} = require('../services/authService');
 
 function buildAuthController(jwtSecret) {
   return {
@@ -9,6 +16,14 @@ function buildAuthController(jwtSecret) {
 
     async login(req, res) {
       res.json(await loginUser(req.body, jwtSecret));
+    },
+
+    async verificarEmail(req, res) {
+      res.json(await verificarCodigoEmail(req.body, jwtSecret));
+    },
+
+    async reenviarCodigo(req, res) {
+      res.json(await reenviarCodigoEmail(req.body));
     },
 
     async profile(req, res) {
