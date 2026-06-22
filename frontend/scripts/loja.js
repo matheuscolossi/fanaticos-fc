@@ -343,6 +343,27 @@ function buildApiParams(page = 1) {
   return params.toString();
 }
 
+async function loadHeroGallery() {
+  const gallery = document.getElementById('heroGallery');
+  if (!gallery) return;
+  try {
+    let { produtos } = await api.get('/produtos?destaque=true&limit=4');
+    if (produtos.length < 4) {
+      const { produtos: recentes } = await api.get('/produtos?limit=4&ordem=recente');
+      produtos = recentes;
+    }
+    const fotos = produtos
+      .map(p => (p.imagens || [])[0])
+      .filter(Boolean)
+      .filter(url => !isGooglePhotosLink(url));
+    gallery.innerHTML = fotos
+      .map(url => `<div class="hero__gallery-item" style="background-image:url('${url}')"></div>`)
+      .join('');
+  } catch (e) {
+    console.warn('[hero-gallery:error]', e);
+  }
+}
+
 async function loadDestaques() {
   const gridD = document.getElementById('gridDestaques');
   if (!gridD) return;
@@ -408,7 +429,7 @@ async function goToPage(page) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  await Promise.all([loadCategorias(), loadProdutos(), loadDestaques()]);
+  await Promise.all([loadCategorias(), loadProdutos(), loadDestaques(), loadHeroGallery()]);
 
   let searchTimer;
   document.getElementById('inputBusca')?.addEventListener('input', () => {

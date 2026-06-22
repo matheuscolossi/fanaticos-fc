@@ -362,10 +362,20 @@ select option { background: var(--bg-card2); }
 }
 .hero__bg {
   position: absolute; inset: 0; z-index: 0;
-  background: 
-    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255,107,0,0.12) 0%, transparent 70%),
-    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(230,90,0,0.08) 0%, transparent 60%),
-    var(--bg);
+  background: var(--bg);
+}
+.hero__gallery {
+  position: absolute; inset: 0;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px;
+}
+.hero__gallery-item {
+  background-size: cover; background-position: center; background-color: var(--bg-card);
+}
+.hero__overlay {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.75) 100%),
+    linear-gradient(180deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,.78) 55%, rgba(0,0,0,.92) 100%);
 }
 .hero__pattern { display: none; }
 .hero__content { position: relative; z-index: 1; }
@@ -782,6 +792,7 @@ select option { background: var(--bg-card2); }
   .hero__title { font-size: clamp(4rem, 18vw, 7rem); }
   .hero__eyebrow { font-size: .78rem; letter-spacing: .14em; }
   .hero__sub { font-size: 1rem; max-width: 36rem; }
+  .hero__gallery { grid-template-columns: repeat(2, 1fr); }
   .hero__badges { margin-top: 2rem; gap: .6rem; }
   .badge { width: 100%; max-width: 320px; text-align: center; }
   .destaques, .catalogo, .sobre { padding: 3rem 0; }
