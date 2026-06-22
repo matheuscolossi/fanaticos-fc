@@ -15,7 +15,28 @@ function findPublicById(userId) {
 }
 
 function listAdminsView() {
-  return all('SELECT id, nome, email, perfil, created_at FROM usuarios ORDER BY created_at DESC');
+  return all(`
+    SELECT u.id, u.nome, u.email, u.perfil, u.created_at,
+      (SELECT COUNT(*) FROM pedidos p WHERE p.usuario_id = u.id) AS pedidos_count
+    FROM usuarios u
+    ORDER BY u.created_at DESC
+  `);
+}
+
+function countAdmins() {
+  return get("SELECT COUNT(*) as c FROM usuarios WHERE perfil = 'admin'");
+}
+
+function countPedidos(userId) {
+  return get('SELECT COUNT(*) as c FROM pedidos WHERE usuario_id = ?', [userId]);
+}
+
+function unlinkPedidos(userId) {
+  return run('UPDATE pedidos SET usuario_id = NULL WHERE usuario_id = ?', [userId]);
+}
+
+function remove(userId) {
+  return run('DELETE FROM usuarios WHERE id = ?', [userId]);
 }
 
 function create({ nome, email, senha, cpf, telefone }) {
@@ -55,13 +76,17 @@ function markEmailVerified(userId) {
 }
 
 module.exports = {
+  countAdmins,
+  countPedidos,
   create,
   findByEmail,
   findById,
   findPublicById,
   listAdminsView,
   markEmailVerified,
+  remove,
   setVerificationCode,
+  unlinkPedidos,
   updateAddress,
   updateName,
   updateNameAndPassword,

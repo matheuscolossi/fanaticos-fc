@@ -19,7 +19,7 @@ if (hasCloudinaryConfig) {
   });
 }
 
-async function uploadProductImage(image) {
+async function uploadImage(image, folder) {
   if (typeof image !== 'string') return null;
   if (image.startsWith('http')) return image;
 
@@ -27,11 +27,19 @@ async function uploadProductImage(image) {
   if (!cloudinary) return image;
 
   const result = await cloudinary.uploader.upload(image, {
-    folder: 'fanaticos-fc/produtos',
+    folder,
     resource_type: 'image',
   });
 
   return result.secure_url;
+}
+
+function uploadProductImage(image) {
+  return uploadImage(image, 'fanaticos-fc/produtos');
+}
+
+function uploadCategoryImage(image) {
+  return uploadImage(image, 'fanaticos-fc/categorias');
 }
 
 async function normalizeProductImages(images = []) {
@@ -48,4 +56,5 @@ async function normalizeProductImages(images = []) {
 module.exports = {
   hasCloudinaryConfig,
   normalizeProductImages,
+  uploadCategoryImage,
 };

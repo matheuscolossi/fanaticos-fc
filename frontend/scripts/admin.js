@@ -383,10 +383,11 @@ function setTab(name) {
   document.querySelector(`.sidebar__link[data-tab="${name}"]`)?.classList.add('active');
 
   const titles = {
-    dashboard: ['Dashboard',           'Visão geral das métricas e vendas'],
-    produtos:  ['Gerenciar Produtos',  'Cadastre, edite e remova produtos do catálogo'],
-    pedidos:   ['Pedidos Recebidos',   'Visualize todos os pedidos finalizados via WhatsApp'],
-    usuarios:  ['Usuários Cadastrados','Gerencie as contas de usuários'],
+    dashboard:  ['Dashboard',            'Visão geral das métricas e vendas'],
+    produtos:   ['Gerenciar Produtos',   'Cadastre, edite e remova produtos do catálogo'],
+    categorias: ['Gerenciar Categorias', 'Organize as categorias e subcategorias da loja'],
+    pedidos:    ['Pedidos Recebidos',    'Visualize todos os pedidos finalizados via WhatsApp'],
+    usuarios:   ['Usuários Cadastrados', 'Gerencie as contas de usuários'],
   };
   document.getElementById('adminTabTitle').textContent = titles[name]?.[0] ?? name;
   document.getElementById('adminTabSub').textContent   = titles[name]?.[1] ?? '';
@@ -748,14 +749,236 @@ async function loadCategoriasAdmin() {
   try {
     categoriasAdmin = await api.get('/categorias');
     const sel = document.getElementById('pCategoria');
-    if (!sel) return;
-    sel.innerHTML = '<option value="">Selecione...</option>';
-    categoriasAdmin.forEach(c => {
+    if (sel) {
+      sel.innerHTML = '<option value="">Selecione...</option>';
+      categoriasAdmin.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id; opt.textContent = c.nome;
+        sel.appendChild(opt);
+      });
+    }
+    renderTabelaCategorias();
+  } catch(e) {}
+}
+
+// ── Category management ────────────────────────────────────────────────────
+
+let editingCategoriaImagem = '';
+let categoriaDeleteTargetId = null;
+
+function renderTabelaCategorias() {
+  const wrap = document.getElementById('tabelaCategoriasWrap');
+  if (!wrap) return;
+
+  if (categoriasAdmin.length === 0) {
+    wrap.innerHTML = '<div class="loading-state">Nenhuma categoria cadastrada.</div>';
+    return;
+  }
+
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th style="width:48px">Imagem</th>
+          <th>Nome</th>
+          <th>Categoria principal</th>
+          <th>Ordem</th>
+          <th>Produtos</th>
+          <th>Status</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${categoriasAdmin.map(c => {
+          const isAtivo = (c.status || 'ativo') === 'ativo';
+          const prodCount = Number(c.produtos_count || 0);
+          return `
+          <tr>
+            <td>
+              <div class="td-img">
+                ${c.imagem
+                  ? `<img src="${c.imagem}" alt="${c.nome}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="td-img-placeholder" style="display:none"></div>`
+                  : `<div class="td-img-placeholder"></div>`}
+              </div>
+            </td>
+            <td><span class="td-nome">${c.nome}</span></td>
+            <td><span class="td-cat">${c.categoria_pai_nome || '—'}</span></td>
+            <td>${c.ordem ?? 0}</td>
+            <td><span class="td-badge ${prodCount > 0 ? '' : 'td-badge--off'}">${prodCount}</span></td>
+            <td><span class="td-status ${isAtivo ? 'td-status-ativo' : 'td-status-inativo'}">${isAtivo ? 'Ativo' : 'Inativo'}</span></td>
+            <td>
+              <div class="td-actions">
+                <button class="btn btn--outline btn--sm" onclick="openEditCategoriaModal(${c.id})">Editar</button>
+                <button class="btn btn--outline btn--sm" onclick="toggleCategoriaStatus(${c.id},'${c.status || 'ativo'}')">${isAtivo ? 'Desativar' : 'Ativar'}</button>
+                <button class="btn btn--danger btn--sm" onclick="confirmDeleteCategoria(${c.id})">Excluir</button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function _populateCategoriaPaiSelect(excludeId = null) {
+  const sel = document.getElementById('catPaiId');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Nenhuma (categoria principal)</option>';
+  categoriasAdmin
+    .filter(c => String(c.id) !== String(excludeId))
+    .forEach(c => {
       const opt = document.createElement('option');
       opt.value = c.id; opt.textContent = c.nome;
       sel.appendChild(opt);
     });
-  } catch(e) {}
+}
+
+function renderCatImagePreview() {
+  const preview = document.getElementById('catImagePreview');
+  if (!preview) return;
+  preview.innerHTML = editingCategoriaImagem
+    ? `<div class="preview-img"><img src="${editingCategoriaImagem}" alt="Categoria" onerror="this.style.display='none'" /><div class="preview-img__remove" onclick="removeCatImage()"></div></div>`
+    : '';
+}
+
+function removeCatImage() {
+  editingCategoriaImagem = '';
+  renderCatImagePreview();
+}
+
+function addCategoriaImageUrl() {
+  const input = document.getElementById('catImagemUrl');
+  const url = input?.value.trim();
+  if (!url) return;
+  if (!url.startsWith('http')) { showToast('URL inválida. Deve começar com http.', 'error'); return; }
+  editingCategoriaImagem = url;
+  input.value = '';
+  renderCatImagePreview();
+}
+
+function openNewCategoriaModal() {
+  editingCategoriaImagem = '';
+  document.getElementById('categoriaId').value = '';
+  document.getElementById('catNome').value = '';
+  document.getElementById('catOrdem').value = '0';
+  document.getElementById('catStatus').value = 'ativo';
+  document.getElementById('catImagemUrl').value = '';
+  _populateCategoriaPaiSelect();
+  renderCatImagePreview();
+  document.getElementById('categoriaModalTitle').textContent = 'Nova Categoria';
+  document.getElementById('categoriaModalOverlay').style.display = 'flex';
+}
+
+function openEditCategoriaModal(id) {
+  const c = categoriasAdmin.find(c => String(c.id) === String(id));
+  if (!c) { showToast('Categoria não encontrada.', 'error'); return; }
+  editingCategoriaImagem = c.imagem || '';
+  document.getElementById('categoriaId').value = c.id;
+  document.getElementById('catNome').value = c.nome;
+  document.getElementById('catOrdem').value = c.ordem ?? 0;
+  document.getElementById('catStatus').value = c.status || 'ativo';
+  document.getElementById('catImagemUrl').value = '';
+  _populateCategoriaPaiSelect(c.id);
+  document.getElementById('catPaiId').value = c.categoria_pai_id || '';
+  renderCatImagePreview();
+  document.getElementById('categoriaModalTitle').textContent = 'Editar Categoria';
+  document.getElementById('categoriaModalOverlay').style.display = 'flex';
+}
+
+function closeCategoriaModal() {
+  document.getElementById('categoriaModalOverlay').style.display = 'none';
+}
+
+async function saveCategoria(e) {
+  e.preventDefault();
+  const id = document.getElementById('categoriaId').value;
+  const nome = document.getElementById('catNome').value.trim();
+  const categoria_pai_id = document.getElementById('catPaiId').value || null;
+  const ordem = parseInt(document.getElementById('catOrdem').value, 10) || 0;
+  const status = document.getElementById('catStatus').value;
+
+  if (!nome) { showToast('Nome é obrigatório.', 'error'); return; }
+
+  const data = { nome, categoria_pai_id, ordem, status };
+  if (editingCategoriaImagem) data.imagem = editingCategoriaImagem;
+
+  const btn = document.getElementById('btnSalvarCategoria');
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+  try {
+    if (id) {
+      await api.put(`/categorias/${id}`, data);
+      showToast('Categoria atualizada!');
+    } else {
+      await api.post('/categorias', data);
+      showToast('Categoria criada!');
+    }
+    closeCategoriaModal();
+    await loadCategoriasAdmin();
+  } catch(err) {
+    showToast(err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Salvar Categoria'; }
+  }
+}
+
+async function toggleCategoriaStatus(id, currentStatus) {
+  const novo = currentStatus === 'ativo' ? 'inativo' : 'ativo';
+  try {
+    await api.patch(`/categorias/${id}/status`, { status: novo });
+    showToast(novo === 'ativo' ? 'Categoria ativada.' : 'Categoria desativada.');
+    await loadCategoriasAdmin();
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function confirmDeleteCategoria(id) {
+  const c = categoriasAdmin.find(c => String(c.id) === String(id));
+  if (!c) return;
+  categoriaDeleteTargetId = id;
+  const body = document.getElementById('categoriaDeleteBody');
+  const btnConfirm = document.getElementById('btnConfirmDeleteCategoria');
+  const subcount = Number(c.subcategorias_count || 0);
+  const prodcount = Number(c.produtos_count || 0);
+
+  if (subcount > 0) {
+    body.innerHTML = `<p>Esta categoria possui <strong>${subcount} subcategoria(s)</strong> vinculada(s). Edite-as para remover o vínculo antes de excluir.</p>`;
+    btnConfirm.style.display = 'none';
+  } else if (prodcount > 0) {
+    const outras = categoriasAdmin.filter(o => String(o.id) !== String(id));
+    body.innerHTML = `
+      <p>Esta categoria possui <strong>${prodcount} produto(s)</strong> vinculado(s). Escolha uma categoria de destino para transferi-los antes de excluir:</p>
+      <select id="catTransferirPara" class="admin-filter-select" style="width:100%;margin-top:.5rem">
+        ${outras.map(o => `<option value="${o.id}">${o.nome}</option>`).join('')}
+      </select>
+    `;
+    btnConfirm.style.display = '';
+  } else {
+    body.innerHTML = `<p>Tem certeza que deseja excluir a categoria <strong>${c.nome}</strong>? Esta ação não pode ser desfeita.</p>`;
+    btnConfirm.style.display = '';
+  }
+
+  document.getElementById('categoriaDeleteOverlay').style.display = 'flex';
+}
+
+async function doDeleteCategoria() {
+  if (!categoriaDeleteTargetId) return;
+  const transferSelect = document.getElementById('catTransferirPara');
+  const transferir_para = transferSelect ? transferSelect.value : undefined;
+
+  const btn = document.getElementById('btnConfirmDeleteCategoria');
+  if (btn) { btn.disabled = true; btn.textContent = 'Excluindo...'; }
+  try {
+    await api.delete(`/categorias/${categoriaDeleteTargetId}`, transferir_para ? { transferir_para } : undefined);
+    showToast('Categoria excluída.');
+    document.getElementById('categoriaDeleteOverlay').style.display = 'none';
+    categoriaDeleteTargetId = null;
+    await loadCategoriasAdmin();
+  } catch(e) {
+    showToast(e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Excluir'; }
+  }
 }
 
 function _resetFormFields() {
@@ -1257,10 +1480,16 @@ async function salvarRastreioPedido(id) {
   }
 }
 
+let usuariosCache = [];
+let usuarioDeleteTargetId = null;
+
 async function loadUsuarios() {
   const wrap = document.getElementById('tabelaUsuariosWrap');
   try {
     const users = await api.get('/admin/usuarios');
+    usuariosCache = users;
+    const currentUser = JSON.parse(localStorage.getItem('fc_user') || 'null');
+
     wrap.innerHTML = `
       <div class="admin-stats">
         <div class="admin-stat">
@@ -1273,21 +1502,60 @@ async function loadUsuarios() {
         </div>
       </div>
       <table>
-        <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Cadastro</th></tr></thead>
+        <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Pedidos</th><th>Cadastro</th><th>Ações</th></tr></thead>
         <tbody>
-          ${users.map(u => `
+          ${users.map(u => {
+            const isSelf = currentUser && String(currentUser.id) === String(u.id);
+            return `
             <tr>
-              <td style="font-weight:600">${u.nome}</td>
+              <td style="font-weight:600">${u.nome}${isSelf ? ' <span style="color:var(--text-dim);font-size:.75rem">(você)</span>' : ''}</td>
               <td style="color:var(--text-muted)">${u.email}</td>
               <td><span class="td-badge ${u.perfil === 'admin' ? '' : 'td-badge--off'}">${u.perfil}</span></td>
+              <td>${u.pedidos_count ?? 0}</td>
               <td style="color:var(--text-muted);font-size:.82rem">${new Date(u.created_at).toLocaleString('pt-BR')}</td>
+              <td>
+                ${isSelf
+                  ? '<span style="color:var(--text-dim);font-size:.78rem">—</span>'
+                  : `<button class="btn btn--danger btn--sm" onclick="confirmDeleteUsuario(${u.id})">Excluir</button>`}
+              </td>
             </tr>
-          `).join('')}
+          `;}).join('')}
         </tbody>
       </table>
     `;
   } catch(e) {
     wrap.innerHTML = '<div class="loading-state" style="color:var(--danger)">Erro ao carregar usuários.</div>';
+  }
+}
+
+function confirmDeleteUsuario(id) {
+  const u = usuariosCache.find(u => String(u.id) === String(id));
+  if (!u) return;
+  usuarioDeleteTargetId = id;
+  const body = document.getElementById('usuarioDeleteBody');
+  const pedidos = Number(u.pedidos_count || 0);
+  body.innerHTML = `
+    <p>Tem certeza que deseja excluir o usuário <strong>${u.nome}</strong> (${u.email})?</p>
+    ${pedidos > 0 ? `<p style="color:var(--text-muted);font-size:.85rem;margin-top:.5rem">Este usuário possui ${pedidos} pedido(s) — eles serão mantidos no histórico, apenas desvinculados da conta.</p>` : ''}
+    <p style="color:var(--danger);font-size:.85rem;margin-top:.5rem">Esta ação não pode ser desfeita.</p>
+  `;
+  document.getElementById('usuarioDeleteOverlay').style.display = 'flex';
+}
+
+async function doDeleteUsuario() {
+  if (!usuarioDeleteTargetId) return;
+  const btn = document.getElementById('btnConfirmDeleteUsuario');
+  if (btn) { btn.disabled = true; btn.textContent = 'Excluindo...'; }
+  try {
+    await api.delete(`/admin/usuarios/${usuarioDeleteTargetId}`);
+    showToast('Usuário excluído.');
+    document.getElementById('usuarioDeleteOverlay').style.display = 'none';
+    usuarioDeleteTargetId = null;
+    await loadUsuarios();
+  } catch(e) {
+    showToast(e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Excluir'; }
   }
 }
 
@@ -1605,6 +1873,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (slugEl) slugEl.value = slug;
   });
   document.getElementById('pSlug')?.addEventListener('input', () => { _slugDirty = true; });
+
+  // Categorias
+  document.getElementById('btnNovaCategoria')?.addEventListener('click', openNewCategoriaModal);
+  document.getElementById('formCategoria')?.addEventListener('submit', saveCategoria);
+  document.getElementById('btnCloseCategoriaForm')?.addEventListener('click', closeCategoriaModal);
+  document.getElementById('btnCancelarCategoria')?.addEventListener('click', closeCategoriaModal);
+  document.getElementById('btnCatAddUrl')?.addEventListener('click', addCategoriaImageUrl);
+  document.getElementById('catImagemUrl')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addCategoriaImageUrl(); }
+  });
+  document.getElementById('catImagemFile')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (file) editingCategoriaImagem = await fileToBase64(file);
+    renderCatImagePreview();
+    e.target.value = '';
+  });
+  document.getElementById('btnCancelDeleteCategoria')?.addEventListener('click', () => {
+    document.getElementById('categoriaDeleteOverlay').style.display = 'none';
+    categoriaDeleteTargetId = null;
+  });
+  document.getElementById('btnConfirmDeleteCategoria')?.addEventListener('click', doDeleteCategoria);
+
+  // Usuários
+  document.getElementById('btnCancelDeleteUsuario')?.addEventListener('click', () => {
+    document.getElementById('usuarioDeleteOverlay').style.display = 'none';
+    usuarioDeleteTargetId = null;
+  });
+  document.getElementById('btnConfirmDeleteUsuario')?.addEventListener('click', doDeleteUsuario);
 
   document.getElementById('btnLogout')?.addEventListener('click', () => {
     if (confirm('Deseja sair do painel?')) {

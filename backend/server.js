@@ -41,7 +41,7 @@ app.use('/api', (req, res, next) => {
 });
 
 app.use('/api/auth', authRoutes({ authMiddleware, jwtSecret: JWT_SECRET }));
-app.use('/api/categorias', categoryRoutes);
+app.use('/api/categorias', categoryRoutes(adminMiddleware));
 app.use('/api/produtos', productRoutes(adminMiddleware));
 app.use('/api/pedidos', orderRoutes({ adminMiddleware, authMiddleware }));
 app.use('/api/admin/usuarios', userRoutes({ adminMiddleware }));

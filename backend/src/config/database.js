@@ -316,6 +316,11 @@ async function runMigrations() {
     await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS keywords TEXT');
     await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS meta_titulo TEXT');
     await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS meta_descricao TEXT');
+    // Extended category fields
+    await runOptionalMigration('ALTER TABLE categorias ADD COLUMN IF NOT EXISTS imagem TEXT');
+    await runOptionalMigration('ALTER TABLE categorias ADD COLUMN IF NOT EXISTS categoria_pai_id INTEGER REFERENCES categorias(id)');
+    await runOptionalMigration('ALTER TABLE categorias ADD COLUMN IF NOT EXISTS ordem INTEGER DEFAULT 0');
+    await runOptionalMigration("ALTER TABLE categorias ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ativo'");
     return;
   }
 
@@ -358,6 +363,11 @@ async function runMigrations() {
   await runOptionalMigration('ALTER TABLE produtos ADD COLUMN keywords TEXT');
   await runOptionalMigration('ALTER TABLE produtos ADD COLUMN meta_titulo TEXT');
   await runOptionalMigration('ALTER TABLE produtos ADD COLUMN meta_descricao TEXT');
+  // Extended category fields
+  await runOptionalMigration('ALTER TABLE categorias ADD COLUMN imagem TEXT');
+  await runOptionalMigration('ALTER TABLE categorias ADD COLUMN categoria_pai_id INTEGER REFERENCES categorias(id)');
+  await runOptionalMigration('ALTER TABLE categorias ADD COLUMN ordem INTEGER DEFAULT 0');
+  await runOptionalMigration("ALTER TABLE categorias ADD COLUMN status TEXT DEFAULT 'ativo'");
 }
 
 async function seedDefaults() {

@@ -6,6 +6,7 @@ module.exports = ({ adminMiddleware }) => {
   const router = express.Router();
 
   router.get('/', adminMiddleware, asyncHandler(controller.index));
+  router.delete('/:id', adminMiddleware, asyncHandler(controller.destroy));
 
   return router;
 };

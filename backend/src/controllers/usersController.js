@@ -1,7 +1,11 @@
-const userModel = require('../models/userModel');
+const userService = require('../services/userService');
 
 async function index(req, res) {
-  res.json(await userModel.listAdminsView());
+  res.json(await userService.listUsers());
 }
 
-module.exports = { index };
+async function destroy(req, res) {
+  res.json(await userService.deleteUser(req.params.id, req.user.id));
+}
+
+module.exports = { destroy, index };
