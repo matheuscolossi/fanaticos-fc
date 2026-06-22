@@ -388,6 +388,7 @@ function setTab(name) {
     categorias: ['Gerenciar Categorias', 'Organize as categorias e subcategorias da loja'],
     pedidos:    ['Pedidos Recebidos',    'Visualize todos os pedidos finalizados via WhatsApp'],
     usuarios:   ['Usuários Cadastrados', 'Gerencie as contas de usuários'],
+    cupons:     ['Gerenciar Cupons',     'Crie e administre cupons de desconto'],
   };
   document.getElementById('adminTabTitle').textContent = titles[name]?.[0] ?? name;
   document.getElementById('adminTabSub').textContent   = titles[name]?.[1] ?? '';
@@ -396,6 +397,7 @@ function setTab(name) {
   if (name === 'pedidos')   loadPedidos();
   if (name === 'usuarios')  loadUsuarios();
   if (name === 'produtos' && allProdutosAdmin.length === 0) loadProdutosAdmin();
+  if (name === 'cupons')   loadCuponsAdmin();
 }
 
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -1757,6 +1759,286 @@ function closeAllDropdowns() {
   document.querySelectorAll('.action-dropdown.open').forEach(d => d.classList.remove('open'));
 }
 
+// ── Cupons ────────────────────────────────────────────────────────────────────
+
+let cuponsCache = [];
+let cupomDeleteTargetId = null;
+
+async function loadCuponsAdmin() {
+  const wrap = document.getElementById('tabelaCuponsWrap');
+  try {
+    cuponsCache = await api.get('/cupons');
+    renderTabelaCupons();
+  } catch (e) {
+    wrap.innerHTML = '<div class="loading-state" style="color:var(--danger)">Erro ao carregar cupons.</div>';
+  }
+}
+
+function _formatCupomValor(c) {
+  return c.tipo_desconto === 'fixo' ? formatBRL(c.valor) : `${Number(c.valor)}%`;
+}
+
+function _formatCupomValidade(c) {
+  if (!c.data_inicio && !c.data_fim) return 'Sem prazo';
+  const ini = c.data_inicio ? new Date(c.data_inicio).toLocaleDateString('pt-BR') : '—';
+  const fim = c.data_fim ? new Date(c.data_fim).toLocaleDateString('pt-BR') : '—';
+  return `${ini} a ${fim}`;
+}
+
+function renderTabelaCupons() {
+  const wrap = document.getElementById('tabelaCuponsWrap');
+  if (!wrap) return;
+
+  if (cuponsCache.length === 0) {
+    wrap.innerHTML = '<div class="loading-state">Nenhum cupom cadastrado.</div>';
+    return;
+  }
+
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Código</th><th>Descrição</th><th>Desconto</th><th>Mín. compra</th>
+          <th>Validade</th><th>Uso</th><th>Status</th><th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${cuponsCache.map(c => {
+          const isAtivo = c.status === 'ativo';
+          const usoLimite = c.limite_uso_total ? `${c.uso_total}/${c.limite_uso_total}` : `${c.uso_total}/∞`;
+          return `
+          <tr>
+            <td style="font-weight:700">${c.codigo}${c.frete_gratis ? ' <span class=\"td-badge\">Frete grátis</span>' : ''}</td>
+            <td style="color:var(--text-muted)">${c.descricao || '—'}</td>
+            <td>${_formatCupomValor(c)}</td>
+            <td>${c.valor_minimo_compra ? formatBRL(c.valor_minimo_compra) : '—'}</td>
+            <td style="color:var(--text-muted);font-size:.82rem">${_formatCupomValidade(c)}</td>
+            <td>
+              <span style="cursor:pointer;text-decoration:underline" onclick="verUsosCupom(${c.id})" title="Ver pedidos">${usoLimite}</span>
+            </td>
+            <td><span class="td-badge ${isAtivo ? '' : 'td-badge--off'}">${isAtivo ? 'Ativo' : 'Inativo'}</span></td>
+            <td>
+              <div class="action-dropdown" id="cupomActions${c.id}">
+                <button class="btn btn--outline btn--sm" onclick="toggleDropdown('cupomActions${c.id}')">Ações ▾</button>
+                <div class="action-dropdown__menu">
+                  <div class="action-dropdown__item" onclick="closeAllDropdowns();openEditCupomModal(${c.id})">Editar</div>
+                  <div class="action-dropdown__item" onclick="closeAllDropdowns();duplicarCupomAdmin(${c.id})">Duplicar</div>
+                  <div class="action-dropdown__item" onclick="closeAllDropdowns();toggleCupomStatus(${c.id},'${c.status}')">${isAtivo ? 'Desativar' : 'Ativar'}</div>
+                  <div class="action-dropdown__item" onclick="closeAllDropdowns();verUsosCupom(${c.id})">Ver utilizações</div>
+                  <div class="action-dropdown__sep"></div>
+                  <div class="action-dropdown__item action-dropdown__item--danger" onclick="closeAllDropdowns();confirmDeleteCupom(${c.id})">Excluir</div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        `;}).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function _toDatetimeLocal(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function _populateCupomMultiSelect(selectId, filterId, items, labelFn, selectedIds = []) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const selecionados = selectedIds.map(String);
+  sel.innerHTML = items.map(item => `
+    <option value="${item.id}" ${selecionados.includes(String(item.id)) ? 'selected' : ''}>${labelFn(item)}</option>
+  `).join('');
+
+  const filtro = document.getElementById(filterId);
+  if (filtro) {
+    filtro.value = '';
+    filtro.oninput = () => {
+      const termo = normalizeText(filtro.value);
+      sel.querySelectorAll('option').forEach(opt => {
+        opt.style.display = normalizeText(opt.textContent).includes(termo) ? '' : 'none';
+      });
+    };
+  }
+}
+
+async function _populateCupomPickers(cupom = null) {
+  if (allProdutosAdmin.length === 0) await loadProdutosAdmin();
+  if (usuariosCache.length === 0) await loadUsuarios();
+
+  _populateCupomMultiSelect('cpCategoriasIds', 'cpFiltroCategorias', categoriasAdmin, c => c.nome, cupom?.categorias_ids || []);
+  _populateCupomMultiSelect('cpProdutosIds', 'cpFiltroProdutos', allProdutosAdmin, p => `${p.nome}${p.sku ? ' — ' + p.sku : ''}`, cupom?.produtos_ids || []);
+  _populateCupomMultiSelect('cpClientesIds', 'cpFiltroClientes', usuariosCache, u => `${u.nome} (${u.email})`, cupom?.clientes_ids || []);
+}
+
+async function openNewCupomModal() {
+  document.getElementById('formCupom').reset();
+  document.getElementById('cupomId').value = '';
+  document.getElementById('cpStatus').value = 'ativo';
+  document.getElementById('cpTipoDesconto').value = 'percentual';
+  document.getElementById('cupomModalTitle').textContent = 'Novo Cupom';
+  document.getElementById('cupomModalOverlay').style.display = 'flex';
+  await _populateCupomPickers();
+}
+
+async function openEditCupomModal(id) {
+  const c = cuponsCache.find(x => x.id === id);
+  if (!c) { showToast('Cupom não encontrado.', 'error'); return; }
+
+  document.getElementById('cupomId').value = c.id;
+  document.getElementById('cpCodigo').value = c.codigo;
+  document.getElementById('cpDescricao').value = c.descricao || '';
+  document.getElementById('cpTipoDesconto').value = c.tipo_desconto;
+  document.getElementById('cpValor').value = c.valor;
+  document.getElementById('cpValorMinimo').value = c.valor_minimo_compra || '';
+  document.getElementById('cpDescontoMaximo').value = c.desconto_maximo || '';
+  document.getElementById('cpDataInicio').value = _toDatetimeLocal(c.data_inicio);
+  document.getElementById('cpDataFim').value = _toDatetimeLocal(c.data_fim);
+  document.getElementById('cpLimiteTotal').value = c.limite_uso_total || '';
+  document.getElementById('cpLimitePorUsuario').value = c.limite_uso_por_usuario || '';
+  document.getElementById('cpFreteGratis').checked = Boolean(c.frete_gratis);
+  document.getElementById('cpStatus').value = c.status;
+
+  document.getElementById('cupomModalTitle').textContent = 'Editar Cupom';
+  document.getElementById('cupomModalOverlay').style.display = 'flex';
+  await _populateCupomPickers(c);
+}
+
+function closeCupomModal() {
+  document.getElementById('cupomModalOverlay').style.display = 'none';
+}
+
+function _selectedValues(selectId) {
+  return Array.from(document.getElementById(selectId)?.selectedOptions || []).map(o => Number(o.value));
+}
+
+async function saveCupom(e) {
+  e.preventDefault();
+  const id = document.getElementById('cupomId').value;
+
+  const data = {
+    codigo: document.getElementById('cpCodigo').value.trim().toUpperCase(),
+    descricao: document.getElementById('cpDescricao').value.trim(),
+    tipo_desconto: document.getElementById('cpTipoDesconto').value,
+    valor: Number(document.getElementById('cpValor').value),
+    valor_minimo_compra: Number(document.getElementById('cpValorMinimo').value) || 0,
+    desconto_maximo: document.getElementById('cpDescontoMaximo').value ? Number(document.getElementById('cpDescontoMaximo').value) : null,
+    data_inicio: document.getElementById('cpDataInicio').value || null,
+    data_fim: document.getElementById('cpDataFim').value || null,
+    limite_uso_total: document.getElementById('cpLimiteTotal').value ? Number(document.getElementById('cpLimiteTotal').value) : null,
+    limite_uso_por_usuario: document.getElementById('cpLimitePorUsuario').value ? Number(document.getElementById('cpLimitePorUsuario').value) : null,
+    frete_gratis: document.getElementById('cpFreteGratis').checked,
+    status: document.getElementById('cpStatus').value,
+    categorias_ids: _selectedValues('cpCategoriasIds'),
+    produtos_ids: _selectedValues('cpProdutosIds'),
+    clientes_ids: _selectedValues('cpClientesIds'),
+  };
+
+  const btn = document.getElementById('btnSalvarCupom');
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+  try {
+    if (id) {
+      await api.put(`/cupons/${id}`, data);
+      showToast('Cupom atualizado!');
+    } else {
+      await api.post('/cupons', data);
+      showToast('Cupom criado!');
+    }
+    closeCupomModal();
+    await loadCuponsAdmin();
+  } catch (e) {
+    showToast(e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Salvar Cupom'; }
+  }
+}
+
+async function toggleCupomStatus(id, currentStatus) {
+  try {
+    const novo = currentStatus === 'ativo' ? 'inativo' : 'ativo';
+    await api.patch(`/cupons/${id}/status`, { status: novo });
+    showToast(novo === 'ativo' ? 'Cupom ativado.' : 'Cupom desativado.');
+    await loadCuponsAdmin();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function duplicarCupomAdmin(id) {
+  try {
+    await api.post(`/cupons/${id}/duplicar`, {});
+    showToast('Cupom duplicado.');
+    await loadCuponsAdmin();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function confirmDeleteCupom(id) {
+  const c = cuponsCache.find(x => x.id === id);
+  if (!c) return;
+  cupomDeleteTargetId = id;
+  document.getElementById('cupomDeleteBody').innerHTML =
+    `<p>Tem certeza que deseja excluir o cupom <strong>${c.codigo}</strong>? Esta ação não pode ser desfeita.</p>`;
+  document.getElementById('cupomDeleteOverlay').style.display = 'flex';
+}
+
+async function doDeleteCupom() {
+  if (!cupomDeleteTargetId) return;
+  const btn = document.getElementById('btnConfirmDeleteCupom');
+  if (btn) { btn.disabled = true; btn.textContent = 'Excluindo...'; }
+  try {
+    await api.delete(`/cupons/${cupomDeleteTargetId}`);
+    showToast('Cupom excluído.');
+    document.getElementById('cupomDeleteOverlay').style.display = 'none';
+    cupomDeleteTargetId = null;
+    await loadCuponsAdmin();
+  } catch (e) {
+    showToast(e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Excluir'; }
+  }
+}
+
+async function verUsosCupom(id) {
+  const c = cuponsCache.find(x => x.id === id);
+  const overlay = document.getElementById('cupomUsosOverlay');
+  const body = document.getElementById('cupomUsosBody');
+  document.getElementById('cupomUsosTitle').textContent = `Utilizações — ${c?.codigo || ''}`;
+  body.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+  overlay.style.display = 'flex';
+
+  try {
+    const { uso_total, pedidos } = await api.get(`/cupons/${id}/usos`);
+    if (pedidos.length === 0) {
+      body.innerHTML = '<p style="color:var(--text-muted)">Este cupom ainda não foi utilizado em nenhum pedido.</p>';
+      return;
+    }
+    body.innerHTML = `
+      <p style="color:var(--text-muted);margin-bottom:.75rem">${uso_total} utilização(ões)</p>
+      <table>
+        <thead><tr><th>Pedido</th><th>Cliente</th><th>Desconto</th><th>Total</th><th>Data</th></tr></thead>
+        <tbody>
+          ${pedidos.map(p => `
+            <tr>
+              <td>#${p.id}</td>
+              <td>${p.nome_cliente || p.email_cliente || '—'}</td>
+              <td>${formatBRL(p.cupom_desconto || 0)}</td>
+              <td>${formatBRL(p.total)}</td>
+              <td style="font-size:.8rem;color:var(--text-muted)">${new Date(p.created_at).toLocaleString('pt-BR')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    body.innerHTML = `<p style="color:var(--danger)">Erro ao carregar utilizações.</p>`;
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   // Login inline quando sessão expirar
   document.getElementById('adminLoginForm')?.addEventListener('submit', async (e) => {
@@ -1904,6 +2186,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     usuarioDeleteTargetId = null;
   });
   document.getElementById('btnConfirmDeleteUsuario')?.addEventListener('click', doDeleteUsuario);
+
+  // Cupons
+  document.getElementById('btnNovoCupom')?.addEventListener('click', openNewCupomModal);
+  document.getElementById('formCupom')?.addEventListener('submit', saveCupom);
+  document.getElementById('btnCloseCupomForm')?.addEventListener('click', closeCupomModal);
+  document.getElementById('btnCancelarCupom')?.addEventListener('click', closeCupomModal);
+  document.getElementById('btnCancelDeleteCupom')?.addEventListener('click', () => {
+    document.getElementById('cupomDeleteOverlay').style.display = 'none';
+    cupomDeleteTargetId = null;
+  });
+  document.getElementById('btnConfirmDeleteCupom')?.addEventListener('click', doDeleteCupom);
+  document.getElementById('btnCloseCupomUsos')?.addEventListener('click', () => {
+    document.getElementById('cupomUsosOverlay').style.display = 'none';
+  });
 
   document.getElementById('btnLogout')?.addEventListener('click', () => {
     if (confirm('Deseja sair do painel?')) {

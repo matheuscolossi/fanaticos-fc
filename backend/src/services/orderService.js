@@ -1,4 +1,6 @@
 const orderModel = require('../models/orderModel');
+const productModel = require('../models/productModel');
+const couponService = require('../services/couponService');
 const { createHttpError } = require('../utils/http');
 
 function parseOrderItems(order) {
@@ -10,25 +12,50 @@ function getInitialOrderStatus(paymentMethod) {
   return paymentMethod === 'pix' ? 'aguardando_pagamento' : 'pendente';
 }
 
+async function aplicarCupom(cupomCodigo, itens, usuarioId) {
+  const subtotal = itens.reduce((s, i) => s + Number(i.preco) * Number(i.qty), 0);
+  const itensComCategoria = await Promise.all(itens.map(async (i) => {
+    const produto = await productModel.findById(i.id);
+    return { productId: i.id, categoria_id: produto?.categoria_id, preco: Number(i.preco), qty: Number(i.qty) };
+  }));
+
+  const { desconto } = await couponService.validateCoupon(cupomCodigo, {
+    subtotal, itens: itensComCategoria, usuarioId,
+  });
+
+  return { subtotal, desconto };
+}
+
 async function createOrder(data) {
-  const { itens, total, usuario_id, nome_cliente, email_cliente, telefone_cliente, endereco, metodo_pagamento } = data;
+  const { itens, total, usuario_id, nome_cliente, email_cliente, telefone_cliente, endereco, metodo_pagamento, cupom_codigo } = data;
   if (!Array.isArray(itens) || itens.length === 0 || !Number(total)) {
     throw createHttpError(400, 'Order items and total are required.', 'VALIDATION_ERROR');
+  }
+
+  let totalFinal = Number(total);
+  let cupomDesconto = null;
+
+  if (cupom_codigo) {
+    const { subtotal, desconto } = await aplicarCupom(cupom_codigo, itens, usuario_id);
+    totalFinal = Math.max(0, Math.round((subtotal - desconto) * 100) / 100);
+    cupomDesconto = desconto;
   }
 
   const result = await orderModel.create({
     usuario_id: usuario_id || null,
     itens: JSON.stringify(itens),
-    total,
+    total: totalFinal,
     nome_cliente: nome_cliente || null,
     email_cliente: email_cliente || null,
     telefone_cliente: telefone_cliente || null,
     endereco: endereco || null,
     metodo_pagamento: metodo_pagamento || 'whatsapp',
     status: getInitialOrderStatus(metodo_pagamento),
+    cupom_codigo: cupom_codigo || null,
+    cupom_desconto: cupomDesconto,
   });
 
-  return { message: 'Order created.', id: result.lastID };
+  return { message: 'Order created.', id: result.lastID, total: totalFinal };
 }
 
 async function listOrders() {

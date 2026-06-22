@@ -1,6 +1,6 @@
 // ── Página de Carrinho Completo ───────────────────────────────────────────
-
-let cupomAplicado = '';
+// cupomAplicado vive em cart.js (getCupomAplicado/setCupomAplicado) porque o
+// checkout (confirmarPedido) também precisa dele e roda em outras páginas.
 
 function renderCartPage() {
   const layout = document.getElementById('cartPageLayout');
@@ -88,7 +88,7 @@ function renderCartPage() {
         </div>
 
         <div class="cart-page__cupom">
-          <input type="text" id="inputCupom" placeholder="Código do cupom (ex: URI10)" value="${cupomAplicado}" />
+          <input type="text" id="inputCupom" placeholder="Código do cupom (ex: URI10)" value="${getCupomAplicado()}" />
           <button class="btn btn--outline btn--sm" id="btnAplicarCupom">Aplicar</button>
         </div>
         <p class="cart-summary__cupom-msg" id="cupomMsg"></p>
@@ -107,7 +107,7 @@ function renderCartPage() {
 
   document.getElementById('btnCartCheckout').addEventListener('click', checkout);
   document.getElementById('btnAplicarCupom').addEventListener('click', () => {
-    cupomAplicado = document.getElementById('inputCupom').value.trim();
+    setCupomAplicado(document.getElementById('inputCupom').value.trim());
     atualizarResumoCarrinho();
   });
   document.getElementById('inputCupom').addEventListener('keydown', (e) => {
@@ -118,11 +118,12 @@ function renderCartPage() {
 }
 
 // Calcula frete/desconto/total via POST /cart (regra oficial: frete grátis >= R$200,
-// senão R$25; cupom URI10 = 10% off). Calculado no backend, não no front.
+// senão R$25; cupom validado contra o banco, com todas as regras do admin). Calculado no backend, não no front.
 async function atualizarResumoCarrinho() {
   const items = getCart();
   if (items.length === 0) return;
 
+  const cupomAplicado = getCupomAplicado();
   const freteRow    = document.getElementById('cartFreteRow');
   const descontoRow = document.getElementById('cartDescontoRow');
   const totalEl      = document.getElementById('cartTotalFinal');
@@ -159,7 +160,7 @@ async function atualizarResumoCarrinho() {
         msgEl.textContent = `Cupom "${cupomAplicado}" aplicado.`;
         msgEl.className = 'cart-summary__cupom-msg cart-summary__cupom-msg--ok';
       } else {
-        msgEl.textContent = 'Cupom inválido.';
+        msgEl.textContent = resumo.cupomErro || 'Cupom inválido.';
         msgEl.className = 'cart-summary__cupom-msg cart-summary__cupom-msg--erro';
       }
     }

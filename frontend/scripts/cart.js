@@ -1,6 +1,12 @@
 const CART_KEY = 'fc_cart';
 let cartItems = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
 
+// Cupom aplicado na página de carrinho (pages/carrinho.js) — fica aqui porque
+// o checkout (confirmarPedido) roda em qualquer página que carregue cart.js.
+let cupomAplicado = '';
+function getCupomAplicado() { return cupomAplicado; }
+function setCupomAplicado(codigo) { cupomAplicado = codigo || ''; }
+
 function makeCartKey(produto, options = {}) {
   const tamanho = options.tamanho || '';
   const pers = options.personalizacao;
@@ -292,7 +298,8 @@ async function confirmarPedido() {
     const metodoEl = document.querySelector('input[name="co_pagamento"]:checked');
     const metodo   = metodoEl ? metodoEl.value : 'pix';
     const endereco = `${endRua} — ${cidade} — CEP: ${cep}`;
-    const total    = getTotal();
+    let total      = getTotal();
+    const cupomCodigo = getCupomAplicado();
 
     const btn = document.getElementById('btnConfirmarPedido');
     if (btn) { btn.disabled = true; btn.textContent = 'Processando...'; }
@@ -304,10 +311,18 @@ async function confirmarPedido() {
         nome_cliente: nome, email_cliente: email,
         telefone_cliente: telefone, endereco,
         metodo_pagamento: metodo,
+        cupom_codigo: cupomCodigo || null,
       });
       pedidoId = res.id;
+      if (typeof res.total === 'number') total = res.total; // recalculado pelo backend quando há cupom
     } catch(apiErr) {
       console.warn('[checkout:order:create:error]', apiErr);
+      // Cupom inválido/expirado/esgotado: o sistema deve impedir o uso, então bloqueia o checkout
+      if (cupomCodigo && apiErr.code?.startsWith('COUPON_')) {
+        showToast(apiErr.message || 'Cupom inválido para este pedido.', 'error');
+        if (btn) { btn.disabled = false; btn.textContent = 'Confirmar pedido'; }
+        return;
+      }
     }
 
     // Captura itens antes de limpar (para mensagem WhatsApp)
@@ -316,6 +331,7 @@ async function confirmarPedido() {
     // Limpa carrinho
     cartItems = [];
     saveCart();
+    setCupomAplicado('');
     renderCart();
     updateBadge();
 

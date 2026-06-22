@@ -37,6 +37,10 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Usuários
       </a>
+      <a href="#" class="sidebar__link" data-tab="cupons">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41 13.42 20.6a2 2 0 0 1-2.83 0L2.5 12.5V3h9.5l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor"/></svg>
+        Cupons
+      </a>
     </nav>
     <div class="sidebar__bottom">
       <a href="/" class="sidebar__link">
@@ -183,6 +187,17 @@
 
     <div id="tabUsuarios" class="tab-content">
       <div class="table-wrap" id="tabelaUsuariosWrap">
+        <div class="loading-state"><div class="spinner"></div><p>Carregando...</p></div>
+      </div>
+    </div>
+
+    <div id="tabCupons" class="tab-content">
+      <div class="prod-toolbar-top">
+        <div class="prod-toolbar-top__left">
+          <button class="btn btn--primary" id="btnNovoCupom">+ Novo Cupom</button>
+        </div>
+      </div>
+      <div class="table-wrap" id="tabelaCuponsWrap">
         <div class="loading-state"><div class="spinner"></div><p>Carregando...</p></div>
       </div>
     </div>
@@ -570,6 +585,142 @@
         <button class="btn btn--outline" id="btnCancelDeleteUsuario">Cancelar</button>
         <button class="btn btn--danger" id="btnConfirmDeleteUsuario">Excluir</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal Cupom -->
+  <div class="modal-overlay" id="cupomModalOverlay" style="display:none">
+    <div class="modal modal--form modal--form--xl">
+      <div class="modal__header">
+        <h2 id="cupomModalTitle">Novo Cupom</h2>
+        <button class="modal__close" id="btnCloseCupomForm">×</button>
+      </div>
+      <form id="formCupom" class="product-form">
+        <input type="hidden" id="cupomId" />
+
+        <div class="form-cols-2">
+          <div class="form-group">
+            <label>Código *</label>
+            <input type="text" id="cpCodigo" placeholder="Ex: URI10" required style="text-transform:uppercase" />
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select id="cpStatus">
+              <option value="ativo">Ativo</option>
+              <option value="inativo">Inativo</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Descrição</label>
+          <input type="text" id="cpDescricao" placeholder="Ex: 10% de desconto para a Black Friday" />
+        </div>
+
+        <div class="form-cols-2">
+          <div class="form-group">
+            <label>Tipo de desconto *</label>
+            <select id="cpTipoDesconto">
+              <option value="percentual">Percentual (%)</option>
+              <option value="fixo">Valor fixo (R$)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Valor do desconto *</label>
+            <input type="number" id="cpValor" min="0" step="0.01" required />
+          </div>
+        </div>
+
+        <div class="form-cols-2">
+          <div class="form-group">
+            <label>Valor mínimo da compra (R$)</label>
+            <input type="number" id="cpValorMinimo" min="0" step="0.01" placeholder="0 = sem mínimo" />
+          </div>
+          <div class="form-group">
+            <label>Desconto máximo (R$)</label>
+            <input type="number" id="cpDescontoMaximo" min="0" step="0.01" placeholder="Vazio = sem teto" />
+          </div>
+        </div>
+
+        <div class="form-cols-2">
+          <div class="form-group">
+            <label>Data inicial</label>
+            <input type="datetime-local" id="cpDataInicio" />
+          </div>
+          <div class="form-group">
+            <label>Data final</label>
+            <input type="datetime-local" id="cpDataFim" />
+          </div>
+        </div>
+
+        <div class="form-cols-2">
+          <div class="form-group">
+            <label>Limite total de utilizações</label>
+            <input type="number" id="cpLimiteTotal" min="0" placeholder="Vazio = ilimitado" />
+          </div>
+          <div class="form-group">
+            <label>Limite por usuário</label>
+            <input type="number" id="cpLimitePorUsuario" min="0" placeholder="Vazio = ilimitado" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer">
+            <input type="checkbox" id="cpFreteGratis" style="width:auto" />
+            Concede frete grátis
+          </label>
+        </div>
+
+        <div class="form-cols-2">
+          <div class="form-group">
+            <label>Categorias participantes</label>
+            <input type="text" id="cpFiltroCategorias" placeholder="Filtrar categorias..." style="margin-bottom:.4rem" />
+            <select id="cpCategoriasIds" multiple style="height:120px"></select>
+            <small style="color:var(--text-dim)">Nenhuma selecionada = vale para todas as categorias</small>
+          </div>
+          <div class="form-group">
+            <label>Produtos participantes</label>
+            <input type="text" id="cpFiltroProdutos" placeholder="Filtrar produtos..." style="margin-bottom:.4rem" />
+            <select id="cpProdutosIds" multiple style="height:120px"></select>
+            <small style="color:var(--text-dim)">Nenhum selecionado = vale para todos os produtos</small>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Clientes permitidos</label>
+          <input type="text" id="cpFiltroClientes" placeholder="Filtrar clientes..." style="margin-bottom:.4rem" />
+          <select id="cpClientesIds" multiple style="height:120px"></select>
+          <small style="color:var(--text-dim)">Nenhum selecionado = vale para qualquer cliente</small>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn--outline" id="btnCancelarCupom">Cancelar</button>
+          <button type="submit" class="btn btn--primary" id="btnSalvarCupom">Salvar Cupom</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Excluir Cupom -->
+  <div class="modal-overlay" id="cupomDeleteOverlay" style="display:none">
+    <div class="modal modal--sm">
+      <div class="modal__header"><h2>Excluir Cupom</h2></div>
+      <div id="cupomDeleteBody" style="padding:0 1.5rem 1rem;color:var(--text-muted)"></div>
+      <div class="form-actions" style="padding:0 1.5rem 1.5rem">
+        <button class="btn btn--outline" id="btnCancelDeleteCupom">Cancelar</button>
+        <button class="btn btn--danger" id="btnConfirmDeleteCupom">Excluir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Utilizações do Cupom -->
+  <div class="modal-overlay" id="cupomUsosOverlay" style="display:none">
+    <div class="modal modal--sm">
+      <div class="modal__header">
+        <h2 id="cupomUsosTitle">Utilizações do Cupom</h2>
+        <button class="modal__close" id="btnCloseCupomUsos">×</button>
+      </div>
+      <div id="cupomUsosBody" style="padding:0 1.5rem 1.5rem"></div>
     </div>
   </div>
 

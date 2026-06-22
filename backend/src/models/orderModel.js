@@ -2,8 +2,8 @@ const { all, get, run } = require('../config/database');
 
 function create(order) {
   return run(
-    `INSERT INTO pedidos (usuario_id, itens, total, nome_cliente, email_cliente, telefone_cliente, endereco, metodo_pagamento, status)
-     VALUES (?, JSON_VALUE(?), ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO pedidos (usuario_id, itens, total, nome_cliente, email_cliente, telefone_cliente, endereco, metodo_pagamento, status, cupom_codigo, cupom_desconto)
+     VALUES (?, JSON_VALUE(?), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       order.usuario_id,
       order.itens,
@@ -14,6 +14,8 @@ function create(order) {
       order.endereco,
       order.metodo_pagamento,
       order.status,
+      order.cupom_codigo || null,
+      order.cupom_desconto ?? null,
     ]
   );
 }

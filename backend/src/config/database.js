@@ -213,6 +213,28 @@ async function createPostgresSchema() {
       created_at TIMESTAMPTZ DEFAULT now()
     )
   `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS cupons (
+      id SERIAL PRIMARY KEY,
+      codigo TEXT NOT NULL UNIQUE,
+      descricao TEXT,
+      tipo_desconto TEXT NOT NULL DEFAULT 'percentual',
+      valor NUMERIC(10,2) NOT NULL,
+      valor_minimo_compra NUMERIC(10,2) DEFAULT 0,
+      desconto_maximo NUMERIC(10,2),
+      data_inicio TIMESTAMPTZ,
+      data_fim TIMESTAMPTZ,
+      limite_uso_total INTEGER,
+      limite_uso_por_usuario INTEGER,
+      produtos_ids JSONB DEFAULT '[]'::jsonb,
+      categorias_ids JSONB DEFAULT '[]'::jsonb,
+      clientes_ids JSONB DEFAULT '[]'::jsonb,
+      frete_gratis BOOLEAN DEFAULT false,
+      status TEXT DEFAULT 'ativo',
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
 }
 
 async function createSqliteSchema() {
@@ -263,6 +285,26 @@ async function createSqliteSchema() {
     endereco TEXT,
     metodo_pagamento TEXT DEFAULT 'whatsapp',
     codigo_rastreio TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  await run(`CREATE TABLE IF NOT EXISTS cupons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    codigo TEXT NOT NULL UNIQUE,
+    descricao TEXT,
+    tipo_desconto TEXT NOT NULL DEFAULT 'percentual',
+    valor REAL NOT NULL,
+    valor_minimo_compra REAL DEFAULT 0,
+    desconto_maximo REAL,
+    data_inicio DATETIME,
+    data_fim DATETIME,
+    limite_uso_total INTEGER,
+    limite_uso_por_usuario INTEGER,
+    produtos_ids TEXT DEFAULT '[]',
+    categorias_ids TEXT DEFAULT '[]',
+    clientes_ids TEXT DEFAULT '[]',
+    frete_gratis INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'ativo',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 }
@@ -321,6 +363,9 @@ async function runMigrations() {
     await runOptionalMigration('ALTER TABLE categorias ADD COLUMN IF NOT EXISTS categoria_pai_id INTEGER REFERENCES categorias(id)');
     await runOptionalMigration('ALTER TABLE categorias ADD COLUMN IF NOT EXISTS ordem INTEGER DEFAULT 0');
     await runOptionalMigration("ALTER TABLE categorias ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ativo'");
+    // Rastreio de cupom aplicado no pedido
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cupom_codigo TEXT');
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cupom_desconto NUMERIC(10,2)');
     return;
   }
 
@@ -368,6 +413,9 @@ async function runMigrations() {
   await runOptionalMigration('ALTER TABLE categorias ADD COLUMN categoria_pai_id INTEGER REFERENCES categorias(id)');
   await runOptionalMigration('ALTER TABLE categorias ADD COLUMN ordem INTEGER DEFAULT 0');
   await runOptionalMigration("ALTER TABLE categorias ADD COLUMN status TEXT DEFAULT 'ativo'");
+  // Rastreio de cupom aplicado no pedido
+  await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN cupom_codigo TEXT');
+  await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN cupom_desconto REAL');
 }
 
 async function seedDefaults() {
@@ -389,6 +437,16 @@ async function seedDefaults() {
       'admin',
     ]);
     console.log('[database] Default admin created.');
+  }
+
+  const cupons = await get('SELECT COUNT(*) as c FROM cupons');
+  if (Number(cupons.c) === 0) {
+    await run(
+      `INSERT INTO cupons (codigo, descricao, tipo_desconto, valor, status)
+       VALUES (?, ?, ?, ?, ?)`,
+      ['URI10', 'Cupom de exemplo — 10% de desconto', 'percentual', 10, 'ativo']
+    );
+    console.log('[database] Default coupon (URI10) inserted.');
   }
 }
 

@@ -17,7 +17,9 @@ async function apiFetch(path, options = {}) {
       }
     }
     const err = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    const error = new Error(err.error || `HTTP ${res.status}`);
+    error.code = err.code;
+    throw error;
   }
   return res.json();
 }
