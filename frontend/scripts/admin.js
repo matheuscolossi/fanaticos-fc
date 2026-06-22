@@ -1365,7 +1365,10 @@ function renderPedidos() {
   pedidosPage = Math.min(pedidosPage, totalPages);
   const start = (pedidosPage - 1) * ORDERS_PER_PAGE;
   const pagePedidos = pedidos.slice(start, start + ORDERS_PER_PAGE);
-  const totalGeral = pedidos.reduce((s, p) => s + (Number(p.total) || 0), 0);
+  const STATUS_EXCLUIDOS_RECEITA = ['pendente', 'aguardando_pagamento', 'cancelado'];
+  const totalGeral = pedidos
+    .filter(p => !STATUS_EXCLUIDOS_RECEITA.includes(p.status))
+    .reduce((s, p) => s + (Number(p.total) || 0), 0);
   const pendentes = pedidos.filter(p => p.status === 'aguardando_pagamento' || p.status === 'pendente').length;
   wrap.innerHTML = `
       <div class="admin-stats">

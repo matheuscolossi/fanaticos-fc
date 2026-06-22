@@ -53,13 +53,16 @@ async function dashboard(req, res, next) {
     const dayMap = new Map();
     const prodMap = new Map();
 
+    const STATUS_EXCLUIDOS_RECEITA = ['cancelado', 'pendente', 'aguardando_pagamento'];
+
     for (const order of periodOrders) {
       const status = order.status || 'pendente';
       por_status[status] = (por_status[status] || 0) + 1;
 
       const total = Number(order.total) || 0;
+      const contaReceita = !STATUS_EXCLUIDOS_RECEITA.includes(status);
 
-      if (status !== 'cancelado') {
+      if (contaReceita) {
         receita += total;
         pedidosCount++;
         ticketSum += total;
@@ -69,11 +72,11 @@ async function dashboard(req, res, next) {
       const day = String(order.created_at).substring(0, 10);
       const dayEntry = dayMap.get(day) || { dia: day, receita: 0, pedidos: 0 };
       dayEntry.pedidos++;
-      if (status !== 'cancelado') dayEntry.receita += total;
+      if (contaReceita) dayEntry.receita += total;
       dayMap.set(day, dayEntry);
 
       // Top products from itens JSON
-      if (status !== 'cancelado') {
+      if (contaReceita) {
         try {
           const itens = typeof order.itens === 'string'
             ? JSON.parse(order.itens)
