@@ -296,9 +296,37 @@ function closeModal() {
   document.getElementById('modalOverlay').style.display = 'none';
 }
 
-function updateLoadMoreBtn() {
-  const container = document.getElementById('loadMoreContainer');
-  if (container) container.style.display = currentPage < totalPages ? 'block' : 'none';
+function renderPagination() {
+  const container = document.getElementById('paginacaoProdutos');
+  if (!container) return;
+
+  if (totalPages <= 1) {
+    container.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+
+  const pages = [];
+  for (let p = 1; p <= totalPages; p++) {
+    if (p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1) pages.push(p);
+    else if (pages[pages.length - 1] !== '...') pages.push('...');
+  }
+
+  container.innerHTML = `
+    <button class="btn btn--outline btn--sm" id="btnPagAnterior" ${currentPage <= 1 ? 'disabled' : ''}>← Anterior</button>
+    ${pages.map(p => p === '...'
+      ? `<span class="pagination__ellipsis">...</span>`
+      : `<button class="pagination__page ${p === currentPage ? 'active' : ''}" data-page="${p}">${p}</button>`
+    ).join('')}
+    <button class="btn btn--outline btn--sm" id="btnPagProximo" ${currentPage >= totalPages ? 'disabled' : ''}>Próximo →</button>
+  `;
+  container.style.display = 'flex';
+
+  container.querySelectorAll('.pagination__page').forEach(btn => {
+    btn.addEventListener('click', () => goToPage(Number(btn.dataset.page)));
+  });
+  document.getElementById('btnPagAnterior')?.addEventListener('click', () => goToPage(currentPage - 1));
+  document.getElementById('btnPagProximo')?.addEventListener('click', () => goToPage(currentPage + 1));
 }
 
 function buildApiParams(page = 1) {
@@ -315,6 +343,17 @@ function buildApiParams(page = 1) {
   return params.toString();
 }
 
+async function loadDestaques() {
+  const gridD = document.getElementById('gridDestaques');
+  if (!gridD) return;
+  try {
+    const { produtos } = await api.get('/produtos?destaque=true&limit=12');
+    renderGrid(gridD, produtos);
+  } catch (e) {
+    console.warn('[destaques:error]', e);
+  }
+}
+
 async function loadProdutos() {
   currentPage = 1;
 
@@ -324,9 +363,7 @@ async function loadProdutos() {
     totalPages = cached.totalPages || 1;
     const gridP = document.getElementById('gridProdutos');
     if (gridP) renderGrid(gridP, allProdutos);
-    updateLoadMoreBtn();
-    const gridD = document.getElementById('gridDestaques');
-    if (gridD) renderGrid(gridD, allProdutos.filter(p => p.destaque));
+    renderPagination();
   }
 
   try {
@@ -337,9 +374,7 @@ async function loadProdutos() {
     writeCache({ produtos, totalPages });
     const gridP = document.getElementById('gridProdutos');
     if (gridP) renderGrid(gridP, allProdutos);
-    updateLoadMoreBtn();
-    const gridD = document.getElementById('gridDestaques');
-    if (gridD) renderGrid(gridD, allProdutos.filter(p => p.destaque));
+    renderPagination();
     const countEl = document.getElementById('filtrosCount');
     if (countEl) countEl.textContent = allProdutos.length > 0
       ? `${allProdutos.length} de ${fresh.total} produto${fresh.total !== 1 ? 's' : ''}` : '';
@@ -354,27 +389,26 @@ async function loadProdutos() {
   }
 }
 
-async function loadMais() {
-  if (isLoadingMore || currentPage >= totalPages) return;
+async function goToPage(page) {
+  if (isLoadingMore || page < 1 || page > totalPages || page === currentPage) return;
   isLoadingMore = true;
-  const btn = document.getElementById('btnLoadMore');
-  if (btn) btn.textContent = 'Carregando...';
+  const grid = document.getElementById('gridProdutos');
+  if (grid) grid.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
 
   try {
-    const { produtos } = await api.get(`/produtos?${buildApiParams(currentPage + 1)}`);
-    currentPage++;
-    allProdutos = [...allProdutos, ...produtos];
-    const grid = document.getElementById('gridProdutos');
-    if (grid) produtos.forEach(p => grid.appendChild(produtoCardSafe(p)));
-    updateLoadMoreBtn();
-  } catch (e) { /* mantém botão */ }
+    const { produtos } = await api.get(`/produtos?${buildApiParams(page)}`);
+    currentPage = page;
+    allProdutos = produtos;
+    if (grid) renderGrid(grid, allProdutos);
+    renderPagination();
+    grid?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) { /* mantém página atual */ }
 
   isLoadingMore = false;
-  if (btn) btn.textContent = 'Carregar mais';
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  await Promise.all([loadCategorias(), loadProdutos()]);
+  await Promise.all([loadCategorias(), loadProdutos(), loadDestaques()]);
 
   let searchTimer;
   document.getElementById('inputBusca')?.addEventListener('input', () => {
@@ -386,7 +420,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btnFiltrar')?.addEventListener('click', loadProdutos);
   document.getElementById('btnLimpar')?.addEventListener('click', clearFilters);
   document.getElementById('btnLimpar2')?.addEventListener('click', clearFilters);
-  document.getElementById('btnLoadMore')?.addEventListener('click', loadMais);
 
   document.querySelector('.cat-btn[data-cat=""]')?.addEventListener('click', () => {
     filterByCategory('');
