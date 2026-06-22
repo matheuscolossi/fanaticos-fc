@@ -1,7 +1,9 @@
 const express = require('express');
 const cors = require('cors');
+const swaggerUi = require('swagger-ui-express');
+const openapiSpec = require('./src/docs/openapi');
 const { init } = require('./src/config/database');
-const { buildAdminMiddleware, buildAuthMiddleware } = require('./src/middleware/auth');
+const { buildAdminMiddleware, buildAuthMiddleware, buildBasicAuthMiddleware } = require('./src/middleware/auth');
 const { errorHandler } = require('./src/utils/http');
 const authRoutes = require('./src/routes/authRoutes');
 const categoryRoutes = require('./src/routes/categoryRoutes');
@@ -9,6 +11,7 @@ const orderRoutes = require('./src/routes/orderRoutes');
 const productRoutes = require('./src/routes/productRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
+const specRoutes = require('./src/routes/specRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -16,6 +19,10 @@ const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) { console.error('[api] JWT_SECRET não definido'); process.exit(1); }
 const authMiddleware = buildAuthMiddleware(JWT_SECRET);
 const adminMiddleware = buildAdminMiddleware(authMiddleware);
+const basicAuthMiddleware = buildBasicAuthMiddleware(
+  process.env.BASIC_AUTH_USER || process.env.DEFAULT_ADMIN_EMAIL || 'admin@fanaticosfc.com',
+  process.env.BASIC_AUTH_PASS || process.env.DEFAULT_ADMIN_PASSWORD || 'admin123'
+);
 
 const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:5500,http://127.0.0.1:5500')
   .split(',').map(o => o.trim());
@@ -27,6 +34,9 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
+
+// Documentação mínima da API (Swagger/OpenAPI), exigida pelo PDF do trabalho
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(openapiSpec));
 
 // Sempre disponível — usada pelo keep-alive e pelo Render para health check
 app.get('/api/health', (req, res) => {
@@ -46,6 +56,10 @@ app.use('/api/produtos', productRoutes(adminMiddleware));
 app.use('/api/pedidos', orderRoutes({ adminMiddleware, authMiddleware }));
 app.use('/api/admin/usuarios', userRoutes({ adminMiddleware }));
 app.use('/api/admin/dashboard', dashboardRoutes(adminMiddleware));
+
+// Rotas no formato exigido pelo PDF do trabalho (sem prefixo /api) — usadas pelo
+// professor no Postman. O site continua usando as rotas /api/produtos acima.
+app.use('/', specRoutes({ basicAuthMiddleware, isDbReady: () => dbReady }));
 
 app.use(errorHandler);
 

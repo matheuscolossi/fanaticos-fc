@@ -1,4 +1,4 @@
-const { sendCreated } = require('../utils/http');
+const { createHttpError, sendCreated } = require('../utils/http');
 const {
   bulkUpdatePrices,
   createProduct,
@@ -12,6 +12,7 @@ const {
   setProductStatus,
   updateProduct,
 } = require('../services/productService');
+const categoryModel = require('../models/categoryModel');
 
 async function index(req, res) {
   if (req.query.admin === 'true') {
@@ -79,6 +80,30 @@ async function patchDestaque(req, res) {
   res.json(await setProductDestaque(req.params.id, destaque));
 }
 
+// GET /search?query=&cat=&page=&limit= — formato de rota exigido pelo PDF do trabalho
+async function search(req, res) {
+  const { query, cat } = req.query;
+  const page = req.query.page !== undefined ? Number(req.query.page) : 1;
+  const limit = req.query.limit !== undefined ? Number(req.query.limit) : 24;
+
+  if (!Number.isInteger(page) || page < 1) {
+    throw createHttpError(400, 'page deve ser um número inteiro >= 1.', 'INVALID_PAGE');
+  }
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw createHttpError(400, 'limit deve ser um número inteiro >= 1.', 'INVALID_LIMIT');
+  }
+
+  let categoria;
+  if (cat) {
+    const categoriaEncontrada = /^\d+$/.test(cat)
+      ? { id: cat }
+      : await categoryModel.findByNomeCI(cat);
+    categoria = categoriaEncontrada ? categoriaEncontrada.id : -1; // categoria inexistente -> lista vazia
+  }
+
+  res.json(await listProductsPaginated({ busca: query, categoria, page, limit }));
+}
+
 module.exports = {
   bulkPrice,
   destroy,
@@ -88,6 +113,7 @@ module.exports = {
   index,
   patchDestaque,
   patchStatus,
+  search,
   show,
   store,
   update,

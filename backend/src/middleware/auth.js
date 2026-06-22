@@ -27,7 +27,29 @@ function buildAdminMiddleware(authMiddleware) {
   };
 }
 
+// HTTP Basic Auth — exigido pelo PDF do trabalho para POST /products e DELETE /product/:id
+function buildBasicAuthMiddleware(expectedUser, expectedPass) {
+  return function basicAuthMiddleware(req, res, next) {
+    const header = req.headers.authorization || '';
+    const [scheme, encoded] = header.split(' ');
+
+    if (scheme !== 'Basic' || !encoded) {
+      res.set('WWW-Authenticate', 'Basic realm="api"');
+      return next(createHttpError(401, 'Basic auth credentials are required.', 'AUTH_BASIC_REQUIRED'));
+    }
+
+    const [user, pass] = Buffer.from(encoded, 'base64').toString('utf8').split(':');
+    if (user !== expectedUser || pass !== expectedPass) {
+      res.set('WWW-Authenticate', 'Basic realm="api"');
+      return next(createHttpError(401, 'Invalid basic auth credentials.', 'AUTH_BASIC_INVALID'));
+    }
+
+    next();
+  };
+}
+
 module.exports = {
   buildAdminMiddleware,
   buildAuthMiddleware,
+  buildBasicAuthMiddleware,
 };

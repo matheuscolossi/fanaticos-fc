@@ -20,6 +20,10 @@ function findByNome(nome) {
   return get('SELECT * FROM categorias WHERE nome = ?', [nome]);
 }
 
+function findByNomeCI(nome) {
+  return get('SELECT * FROM categorias WHERE LOWER(nome) = LOWER(?)', [nome]);
+}
+
 function countProdutos(categoriaId) {
   return get('SELECT COUNT(*) as c FROM produtos WHERE categoria_id = ?', [categoriaId]);
 }
@@ -59,6 +63,7 @@ module.exports = {
   countSubcategorias,
   create,
   findByNome,
+  findByNomeCI,
   findById,
   list,
   reassignProducts,
