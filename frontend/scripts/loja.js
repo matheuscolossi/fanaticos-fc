@@ -151,51 +151,10 @@ function filterByCategory(catId) {
   applyFilters();
 }
 
-function applyFilters() {
-  const busca = normalizeText(document.getElementById('inputBusca')?.value || '');
-  const precoMin = parseFloat(document.getElementById('precoMin')?.value) || 0;
-  const precoMax = parseFloat(document.getElementById('precoMax')?.value) || Infinity;
-  const ordem = document.getElementById('selectOrdem')?.value || 'recente';
-
-  let filtered = allProdutos.filter(p => {
-    const nome = normalizeText(p.nome);
-    const matchBusca = !busca || nome.includes(busca) || normalizeText(p.categoria_nome || '').includes(busca);
-    const matchCat = !catAtiva || String(p.categoria_id) === String(catAtiva);
-    const matchPreco = p.preco >= precoMin && p.preco <= precoMax;
-    return matchBusca && matchCat && matchPreco;
-  });
-
-  filtered = sortProdutos(filtered, ordem);
-
-  const countEl = document.getElementById('filtrosCount');
-  if (countEl) {
-    countEl.textContent = filtered.length > 0
-      ? `${filtered.length} produto${filtered.length !== 1 ? 's' : ''} encontrado${filtered.length !== 1 ? 's' : ''}`
-      : '';
-  }
-
-  const grid = document.getElementById('gridProdutos');
-  const empty = document.getElementById('emptyState');
-  if (grid) {
-    if (filtered.length === 0) {
-      grid.innerHTML = '';
-      if (empty) empty.style.display = 'flex';
-    } else {
-      if (empty) empty.style.display = 'none';
-      renderGrid(grid, filtered);
-    }
-  }
-}
-
-function sortProdutos(list, ordem) {
-  const sorted = [...list];
-  switch (ordem) {
-    case 'az':         return sorted.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-    case 'za':         return sorted.sort((a, b) => b.nome.localeCompare(a.nome, 'pt-BR'));
-    case 'preco_asc':  return sorted.sort((a, b) => a.preco - b.preco);
-    case 'preco_desc': return sorted.sort((a, b) => b.preco - a.preco);
-    default:           return sorted;
-  }
+// Busca/categoria/preço precisam ser resolvidos no backend (allProdutos só tem
+// a página atual, no máximo 24 itens) — por isso delega para loadProdutos().
+async function applyFilters() {
+  await loadProdutos();
 }
 
 function clearFilters() {
@@ -209,8 +168,8 @@ function clearFilters() {
   document.querySelectorAll('.cat-nav-btn').forEach(b => b.classList.toggle('active', b.dataset.cat === ''));
   const countEl = document.getElementById('filtrosCount');
   if (countEl) countEl.textContent = '';
-  renderGrid(document.getElementById('gridProdutos'), allProdutos);
   document.getElementById('emptyState').style.display = 'none';
+  loadProdutos();
 }
 
 async function openProdutoModal(id) {
@@ -375,16 +334,28 @@ async function loadDestaques() {
   }
 }
 
+function hasActiveFilters() {
+  return Boolean(
+    document.getElementById('inputBusca')?.value.trim() ||
+    catAtiva ||
+    document.getElementById('precoMin')?.value ||
+    document.getElementById('precoMax')?.value
+  );
+}
+
 async function loadProdutos() {
   currentPage = 1;
+  const filtering = hasActiveFilters();
 
-  const cached = readCache();
-  if (cached) {
-    allProdutos = cached.produtos || cached;
-    totalPages = cached.totalPages || 1;
-    const gridP = document.getElementById('gridProdutos');
-    if (gridP) renderGrid(gridP, allProdutos);
-    renderPagination();
+  if (!filtering) {
+    const cached = readCache();
+    if (cached) {
+      allProdutos = cached.produtos || cached;
+      totalPages = cached.totalPages || 1;
+      const gridP = document.getElementById('gridProdutos');
+      if (gridP) renderGrid(gridP, allProdutos);
+      renderPagination();
+    }
   }
 
   try {
@@ -392,10 +363,12 @@ async function loadProdutos() {
     const { produtos, totalPages: tp } = fresh;
     totalPages = tp || 1;
     allProdutos = produtos;
-    writeCache({ produtos, totalPages });
+    if (!filtering) writeCache({ produtos, totalPages });
     const gridP = document.getElementById('gridProdutos');
     if (gridP) renderGrid(gridP, allProdutos);
     renderPagination();
+    const empty = document.getElementById('emptyState');
+    if (empty) empty.style.display = allProdutos.length === 0 ? 'flex' : 'none';
     const countEl = document.getElementById('filtrosCount');
     if (countEl) countEl.textContent = allProdutos.length > 0
       ? `${allProdutos.length} de ${fresh.total} produto${fresh.total !== 1 ? 's' : ''}` : '';

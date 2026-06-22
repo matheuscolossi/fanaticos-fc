@@ -1,5 +1,7 @@
 // ── Página de Carrinho Completo ───────────────────────────────────────────
 
+let cupomAplicado = '';
+
 function renderCartPage() {
   const layout = document.getElementById('cartPageLayout');
   if (!layout) return;
@@ -19,9 +21,7 @@ function renderCartPage() {
     return;
   }
 
-  const subtotal    = getTotal();
-  const freteGratis = subtotal >= 300;
-  const totalFinal  = subtotal; // frete é grátis acima de R$300, senão calculado no checkout
+  const subtotal = getTotal();
 
   layout.innerHTML = `
     <div class="cart-page__inner">
@@ -78,21 +78,24 @@ function renderCartPage() {
           <span>Subtotal (${items.reduce((s, i) => s + i.qty, 0)} itens)</span>
           <span>${formatBRL(subtotal)}</span>
         </div>
-        <div class="cart-page__summary-row">
+        <div class="cart-page__summary-row" id="cartFreteRow">
           <span>Frete</span>
-          <span class="${freteGratis ? 'cart-summary__frete-gratis' : 'cart-summary__frete-calc'}">
-            ${freteGratis ? 'Frete grátis' : 'A calcular'}
-          </span>
+          <span class="cart-summary__frete-calc">Calculando...</span>
         </div>
-        ${!freteGratis ? `
-          <div class="cart-summary__frete-bar">
-            <div class="cart-summary__frete-bar-fill" style="width:${Math.min(100, (subtotal / 300) * 100).toFixed(0)}%"></div>
-          </div>
-          <p class="cart-summary__frete-hint">Faltam <strong>${formatBRL(300 - subtotal)}</strong> para frete grátis</p>
-        ` : ''}
+        <div class="cart-page__summary-row" id="cartDescontoRow" style="display:none">
+          <span>Desconto</span>
+          <span class="cart-summary__desconto"></span>
+        </div>
+
+        <div class="cart-page__cupom">
+          <input type="text" id="inputCupom" placeholder="Código do cupom (ex: URI10)" value="${cupomAplicado}" />
+          <button class="btn btn--outline btn--sm" id="btnAplicarCupom">Aplicar</button>
+        </div>
+        <p class="cart-summary__cupom-msg" id="cupomMsg"></p>
+
         <div class="cart-page__summary-total">
           <span>Total</span>
-          <strong>${formatBRL(totalFinal)}</strong>
+          <strong id="cartTotalFinal">${formatBRL(subtotal)}</strong>
         </div>
         <button class="btn btn--primary cart-page__checkout-btn" id="btnCartCheckout">
           Finalizar Pedido →
@@ -103,6 +106,78 @@ function renderCartPage() {
   `;
 
   document.getElementById('btnCartCheckout').addEventListener('click', checkout);
+  document.getElementById('btnAplicarCupom').addEventListener('click', () => {
+    cupomAplicado = document.getElementById('inputCupom').value.trim();
+    atualizarResumoCarrinho();
+  });
+  document.getElementById('inputCupom').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('btnAplicarCupom').click();
+  });
+
+  atualizarResumoCarrinho();
+}
+
+// Calcula frete/desconto/total via POST /cart (regra oficial: frete grátis >= R$200,
+// senão R$25; cupom URI10 = 10% off). Calculado no backend, não no front.
+async function atualizarResumoCarrinho() {
+  const items = getCart();
+  if (items.length === 0) return;
+
+  const freteRow    = document.getElementById('cartFreteRow');
+  const descontoRow = document.getElementById('cartDescontoRow');
+  const totalEl      = document.getElementById('cartTotalFinal');
+  const msgEl         = document.getElementById('cupomMsg');
+
+  try {
+    const resumo = await fetchCartSummary(
+      items.map(i => ({ productId: i.id, qty: i.qty })),
+      cupomAplicado || undefined
+    );
+
+    if (freteRow) {
+      const span = freteRow.querySelector('span:last-child');
+      const gratis = resumo.freight === 0;
+      span.className = gratis ? 'cart-summary__frete-gratis' : 'cart-summary__frete-calc';
+      span.textContent = gratis ? 'Frete grátis' : formatBRL(resumo.freight);
+    }
+
+    if (descontoRow) {
+      if (resumo.discount > 0) {
+        descontoRow.style.display = 'flex';
+        descontoRow.querySelector('span:last-child').textContent = `− ${formatBRL(resumo.discount)}`;
+      } else {
+        descontoRow.style.display = 'none';
+      }
+    }
+
+    if (totalEl) totalEl.textContent = formatBRL(resumo.total);
+
+    if (msgEl) {
+      if (!cupomAplicado) {
+        msgEl.textContent = '';
+      } else if (resumo.discount > 0) {
+        msgEl.textContent = `Cupom "${cupomAplicado}" aplicado.`;
+        msgEl.className = 'cart-summary__cupom-msg cart-summary__cupom-msg--ok';
+      } else {
+        msgEl.textContent = 'Cupom inválido.';
+        msgEl.className = 'cart-summary__cupom-msg cart-summary__cupom-msg--erro';
+      }
+    }
+  } catch (e) {
+    // Fallback: aplica a mesma regra de frete localmente se a API não responder
+    const subtotal = getTotal();
+    if (freteRow) {
+      const span = freteRow.querySelector('span:last-child');
+      const gratis = subtotal >= 200;
+      span.className = gratis ? 'cart-summary__frete-gratis' : 'cart-summary__frete-calc';
+      span.textContent = gratis ? 'Frete grátis' : formatBRL(25);
+    }
+    if (totalEl) totalEl.textContent = formatBRL(subtotal + (subtotal >= 200 ? 0 : 25));
+    if (msgEl) {
+      msgEl.textContent = cupomAplicado ? 'Não foi possível validar o cupom agora.' : '';
+      msgEl.className = 'cart-summary__cupom-msg cart-summary__cupom-msg--erro';
+    }
+  }
 }
 
 function cartPageClearAll() {

@@ -30,6 +30,24 @@ const api = {
   delete: (path, body)   => apiFetch(path, { method: 'DELETE', ...(body ? { body: JSON.stringify(body) } : {}) }),
 };
 
+// POST /cart vive na raiz da API (fora do prefixo /api), no formato exigido pelo PDF
+const CART_ROOT_BASE = API_BASE.replace(/\/api\/?$/, '');
+
+async function fetchCartSummary(items, cupomCode) {
+  const res = await fetch(`${CART_ROOT_BASE}/cart`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items, cupomCode }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
+    const error = new Error(err.error || `HTTP ${res.status}`);
+    error.code = err.code;
+    throw error;
+  }
+  return res.json();
+}
+
 function showToast(msg, type = 'success') {
   let cont = document.querySelector('.toast-container');
   if (!cont) {

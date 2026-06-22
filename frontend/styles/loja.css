@@ -786,6 +786,21 @@
   margin-bottom: .75rem;
 }
 .cart-summary__frete-hint strong { color: var(--text-muted); }
+.cart-summary__desconto { color: var(--green); font-weight: 700; }
+.cart-page__cupom {
+  display: flex; gap: .5rem; margin: 1rem 0 .25rem;
+}
+.cart-page__cupom input {
+  flex: 1; min-width: 0; padding: .55rem .7rem;
+  background: var(--bg-card2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text); font-size: .85rem;
+}
+.cart-page__cupom .btn { white-space: nowrap; }
+.cart-summary__cupom-msg {
+  font-size: .78rem; margin: 0 0 .75rem; min-height: 1em;
+}
+.cart-summary__cupom-msg--ok { color: var(--green); }
+.cart-summary__cupom-msg--erro { color: var(--danger); }
 .cart-page__summary-total {
   display: flex; justify-content: space-between; align-items: center;
   padding-top: 1rem; border-top: 1px solid var(--border);
