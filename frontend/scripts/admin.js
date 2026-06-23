@@ -1446,6 +1446,7 @@ function renderPedidos() {
                   ${p.telefone_cliente ? `
                   <a href="https://wa.me/55${p.telefone_cliente.replace(/\D/g,'')}" target="_blank"
                      class="btn btn--whatsapp btn--sm" title="Contatar cliente"></a>` : ''}
+                  <button class="btn btn--danger btn--sm" onclick="excluirPedido(${p.id})" title="Excluir pedido">Excluir</button>
                 </div>
               </td>
             </tr>
@@ -1482,6 +1483,18 @@ async function salvarRastreioPedido(id) {
     showToast(`Rastreio do pedido #${id} salvo!`);
   } catch(e) {
     showToast('Erro ao salvar rastreio');
+  }
+}
+
+async function excluirPedido(id) {
+  if (!confirm(`Excluir o pedido #${id}? Essa ação não pode ser desfeita.`)) return;
+  try {
+    await api.delete(`/pedidos/${id}`);
+    pedidosCache = pedidosCache.filter(p => String(p.id) !== String(id));
+    showToast(`Pedido #${id} excluído.`);
+    renderPedidos();
+  } catch(e) {
+    showToast(e.message || 'Erro ao excluir pedido', 'error');
   }
 }
 

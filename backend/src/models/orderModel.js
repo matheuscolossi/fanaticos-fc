@@ -49,11 +49,16 @@ function updateTracking(orderId, { status, codigo_rastreio }) {
   );
 }
 
+function remove(orderId) {
+  return run('DELETE FROM pedidos WHERE id = ?', [orderId]);
+}
+
 module.exports = {
   create,
   exists,
   findTrackingById,
   list,
   listByUser,
+  remove,
   updateTracking,
 };

@@ -88,8 +88,17 @@ async function updateOrder(orderId, data) {
   return { message: 'Order updated.' };
 }
 
+async function deleteOrder(orderId) {
+  const existingOrder = await orderModel.exists(orderId);
+  if (!existingOrder) throw createHttpError(404, 'Order not found.', 'ORDER_NOT_FOUND');
+
+  await orderModel.remove(orderId);
+  return { message: 'Order deleted.' };
+}
+
 module.exports = {
   createOrder,
+  deleteOrder,
   getTrackingById,
   listOrders,
   listOrdersByUser,

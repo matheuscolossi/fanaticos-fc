@@ -10,6 +10,7 @@ module.exports = ({ adminMiddleware, authMiddleware }) => {
   router.get('/meus', authMiddleware, asyncHandler(controller.myOrders));
   router.get('/:id/rastreio', asyncHandler(controller.tracking));
   router.put('/:id', adminMiddleware, asyncHandler(controller.update));
+  router.delete('/:id', adminMiddleware, asyncHandler(controller.destroy));
 
   return router;
 };

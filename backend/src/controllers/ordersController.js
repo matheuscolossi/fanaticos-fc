@@ -1,6 +1,7 @@
 const { sendCreated } = require('../utils/http');
 const {
   createOrder,
+  deleteOrder,
   getTrackingById,
   listOrders,
   listOrdersByUser,
@@ -27,7 +28,12 @@ async function update(req, res) {
   res.json(await updateOrder(req.params.id, req.body));
 }
 
+async function destroy(req, res) {
+  res.json(await deleteOrder(req.params.id));
+}
+
 module.exports = {
+  destroy,
   index,
   myOrders,
   store,
