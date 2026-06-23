@@ -11,7 +11,7 @@ const {
 function buildAuthController(jwtSecret) {
   return {
     async register(req, res) {
-      sendCreated(res, await registerUser(req.body));
+      sendCreated(res, await registerUser(req.body, jwtSecret));
     },
 
     async login(req, res) {

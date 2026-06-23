@@ -34,7 +34,7 @@ async function enviarCodigoParaUsuario(user) {
   }
 }
 
-async function registerUser({ nome, email, senha, cpf, telefone }) {
+async function registerUser({ nome, email, senha, cpf, telefone }, jwtSecret) {
   if (!nome || !email || !senha || !cpf || !telefone) {
     throw createHttpError(400, 'Nome, email, senha, CPF e telefone são obrigatórios.', 'VALIDATION_ERROR');
   }
@@ -46,7 +46,18 @@ async function registerUser({ nome, email, senha, cpf, telefone }) {
   const result = await userModel.create({ nome, email, senha: passwordHash, cpf, telefone });
   const userId = result.lastID;
 
-  await enviarCodigoParaUsuario({ id: userId, email });
+  try {
+    await enviarCodigoParaUsuario({ id: userId, email });
+  } catch (err) {
+    // Não bloqueia o cadastro se o envio falhar (ex.: domínio ainda não
+    // verificado na Resend, que só permite enviar para o próprio e-mail da
+    // conta em modo sandbox) — libera o login direto pra não travar clientes reais.
+    console.error('[auth:register:email-failed]', err.message);
+    const user = await userModel.findById(userId);
+    const publicUser = toPublicUser(user);
+    const token = jwt.sign(publicUser, jwtSecret, { expiresIn: '7d' });
+    return { message: 'User created.', id: userId, requiresVerification: false, token, user: publicUser };
+  }
 
   return { message: 'User created. Verification code sent.', id: userId, requiresVerification: true };
 }

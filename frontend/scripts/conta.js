@@ -476,7 +476,17 @@ async function doRegister() {
   const btn = document.getElementById('btnRegSubmit');
   btn.disabled = true; btn.textContent = 'Criando...';
   try {
-    await api.post('/auth/register', { nome, email, senha, cpf, telefone });
+    const res = await api.post('/auth/register', { nome, email, senha, cpf, telefone });
+    if (res.requiresVerification === false && res.token) {
+      // Não foi possível enviar o código (ex.: domínio ainda não verificado
+      // na Resend) — entra direto, sem travar o cadastro.
+      localStorage.setItem('fc_token', res.token);
+      localStorage.setItem('fc_user', JSON.stringify(res.user));
+      showToast(`Conta criada! Bem-vindo, ${res.user.nome.split(' ')[0]}!`);
+      contaTab = 'pedidos';
+      renderContaPage();
+      return;
+    }
     showToast('Conta criada! Enviamos um código para seu e-mail.');
     renderContaVerification(email);
   } catch (e) {
