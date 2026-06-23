@@ -293,18 +293,29 @@ async function renderCheckoutStep1() {
     </div>
   `;
 
-  // Pré-preenche com dados salvos do usuário
+  // Pré-preenche com os dados salvos do usuário. O cache local (fc_user) só
+  // tem nome/email (é o que o /auth/login devolve) — telefone e endereço só
+  // existem no perfil completo, então busca direto na API pra não pedir de novo.
+  const preencher = (saved) => {
+    if (!saved) return;
+    if (saved.nome)         document.getElementById('co_nome').value = saved.nome;
+    if (saved.telefone)     document.getElementById('co_telefone').value = saved.telefone;
+    if (saved.email)        document.getElementById('co_email').value = saved.email;
+    if (saved.endereco_rua) document.getElementById('co_endereco').value = saved.endereco_rua;
+    if (saved.cidade)       document.getElementById('co_cidade').value = saved.cidade;
+    if (saved.cep)          document.getElementById('co_cep').value = saved.cep;
+  };
   try {
-    const saved = JSON.parse(localStorage.getItem('fc_user') || 'null');
-    if (saved) {
-      if (saved.nome)         document.getElementById('co_nome').value = saved.nome;
-      if (saved.telefone)     document.getElementById('co_telefone').value = saved.telefone;
-      if (saved.email)        document.getElementById('co_email').value = saved.email;
-      if (saved.endereco_rua) document.getElementById('co_endereco').value = saved.endereco_rua;
-      if (saved.cidade)       document.getElementById('co_cidade').value = saved.cidade;
-      if (saved.cep)          document.getElementById('co_cep').value = saved.cep;
-    }
+    preencher(JSON.parse(localStorage.getItem('fc_user') || 'null'));
   } catch(_) {}
+  try {
+    const perfil = await api.get('/auth/perfil');
+    preencher(perfil);
+    const user = JSON.parse(localStorage.getItem('fc_user') || '{}');
+    localStorage.setItem('fc_user', JSON.stringify({ ...user, ...perfil }));
+  } catch(_) {
+    // sem conexão ou não logado: mantém o que já foi preenchido do cache local
+  }
 
   const btnFechar = document.getElementById('btnFecharCheckout');
   const btnConfirmar = document.getElementById('btnConfirmarPedido');
