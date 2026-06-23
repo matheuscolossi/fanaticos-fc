@@ -475,6 +475,12 @@ select option { background: var(--bg-card2); }
 }
 .filtros__row--preco { gap: .6rem; }
 .input-preco { width: 110px !important; flex-shrink: 0; }
+.input-preco::-webkit-outer-spin-button,
+.input-preco::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.input-preco { -moz-appearance: textfield; appearance: textfield; }
 
 /* ══════════ PRODUCTS GRID ══════════ */
 .produtos-grid {
