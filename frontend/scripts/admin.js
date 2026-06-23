@@ -1766,11 +1766,32 @@ function toggleDropdown(id) {
   if (!dd) return;
   const isOpen = dd.classList.contains('open');
   closeAllDropdowns();
-  if (!isOpen) dd.classList.add('open');
+  if (isOpen) return;
+
+  // O menu usa position:fixed (calculado aqui) em vez de absolute porque, na
+  // vista por ligas, o accordion (.time-section) tem overflow:hidden para
+  // arredondar os cantos — isso cortava o dropdown ao abrir perto da borda.
+  const btn = dd.querySelector('button');
+  const menu = dd.querySelector('.action-dropdown__menu');
+  dd.classList.add('open');
+  if (btn && menu) {
+    const rect = btn.getBoundingClientRect();
+    const menuWidth = menu.offsetWidth || 160;
+    const maxLeft = window.innerWidth - menuWidth - 4;
+    const left = Math.max(4, Math.min(rect.right - menuWidth, maxLeft));
+    menu.style.position = 'fixed';
+    menu.style.top = `${rect.bottom + 4}px`;
+    menu.style.left = `${left}px`;
+    menu.style.right = 'auto';
+  }
 }
 
 function closeAllDropdowns() {
-  document.querySelectorAll('.action-dropdown.open').forEach(d => d.classList.remove('open'));
+  document.querySelectorAll('.action-dropdown.open').forEach(d => {
+    d.classList.remove('open');
+    const menu = d.querySelector('.action-dropdown__menu');
+    if (menu) { menu.style.position = ''; menu.style.top = ''; menu.style.left = ''; menu.style.right = ''; }
+  });
 }
 
 // ── Cupons ────────────────────────────────────────────────────────────────────
