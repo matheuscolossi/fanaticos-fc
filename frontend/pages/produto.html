@@ -4,11 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Produto - Fanáticos Mantos</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/images/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/images/favicon-16.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="/assets/images/favicon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../styles/global.css" />
-  <link rel="stylesheet" href="../styles/loja.css" />
+  <link rel="stylesheet" href="/styles/global.css" />
+  <link rel="stylesheet" href="/styles/loja.css" />
   <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('fc_theme') || 'dark');</script>
 </head>
 <body>
@@ -19,8 +22,8 @@
       </a>
       <nav class="nav">
         <a href="/" class="nav__link">Loja</a>
-        <a href="carrinho.html" class="nav__link">Carrinho</a>
-        <a href="conta.html" class="nav__link">Minha Conta</a>
+        <a href="/pages/carrinho.html" class="nav__link">Carrinho</a>
+        <a href="/pages/conta.html" class="nav__link">Minha Conta</a>
       </nav>
       <div class="header__actions">
         <button class="btn-icon" id="btnCart" aria-label="Carrinho">
@@ -37,7 +40,7 @@
 
   <main class="produto-page">
     <div class="container">
-      <a href="../index.html#catalogo" class="produto-back">← Voltar para o catálogo</a>
+      <a href="/#catalogo" class="produto-back">← Voltar para o catálogo</a>
       <section id="produtoContent" class="produto-shell">
         <div class="loading-state">
           <div class="spinner"></div>
@@ -77,8 +80,8 @@
     </div>
   </div>
 
-  <script src="../scripts/api.js"></script>
-  <script src="../scripts/cart.js"></script>
-  <script src="../scripts/produto.js"></script>
+  <script src="/scripts/api.js"></script>
+  <script src="/scripts/cart.js"></script>
+  <script src="/scripts/produto.js"></script>
 </body>
 </html>
