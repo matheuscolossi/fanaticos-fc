@@ -13,7 +13,6 @@
 .sidebar {
   background: #111;
   border-right: 1px solid var(--border);
-  min-height: 100%;
 }
 .sidebar__inner {
   display: flex; flex-direction: column;
