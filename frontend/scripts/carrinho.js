@@ -230,16 +230,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Ícone do carrinho vai para a própria página (já está aqui)
   document.getElementById('btnCart')?.addEventListener('click', () => {
-    window.location.href = 'carrinho.html';
+    window.location.href = '/carrinho';
   });
 
   // Botão de usuário
   document.getElementById('btnUser')?.addEventListener('click', () => {
-    const raw = localStorage.getItem('fc_user');
-    if (raw) {
-      window.location.href = 'conta.html';
-    } else {
-      window.location.href = 'conta.html';
-    }
+    window.location.href = '/pages/conta.html';
   });
 });
