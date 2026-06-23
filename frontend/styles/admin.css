@@ -13,6 +13,9 @@
 .sidebar {
   background: #111;
   border-right: 1px solid var(--border);
+  min-height: 100%;
+}
+.sidebar__inner {
   display: flex; flex-direction: column;
   position: sticky; top: 0; height: 100vh;
 }
@@ -587,14 +590,17 @@ td { padding: .85rem 1rem; color: var(--text); vertical-align: middle; }
 @media (max-width: 900px) {
   .admin-body { grid-template-columns: 1fr; }
   .sidebar {
+    min-height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar__inner {
     position: sticky;
     top: 0;
     z-index: 120;
     height: auto;
     max-height: none;
     overflow: visible;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
   }
   .sidebar__logo {
     justify-content: flex-start;
