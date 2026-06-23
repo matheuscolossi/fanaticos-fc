@@ -1282,7 +1282,7 @@ function verDetalhesPedido(id) {
     <div class="modal modal--checkout" style="margin:auto;width:100%;max-width:580px">
       <div class="co-header">
         <h2>Pedido #${p.id}</h2>
-        <button class="modal__close" id="_btnFecharDetalhe">Fechar</button>
+        <button class="modal__close" id="_btnFecharDetalhe">×</button>
       </div>
 
       <div style="padding:0 1.25rem 1.25rem">
