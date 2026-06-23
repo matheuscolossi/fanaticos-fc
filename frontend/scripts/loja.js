@@ -1,3 +1,12 @@
+function produtoUrl(p) {
+  // Abrindo direto do disco (file://) o rewrite /p/nome/:id da Vercel não existe — usa o link relativo.
+  if (window.location.protocol === 'file:') {
+    return `pages/produto.html?id=${encodeURIComponent(p.id)}`;
+  }
+  const slug = normalizeText(p.nome).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return `/p/${slug}/${p.id}`;
+}
+
 let allProdutos = [];
 let categorias = [];
 let catAtiva = '';
@@ -104,7 +113,7 @@ function produtoCardSafe(p) {
 
   card.addEventListener('click', () => {
     try { sessionStorage.setItem('fc_produto_cache', JSON.stringify(p)); } catch (_) {}
-    window.location.href = `pages/produto.html?id=${encodeURIComponent(p.id)}`;
+    window.location.href = produtoUrl(p);
   });
   card.querySelector('.produto-card__btn').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -434,17 +443,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' });
   });
 
-  // Auto-filtro por time via parâmetro de URL (?time=Flamengo)
+  // Auto-filtro via parâmetros de URL: ?time=Flamengo (interno) ou
+  // ?query=&cat= (padrão exigido em /busca pelo trabalho da faculdade)
   const urlParams = new URLSearchParams(window.location.search);
   const timeParam = urlParams.get('time');
-  if (timeParam) {
+  const queryParam = urlParams.get('query');
+  const catParam = urlParams.get('cat');
+  const termoBusca = timeParam || queryParam;
+
+  if (termoBusca || catParam) {
     const inputBusca = document.getElementById('inputBusca');
-    if (inputBusca) {
-      inputBusca.value = timeParam;
-      applyFilters();
-      setTimeout(() => {
-        document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' });
-      }, 300);
+    if (inputBusca && termoBusca) inputBusca.value = termoBusca;
+
+    let categoriaEncontrada = null;
+    if (catParam) {
+      categoriaEncontrada = categorias.find(
+        c => String(c.id) === String(catParam) || c.nome.toLowerCase() === catParam.toLowerCase()
+      );
     }
+
+    if (categoriaEncontrada) filterByCategory(categoriaEncontrada.id);
+    else applyFilters();
+
+    setTimeout(() => {
+      document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' });
+    }, 300);
   }
 });

@@ -4,7 +4,11 @@ let imagemAtual = 0;
 const TAMANHOS = ['P', 'M', 'G', 'GG', 'XG', '2XG'];
 
 function produtoIdFromUrl() {
-  return new URLSearchParams(window.location.search).get('id');
+  const fromQuery = new URLSearchParams(window.location.search).get('id');
+  if (fromQuery) return fromQuery;
+  // Fallback: URL no padrão /p/nome/:id (rewrite da Vercel para a URL "bonita")
+  const match = window.location.pathname.match(/\/p\/[^/]+\/(\d+)/);
+  return match ? match[1] : null;
 }
 
 function isGooglePhotosLink(url) {

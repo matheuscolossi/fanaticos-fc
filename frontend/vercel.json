@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/busca", "destination": "/index.html" },
+    { "source": "/carrinho", "destination": "/pages/carrinho.html" },
+    { "source": "/p/:nome/:id", "destination": "/pages/produto.html" }
+  ]
+}
