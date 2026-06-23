@@ -386,7 +386,7 @@ select option { background: var(--bg-card2); }
 }
 .hero__title {
   font-family: var(--font-display); font-size: clamp(5rem, 14vw, 11rem);
-  line-height: .9; color: var(--white);
+  line-height: .9; color: #ffffff;
   text-shadow: 0 0 80px rgba(255,107,0,0.1);
   margin-bottom: 1.5rem;
   padding-top: .35em;
