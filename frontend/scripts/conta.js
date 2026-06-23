@@ -262,7 +262,7 @@ async function renderPerfilTab() {
           </div>
           <div class="co-form-group">
             <label>Nova senha</label>
-            <input type="password" id="novaSenha" placeholder="Mínimo 6 caracteres" />
+            <input type="password" id="novaSenha" placeholder="Mín. 8 caracteres, com letras e números" />
           </div>
         </div>
         <p id="senhaMsg" class="perfil-msg" style="display:none"></p>
@@ -336,7 +336,8 @@ async function renderPerfilTab() {
     const senhaAtual = document.getElementById('senhaAtual').value;
     const novaSenha  = document.getElementById('novaSenha').value;
     if (!senhaAtual || !novaSenha) { showToast('Preencha os dois campos de senha.', 'error'); return; }
-    if (novaSenha.length < 6) { showToast('A nova senha deve ter pelo menos 6 caracteres.', 'error'); return; }
+    const erroSenha = erroSenhaFraca(novaSenha);
+    if (erroSenha) { showToast(erroSenha, 'error'); return; }
     const btn = document.getElementById('btnAlterarSenha');
     btn.disabled = true; btn.textContent = 'Alterando...';
     try {
@@ -385,7 +386,7 @@ function renderContaLogin() {
           <label>Telefone</label>
           <input type="tel" id="regTelefone" placeholder="(00) 99999-9999" maxlength="15" />
           <label>Senha</label>
-          <input type="password" id="regSenha" placeholder="Mínimo 6 caracteres" />
+          <input type="password" id="regSenha" placeholder="Mín. 8 caracteres, com letras e números" />
           <label>Confirmar senha</label>
           <input type="password" id="regSenhaConf" placeholder="Repita a senha" />
           <p id="regError" class="auth-error" style="display:none"></p>
@@ -467,8 +468,9 @@ async function doRegister() {
     errEl.style.display = 'block';
     return;
   }
-  if (senha.length < 6) {
-    errEl.textContent = 'A senha deve ter no mínimo 6 caracteres.';
+  const erroSenha = erroSenhaFraca(senha);
+  if (erroSenha) {
+    errEl.textContent = erroSenha;
     errEl.style.display = 'block';
     return;
   }

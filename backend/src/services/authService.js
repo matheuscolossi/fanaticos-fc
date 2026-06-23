@@ -23,6 +23,15 @@ function codigoExpiraEm() {
   return new Date(Date.now() + CODE_TTL_MINUTES * 60 * 1000).toISOString();
 }
 
+function validarForcaSenha(senha) {
+  if (senha.length < 8) {
+    throw createHttpError(400, 'A senha deve ter no mínimo 8 caracteres.', 'WEAK_PASSWORD');
+  }
+  if (!/[a-zA-Z]/.test(senha) || !/[0-9]/.test(senha)) {
+    throw createHttpError(400, 'A senha deve conter letras e números.', 'WEAK_PASSWORD');
+  }
+}
+
 async function enviarCodigoParaUsuario(user) {
   const codigo = gerarCodigo();
   await userModel.setVerificationCode(user.id, codigo, codigoExpiraEm());
@@ -38,6 +47,7 @@ async function registerUser({ nome, email, senha, cpf, telefone }, jwtSecret) {
   if (!nome || !email || !senha || !cpf || !telefone) {
     throw createHttpError(400, 'Nome, email, senha, CPF e telefone são obrigatórios.', 'VALIDATION_ERROR');
   }
+  validarForcaSenha(senha);
 
   const existingUser = await userModel.findByEmail(email);
   if (existingUser) throw createHttpError(409, 'Email already registered.', 'EMAIL_ALREADY_EXISTS');
@@ -122,6 +132,7 @@ async function updateProfile(userId, data) {
     if (!bcrypt.compareSync(data.senhaAtual, user.senha)) {
       throw createHttpError(401, 'Current password is incorrect.', 'INVALID_CURRENT_PASSWORD');
     }
+    validarForcaSenha(data.novaSenha);
 
     const passwordHash = bcrypt.hashSync(data.novaSenha, 10);
     await userModel.updateNameAndPassword(userId, { nome: data.nome || user.nome, senha: passwordHash });

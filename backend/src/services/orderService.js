@@ -1,5 +1,6 @@
 const orderModel = require('../models/orderModel');
 const productModel = require('../models/productModel');
+const userModel = require('../models/userModel');
 const couponService = require('../services/couponService');
 const { createHttpError } = require('../utils/http');
 
@@ -30,6 +31,11 @@ async function createOrder(data) {
   const { itens, total, usuario_id, nome_cliente, email_cliente, telefone_cliente, endereco, metodo_pagamento, cupom_codigo } = data;
   if (!Array.isArray(itens) || itens.length === 0 || !Number(total)) {
     throw createHttpError(400, 'Order items and total are required.', 'VALIDATION_ERROR');
+  }
+
+  const usuario = await userModel.findPublicById(usuario_id);
+  if (usuario && usuario.perfil !== 'admin' && !usuario.email_verificado) {
+    throw createHttpError(403, 'Confirme seu e-mail antes de finalizar uma compra.', 'EMAIL_NOT_VERIFIED');
   }
 
   let totalFinal = Number(total);

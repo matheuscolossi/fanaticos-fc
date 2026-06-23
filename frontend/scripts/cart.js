@@ -397,12 +397,23 @@ async function confirmarPedido() {
       if (typeof res.total === 'number') total = res.total; // recalculado pelo backend quando há cupom
     } catch(apiErr) {
       console.warn('[checkout:order:create:error]', apiErr);
+      if (btn) { btn.disabled = false; btn.textContent = 'Confirmar pedido'; }
+
       // Cupom inválido/expirado/esgotado: o sistema deve impedir o uso, então bloqueia o checkout
       if (cupomCodigo && apiErr.code?.startsWith('COUPON_')) {
         showToast(apiErr.message || 'Cupom inválido para este pedido.', 'error');
-        if (btn) { btn.disabled = false; btn.textContent = 'Confirmar pedido'; }
         return;
       }
+      // Conta criada antes da verificação por e-mail existir, ou que nunca confirmou:
+      // oferece confirmar agora mesmo, sem perder os dados já preenchidos no checkout.
+      if (apiErr.code === 'EMAIL_NOT_VERIFIED') {
+        showToast('Confirme seu e-mail para finalizar a compra.', 'error');
+        try { await api.post('/auth/reenviar-codigo', { email }); } catch (_) {}
+        renderCheckoutVerification(email, { nome, telefone, email, endRua, cidade, cep, metodo });
+        return;
+      }
+      showToast(apiErr.message || 'Erro ao criar pedido. Tente novamente.', 'error');
+      return;
     }
 
     // Captura itens antes de limpar (para mensagem WhatsApp)
@@ -437,6 +448,75 @@ async function confirmarPedido() {
     const btn = document.getElementById('btnConfirmarPedido');
     if (btn) { btn.disabled = false; btn.textContent = 'Confirmar pedido'; }
   }
+}
+
+// Conta logada nunca confirmou o e-mail (ex.: criada antes dessa verificação
+// existir). Mostra o mesmo passo de código do cadastro, sem perder os dados
+// já digitados no formulário de checkout.
+function renderCheckoutVerification(email, dadosForm) {
+  const content = document.getElementById('checkoutContent');
+  content.innerHTML = `
+    <div class="co-header">
+      <h2>Confirme seu e-mail</h2>
+      <button class="modal__close" id="btnFecharCheckout">×</button>
+    </div>
+    <div class="co-form">
+      <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:.5rem">
+        Para sua segurança, confirme o código de 6 dígitos enviado para <strong>${email}</strong> antes de finalizar a compra.
+      </p>
+      <label>Código de verificação</label>
+      <input type="text" id="verifCodigoCheckout" placeholder="000000" maxlength="6" inputmode="numeric" style="letter-spacing:6px;font-size:1.2rem;text-align:center" />
+      <p id="verifErrorCheckout" class="auth-error" style="display:none"></p>
+      <button class="btn btn--primary co-btn-submit" id="btnVerifSubmitCheckout">Confirmar código</button>
+      <button class="btn btn--outline" id="btnVerifReenviarCheckout" style="margin-top:.5rem">Reenviar código</button>
+    </div>
+  `;
+
+  document.getElementById('btnFecharCheckout').addEventListener('click', closeCheckoutModal);
+  document.getElementById('verifCodigoCheckout')?.addEventListener('input', (e) => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+  });
+  document.getElementById('verifCodigoCheckout')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('btnVerifSubmitCheckout').click();
+  });
+
+  document.getElementById('btnVerifSubmitCheckout').addEventListener('click', async () => {
+    const codigo = document.getElementById('verifCodigoCheckout').value.trim();
+    const errEl = document.getElementById('verifErrorCheckout');
+    if (codigo.length !== 6) {
+      errEl.textContent = 'Informe os 6 dígitos do código.';
+      errEl.style.display = 'block';
+      return;
+    }
+    try {
+      await api.post('/auth/verificar-email', { email, codigo });
+      showToast('E-mail confirmado! Finalizando seu pedido...');
+      await renderCheckoutStep1();
+      const ids = { nome: 'co_nome', telefone: 'co_telefone', email: 'co_email', endRua: 'co_endereco', cidade: 'co_cidade', cep: 'co_cep' };
+      for (const [campo, id] of Object.entries(ids)) {
+        const el = document.getElementById(id);
+        if (el && dadosForm[campo]) el.value = dadosForm[campo];
+      }
+      if (dadosForm.metodo === 'whatsapp') {
+        document.querySelector('input[name="co_pagamento"][value="whatsapp"]').checked = true;
+      }
+    } catch (e) {
+      errEl.textContent = e.message;
+      errEl.style.display = 'block';
+    }
+  });
+
+  document.getElementById('btnVerifReenviarCheckout').addEventListener('click', async () => {
+    const btn = document.getElementById('btnVerifReenviarCheckout');
+    btn.disabled = true; btn.textContent = 'Enviando...';
+    try {
+      await api.post('/auth/reenviar-codigo', { email });
+      showToast('Código reenviado para seu e-mail.');
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
+    btn.disabled = false; btn.textContent = 'Reenviar código';
+  });
 }
 
 // ── PIX OVERLAY (criado dinamicamente, imune a interferências) ────────────────

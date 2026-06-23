@@ -90,6 +90,13 @@ function maskCep(value) {
   return value.replace(/\D/g, '').slice(0, 8).replace(/(\d{5})(\d{0,3})/, '$1-$2').replace(/-$/, '');
 }
 
+// Mesma regra validada no backend (authService.js) — mín. 8 caracteres, letras e números.
+function erroSenhaFraca(senha) {
+  if (senha.length < 8) return 'A senha deve ter no mínimo 8 caracteres.';
+  if (!/[a-zA-Z]/.test(senha) || !/[0-9]/.test(senha)) return 'A senha deve conter letras e números.';
+  return null;
+}
+
 // --- CEP (ViaCEP) -----------------------------------------------------------
 (function () {
   const saved = localStorage.getItem('fc_theme') || 'dark';

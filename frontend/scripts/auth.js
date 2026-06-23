@@ -49,7 +49,7 @@ function openAuthModal(defaultTab = 'login') {
       <label>Telefone</label>
       <input type="tel" id="regTelefone" placeholder="(00) 99999-9999" maxlength="15" />
       <label>Senha</label>
-      <input type="password" id="regSenha" placeholder="Mínimo 6 caracteres" />
+      <input type="password" id="regSenha" placeholder="Mín. 8 caracteres, com letras e números" />
       <label>Confirmar senha</label>
       <input type="password" id="regSenhaConf" placeholder="Repita a senha" />
       <p id="regError" class="auth-error" style="display:none"></p>
@@ -123,8 +123,9 @@ function openAuthModal(defaultTab = 'login') {
       errEl.style.display = 'block';
       return;
     }
-    if (senha.length < 6) {
-      errEl.textContent = 'A senha deve ter no mínimo 6 caracteres.';
+    const erroSenha = erroSenhaFraca(senha);
+    if (erroSenha) {
+      errEl.textContent = erroSenha;
       errEl.style.display = 'block';
       return;
     }
