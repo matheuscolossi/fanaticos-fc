@@ -2185,6 +2185,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!e.target.closest('.action-dropdown')) closeAllDropdowns();
   });
 
+  // O menu usa position:fixed (ver toggleDropdown), então não acompanha o
+  // scroll/resize sozinho — fecha para não ficar "flutuando" sobre outras linhas.
+  window.addEventListener('scroll', () => closeAllDropdowns(), true);
+  window.addEventListener('resize', () => closeAllDropdowns());
+
   // Auto-slug from nome
   document.getElementById('pNome')?.addEventListener('input', (e) => {
     if (_slugDirty) return;
