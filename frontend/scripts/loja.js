@@ -171,7 +171,7 @@ function clearFilters() {
   document.getElementById('precoMin').value = '';
   document.getElementById('precoMax').value = '';
   const sel = document.getElementById('selectOrdem');
-  if (sel) sel.value = 'recente';
+  if (sel) sel.value = 'az';
   catAtiva = '';
   document.querySelectorAll('.cat-btn').forEach(b => b.classList.toggle('active', b.dataset.cat === ''));
   document.querySelectorAll('.cat-nav-btn').forEach(b => b.classList.toggle('active', b.dataset.cat === ''));
@@ -302,7 +302,7 @@ function buildApiParams(page = 1) {
   const busca = document.getElementById('inputBusca')?.value.trim();
   const precoMin = document.getElementById('precoMin')?.value;
   const precoMax = document.getElementById('precoMax')?.value;
-  const ordem = document.getElementById('selectOrdem')?.value || 'recente';
+  const ordem = document.getElementById('selectOrdem')?.value || 'az';
   if (busca) params.set('busca', busca);
   if (catAtiva) params.set('categoria', catAtiva);
   if (precoMin) params.set('precoMin', precoMin);

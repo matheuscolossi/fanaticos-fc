@@ -380,8 +380,14 @@ function renderContaLogin() {
           <input type="text" id="regNome" placeholder="Seu nome" />
           <label>E-mail</label>
           <input type="email" id="regEmail" placeholder="seu@email.com" />
+          <label>CPF</label>
+          <input type="text" id="regCpf" placeholder="000.000.000-00" maxlength="14" />
+          <label>Telefone</label>
+          <input type="tel" id="regTelefone" placeholder="(00) 99999-9999" maxlength="15" />
           <label>Senha</label>
           <input type="password" id="regSenha" placeholder="Mínimo 6 caracteres" />
+          <label>Confirmar senha</label>
+          <input type="password" id="regSenhaConf" placeholder="Repita a senha" />
           <p id="regError" class="auth-error" style="display:none"></p>
           <button class="btn btn--primary" id="btnRegSubmit">Criar Conta</button>
         </div>
@@ -408,6 +414,21 @@ function renderContaLogin() {
   document.getElementById('loginSenha').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
   document.getElementById('btnLoginSubmit').addEventListener('click', doLogin);
   document.getElementById('btnRegSubmit').addEventListener('click', doRegister);
+
+  document.getElementById('regCpf').addEventListener('input', (e) => {
+    let v = e.target.value.replace(/\D/g, '').slice(0, 11);
+    if (v.length > 9) v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4');
+    else if (v.length > 6) v = v.replace(/(\d{3})(\d{3})(\d{0,3})/, '$1.$2.$3');
+    else if (v.length > 3) v = v.replace(/(\d{3})(\d{0,3})/, '$1.$2');
+    e.target.value = v;
+  });
+
+  document.getElementById('regTelefone').addEventListener('input', (e) => {
+    let v = e.target.value.replace(/\D/g, '').slice(0, 11);
+    if (v.length > 6) v = v.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
+    else if (v.length > 2) v = v.replace(/(\d{2})(\d{0,5})/, '($1) $2');
+    e.target.value = v;
+  });
 }
 
 async function doLogin() {
@@ -432,26 +453,100 @@ async function doLogin() {
 }
 
 async function doRegister() {
-  const nome  = document.getElementById('regNome').value.trim();
-  const email = document.getElementById('regEmail').value.trim();
-  const senha = document.getElementById('regSenha').value;
+  const nome      = document.getElementById('regNome').value.trim();
+  const email     = document.getElementById('regEmail').value.trim();
+  const cpf       = document.getElementById('regCpf').value.trim();
+  const telefone  = document.getElementById('regTelefone').value.trim();
+  const senha     = document.getElementById('regSenha').value;
+  const senhaConf = document.getElementById('regSenhaConf').value;
   const errEl = document.getElementById('regError');
   errEl.style.display = 'none';
+
+  if (senha !== senhaConf) {
+    errEl.textContent = 'As senhas não coincidem.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (senha.length < 6) {
+    errEl.textContent = 'A senha deve ter no mínimo 6 caracteres.';
+    errEl.style.display = 'block';
+    return;
+  }
+
   const btn = document.getElementById('btnRegSubmit');
   btn.disabled = true; btn.textContent = 'Criando...';
   try {
-    await api.post('/auth/register', { nome, email, senha });
-    const data = await api.post('/auth/login', { email, senha });
-    localStorage.setItem('fc_token', data.token);
-    localStorage.setItem('fc_user', JSON.stringify(data.user));
-    showToast('Conta criada com sucesso! ');
-    contaTab = 'pedidos';
-    renderContaPage();
+    await api.post('/auth/register', { nome, email, senha, cpf, telefone });
+    showToast('Conta criada! Enviamos um código para seu e-mail.');
+    renderContaVerification(email);
   } catch (e) {
     errEl.textContent = e.message;
     errEl.style.display = 'block';
     btn.disabled = false; btn.textContent = 'Criar Conta';
   }
+}
+
+function renderContaVerification(email) {
+  const content = document.getElementById('contaContent');
+  content.innerHTML = `
+    <div class="conta-login">
+      <div class="conta-login__card">
+        <div class="auth-tabs">
+          <button class="auth-tab active" disabled>Confirme seu e-mail</button>
+        </div>
+        <div class="auth-form" style="display:flex">
+          <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:.5rem">
+            Enviamos um código de 6 dígitos para <strong>${email}</strong>. Confira sua caixa de entrada (e o spam).
+          </p>
+          <label>Código de verificação</label>
+          <input type="text" id="verifCodigo" placeholder="000000" maxlength="6" inputmode="numeric" style="letter-spacing:6px;font-size:1.2rem;text-align:center" />
+          <p id="verifError" class="auth-error" style="display:none"></p>
+          <button class="btn btn--primary" id="btnVerifSubmit">Confirmar código</button>
+          <button class="btn btn--outline" id="btnVerifReenviar" style="margin-top:.5rem">Reenviar código</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('verifCodigo')?.addEventListener('input', (e) => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+  });
+  document.getElementById('verifCodigo')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('btnVerifSubmit').click();
+  });
+
+  document.getElementById('btnVerifSubmit').addEventListener('click', async () => {
+    const codigo = document.getElementById('verifCodigo').value.trim();
+    const errEl = document.getElementById('verifError');
+    if (codigo.length !== 6) {
+      errEl.textContent = 'Informe os 6 dígitos do código.';
+      errEl.style.display = 'block';
+      return;
+    }
+    try {
+      const data = await api.post('/auth/verificar-email', { email, codigo });
+      localStorage.setItem('fc_token', data.token);
+      localStorage.setItem('fc_user', JSON.stringify(data.user));
+      showToast(`E-mail confirmado! Bem-vindo, ${data.user.nome.split(' ')[0]}!`);
+      contaTab = 'pedidos';
+      renderContaPage();
+    } catch (e) {
+      errEl.textContent = e.message;
+      errEl.style.display = 'block';
+    }
+  });
+
+  document.getElementById('btnVerifReenviar').addEventListener('click', async () => {
+    const btn = document.getElementById('btnVerifReenviar');
+    btn.disabled = true; btn.textContent = 'Enviando...';
+    try {
+      await api.post('/auth/reenviar-codigo', { email });
+      showToast('Código reenviado para seu e-mail.');
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
+    btn.disabled = false; btn.textContent = 'Reenviar código';
+  });
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
