@@ -620,6 +620,7 @@ async function loadProdutosAdmin() {
   try {
     const res = await api.get('/produtos?admin=true');
     allProdutosAdmin = Array.isArray(res) ? res : (res.produtos || []);
+    allProdutosAdmin.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
     filteredProdutos = [...allProdutosAdmin];
     currentPage = 1;
     renderTabelaProdutos();
@@ -1581,7 +1582,7 @@ function applyAdminFilters() {
   const q = normalizeText(document.getElementById('adminBusca')?.value || '');
   const statusFilter = document.getElementById('adminFiltroStatus')?.value || '';
   const tipoFilter   = document.getElementById('adminFiltroTipo')?.value   || '';
-  const ordem        = document.getElementById('adminOrdem')?.value         || 'recente';
+  const ordem        = document.getElementById('adminOrdem')?.value         || 'nome';
 
   let list = [...allProdutosAdmin];
   if (q) list = list.filter(p =>
@@ -1596,8 +1597,8 @@ function applyAdminFilters() {
     case 'preco_asc':  list.sort((a, b) => a.preco - b.preco); break;
     case 'preco_desc': list.sort((a, b) => b.preco - a.preco); break;
     case 'estoque':    list.sort((a, b) => a.estoque - b.estoque); break;
-    case 'nome':       list.sort((a, b) => (a.nome||'').localeCompare(b.nome||'','pt-BR')); break;
-    default:           list.sort((a, b) => b.id - a.id); break;
+    case 'recente':    list.sort((a, b) => b.id - a.id); break;
+    default:           list.sort((a, b) => (a.nome||'').localeCompare(b.nome||'','pt-BR')); break;
   }
 
   filteredProdutos = list;

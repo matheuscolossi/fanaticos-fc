@@ -1,73 +1,134 @@
 # Fanáticos FC
 
-E-commerce para venda de camisas de futebol, com vitrine pública, carrinho, autenticação de clientes, painel administrativo, gestão de produtos, pedidos e usuários.
+E-commerce de camisas de futebol, desenvolvido como Trabalho Individual da disciplina **Programação Web** (URI — Turma 2026/1, Prof. Douglas Tagliari). O projeto implementa front-end, APIs REST de back-end, persistência em banco relacional e documentação OpenAPI/Swagger, cobrindo o fluxo completo Home → Busca → Detalhes → Carrinho.
 
-O projeto foi reorganizado para separar claramente frontend e backend. No backend, a estrutura segue um padrão MVC com services, deixando rotas, controladores, regras de negócio e acesso a dados em camadas distintas.
+O backend segue um padrão em camadas (rotas → controllers → services → models), separado do frontend estático.
+
+## Sumário
+
+- [Tecnologias](#tecnologias)
+- [Estrutura de Arquivos](#estrutura-de-arquivos)
+- [Páginas do Front-end](#páginas-do-front-end)
+- [Instalação e Execução Local](#instalação-e-execução-local)
+- [Variáveis de Ambiente](#variáveis-de-ambiente)
+- [Documentação da API (Swagger/OpenAPI)](#documentação-da-api-swaggeropenapi)
+- [Rotas no formato do trabalho (Postman)](#rotas-no-formato-do-trabalho-postman)
+- [Rotas internas do site (`/api/*`)](#rotas-internas-do-site-api)
+- [Fluxo de Arquitetura](#fluxo-de-arquitetura)
+- [Keep-alive no Render (free tier)](#keep-alive-no-render-free-tier)
+- [Guia de Contribuição](#guia-de-contribuição)
+- [Credenciais Padrão](#credenciais-padrão)
 
 ## Tecnologias
 
 | Camada | Stack |
 | --- | --- |
-| Frontend | HTML5, CSS3, JavaScript |
+| Frontend | HTML5, CSS3, JavaScript (vanilla) |
 | Backend | Node.js, Express |
 | Banco de dados | PostgreSQL via `DATABASE_URL`; SQLite local como fallback |
 | Storage de imagens | Cloudinary, com fallback para URLs/Base64 em desenvolvimento |
-| Autenticação | JWT, bcryptjs |
+| Autenticação | JWT (`jsonwebtoken`), bcrypt (`bcryptjs`), HTTP Basic Auth nas rotas exigidas pelo trabalho |
+| Documentação | OpenAPI 3.0 servida via `swagger-ui-express` em `/docs` |
+| Deploy | Backend no Render, frontend no Vercel |
 
 ## Estrutura de Arquivos
 
 ```txt
 fanaticos-fc/
-├── README.md                         # Documentação principal do projeto
-├── .gitignore                        # Regras globais de versionamento
+├── README.md                          # Documentação principal do projeto
+├── .gitignore                         # Regras globais de versionamento
 ├── backend/
-│   ├── package.json                  # Dependências e scripts da API
-│   ├── package-lock.json             # Lockfile do npm
-│   ├── .env.example                  # Modelo das variáveis de ambiente
-│   ├── server.js                     # Bootstrap do Express
-│   ├── data/                         # Banco SQLite local gerado em runtime
-│   ├── uploads/                      # Uploads temporários fora do src
+│   ├── package.json                   # Dependências e scripts da API
+│   ├── package-lock.json              # Lockfile do npm
+│   ├── .env.example                   # Modelo das variáveis de ambiente
+│   ├── server.js                      # Bootstrap do Express, montagem das rotas e do /docs
+│   ├── data/                          # Banco SQLite local gerado em runtime
+│   ├── uploads/                       # Uploads temporários fora do src
 │   └── src/
 │       ├── config/
-│       │   └── database.js           # Conexão e schema SQLite/PostgreSQL
-│       ├── controllers/              # Entrada HTTP: req/res
+│       │   └── database.js            # Conexão e schema SQLite/PostgreSQL
+│       ├── controllers/                # Entrada HTTP: req/res
 │       │   ├── authController.js
+│       │   ├── cartController.js
 │       │   ├── categoriesController.js
+│       │   ├── couponsController.js
+│       │   ├── dashboardController.js
 │       │   ├── ordersController.js
 │       │   ├── productsController.js
 │       │   └── usersController.js
+│       ├── docs/
+│       │   └── openapi.js             # Spec OpenAPI 3.0 servida em /docs
 │       ├── middleware/
-│       │   └── auth.js               # Autenticação e autorização
-│       ├── models/                   # Acesso ao banco e SQL
+│       │   └── auth.js                # JWT (auth/admin) e HTTP Basic Auth
+│       ├── models/                    # Acesso ao banco e SQL
 │       │   ├── categoryModel.js
+│       │   ├── couponModel.js
 │       │   ├── orderModel.js
 │       │   ├── productModel.js
 │       │   └── userModel.js
-│       ├── routes/                   # Definição das rotas da API
+│       ├── routes/                    # Definição das rotas da API
 │       │   ├── authRoutes.js
 │       │   ├── categoryRoutes.js
+│       │   ├── couponRoutes.js
+│       │   ├── dashboardRoutes.js
 │       │   ├── orderRoutes.js
 │       │   ├── productRoutes.js
+│       │   ├── specRoutes.js          # Rotas "limpas" exigidas pelo PDF (/health, /products, ...)
 │       │   └── userRoutes.js
-│       ├── services/                 # Regras de negócio e integrações
+│       ├── services/                  # Regras de negócio e integrações
 │       │   ├── authService.js
-│       │   ├── imageService.js       # Cloudinary/storage de imagens
+│       │   ├── cartService.js         # Cálculo de subtotal/frete/desconto/total
+│       │   ├── categoryService.js
+│       │   ├── couponService.js
+│       │   ├── emailService.js        # Envio do código de verificação por e-mail
+│       │   ├── imageService.js        # Cloudinary/storage de imagens
 │       │   ├── orderService.js
-│       │   └── productService.js
+│       │   ├── productService.js
+│       │   └── userService.js
 │       ├── scripts/
-│       │   └── importProducts.js     # Importador de camisas
-│       ├── utils/
-│       │   └── http.js               # Helpers HTTP e tratamento de erro
-├── frontend/
-│   ├── index.html                    # Página inicial
-│   ├── pages/                        # Páginas estáticas da loja/admin
-│   ├── styles/                       # Estilos globais e por contexto
-│   ├── scripts/                      # JavaScript do frontend
-│   └── assets/
-│       └── images/                   # Imagens estáticas versionadas
+│       │   └── migrateImages.js       # Script utilitário de migração de imagens p/ Cloudinary
+│       └── utils/
+│           └── http.js                # Helpers HTTP e tratamento de erro
+└── frontend/
+    ├── index.html                     # Home (/)
+    ├── vercel.json                    # Rewrites de rotas (/busca, /carrinho, /p/:nome/:id)
+    ├── pages/
+    │   ├── admin.html                 # Painel administrativo (/admin)
+    │   ├── brasileirao.html
+    │   ├── carrinho.html              # Carrinho (/carrinho)
+    │   ├── conta.html                 # Login/cadastro/perfil do cliente
+    │   └── produto.html               # PDP (/p/:nome/:id)
+    ├── scripts/
+    │   ├── admin.js
+    │   ├── api.js                     # Wrapper de fetch para a API (API_BASE)
+    │   ├── auth.js
+    │   ├── carrinho.js
+    │   ├── cart.js
+    │   ├── conta.js
+    │   ├── loja.js
+    │   └── produto.js
+    ├── styles/
+    │   ├── admin.css
+    │   ├── global.css
+    │   └── loja.css
+    └── assets/
+        └── images/                   # Imagens estáticas versionadas (logo, favicons)
 ```
 
-## Instalação
+## Páginas do Front-end
+
+| Página | Rota | Descrição |
+| --- | --- | --- |
+| Home | `/` | Banner, menu de navegação, busca e vitrine com produtos em destaque |
+| Busca e Listagem | `/busca?query=blusa` | Busca por nome/atributos, com filtros e paginação |
+| Detalhes do Produto (PDP) | `/p/:nome/:id` | Dados completos do produto e ação "Adicionar ao carrinho" |
+| Carrinho | `/carrinho` | Itens, quantidade, subtotal, frete simulado, cupom e total |
+| Conta | `/pages/conta.html` | Cadastro, login e perfil do cliente |
+| Admin (bônus) | `/admin` | CRUD de produtos restrito a usuários com `isAdmin`/perfil `admin` |
+
+O carrinho é mantido no `LocalStorage` do navegador e sincronizado com os dados atualizados do banco via `POST /api/cart` / `POST /cart` a cada visita à página.
+
+## Instalação e Execução Local
 
 Clone o repositório:
 
@@ -89,23 +150,7 @@ Configure as variáveis de ambiente:
 cp .env.example .env
 ```
 
-Para desenvolvimento local, você pode deixar `DATABASE_URL` vazio/removido e a API usará SQLite em `backend/data/fanaticos.db`.
-
-Para dados compartilhados entre máquinas ou produção, configure um PostgreSQL externo:
-
-```env
-DATABASE_URL=postgres://usuario:senha@host:5432/database
-DB_SSL=true
-JWT_SECRET=troque_essa_chave_em_producao
-```
-
-Para imagens em storage/CDN, configure Cloudinary:
-
-```env
-CLOUDINARY_CLOUD_NAME=
-CLOUDINARY_API_KEY=
-CLOUDINARY_API_SECRET=
-```
+Para desenvolvimento local, você pode deixar `DATABASE_URL` vazio/removido — a API usará SQLite em `backend/data/fanaticos.db`. Para banco compartilhado/produção, configure um PostgreSQL externo (ver seção [Variáveis de Ambiente](#variáveis-de-ambiente)).
 
 Rode a API:
 
@@ -116,8 +161,12 @@ npm start
 A API ficará disponível em:
 
 ```txt
-http://localhost:3001/api
+http://localhost:3001
 ```
+
+- Rotas internas do site: `http://localhost:3001/api/...`
+- Rotas "limpas" exigidas pelo trabalho (Postman): `http://localhost:3001/health`, `/products`, `/product/:id`, `/search`, `/cart`
+- Documentação Swagger: `http://localhost:3001/docs`
 
 Abra o frontend diretamente no navegador ou use um servidor estático:
 
@@ -132,67 +181,210 @@ Depois acesse:
 http://localhost:5500
 ```
 
-## Importar Camisas
+> Por padrão o frontend aponta para a API em produção (`https://fanaticos-fc.onrender.com/api`). Para testar contra a API local, defina `window.FANATICOS_API_BASE = 'http://localhost:3001/api'` antes de carregar `scripts/api.js` (ex.: em um `<script>` no `index.html`).
 
-O importador de produtos fica em `backend/src/scripts/importProducts.js`.
+## Variáveis de Ambiente
 
-Edite o array `CONFIG.searches` dentro do arquivo para escolher os termos de busca, quantidade de páginas e categoria destino:
+Definidas em `backend/.env` (modelo em `backend/.env.example`):
 
-```js
-searches: [
-  { search: 'FORTALEZA', pages: 1, mapTo: 'Brasileirão' },
-]
-```
+| Variável | Descrição |
+| --- | --- |
+| `DATABASE_URL` | String de conexão PostgreSQL. Se omitida, usa SQLite local. |
+| `DB_SSL` | `true` para exigir SSL na conexão PostgreSQL (ex.: Neon, Render). |
+| `JWT_SECRET` | Chave usada para assinar/validar os tokens JWT. Obrigatória. |
+| `CORS_ORIGIN` | Lista de origens permitidas, separadas por vírgula. |
+| `DEFAULT_ADMIN_EMAIL` / `DEFAULT_ADMIN_PASSWORD` | Credenciais do admin criado automaticamente quando o banco está vazio. |
+| `BASIC_AUTH_USER` / `BASIC_AUTH_PASS` | Credenciais HTTP Basic Auth usadas em `POST /products` e `DELETE /product/:id` (rotas testadas via Postman). Se não definidas, caem para `DEFAULT_ADMIN_EMAIL`/`DEFAULT_ADMIN_PASSWORD`. |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Credenciais do Cloudinary para upload/armazenamento de imagens de produto. |
+| `RESEND_API_KEY` / `RESEND_FROM` | Credenciais do serviço de e-mail (verificação de cadastro). |
 
-Depois rode:
+## Documentação da API (Swagger/OpenAPI)
+
+A especificação OpenAPI 3.0 das rotas exigidas pelo trabalho (`/health`, `/products`, `/product/:id`, `/search`, `/cart`) está em [`backend/src/docs/openapi.js`](backend/src/docs/openapi.js) e é servida via Swagger UI:
+
+- Produção: **https://fanaticos-fc.onrender.com/docs**
+- Local: **http://localhost:3001/docs**
+
+## Rotas no formato do trabalho (Postman)
+
+Estas são as rotas REST **exigidas literalmente pelo PDF do trabalho**, montadas na raiz do servidor (sem prefixo `/api`) para facilitar os testes no Postman. Implementadas em [`backend/src/routes/specRoutes.js`](backend/src/routes/specRoutes.js).
+
+**Base URL (produção/Render):** `https://fanaticos-fc.onrender.com`
+**Base URL (local):** `http://localhost:3001`
+
+> O serviço gratuito do Render hiberna após ~15 min sem uso — a primeira requisição pode levar 30–50s (cold start). Veja [Keep-alive no Render](#keep-alive-no-render-free-tier).
+
+### `GET /health`
+
+Validação de funcionamento do serviço. Não exige autenticação nem banco pronto.
 
 ```bash
-cd backend
-npm run import:produtos
+curl https://fanaticos-fc.onrender.com/health
 ```
 
-Para testar sem salvar no banco:
+```json
+{ "status": "ok", "db": true, "timestamp": "2026-06-22T21:58:44.154Z" }
+```
+
+### `POST /products` — autenticado com Basic Auth
+
+Cadastra um produto, incluindo atributos (cor, tamanho, peso, descrição).
+
+No Postman: aba **Authorization** → tipo `Basic Auth` → usuário/senha definidos em `BASIC_AUTH_USER`/`BASIC_AUTH_PASS` (local padrão: `admin@fanaticosfc.com` / `admin123`).
 
 ```bash
-npm run import:produtos:dry
+curl -X POST https://fanaticos-fc.onrender.com/products \
+  -u admin@fanaticosfc.com:admin123 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nome": "Camisa Flamengo Home 25/26",
+    "preco": 299.9,
+    "cores": ["Vermelho", "Preto"],
+    "tamanhos": ["P", "M", "G"],
+    "peso": 0.3,
+    "descricao": "Camisa oficial titular.",
+    "categoria_id": 1
+  }'
 ```
 
-## Keep-alive no Render (free tier)
-
-O plano gratuito do Render hiberna o serviço após ~15 minutos sem requisições, causando um cold start de 30–50 segundos na primeira visita. Para evitar isso, configure um monitor externo que pinga a rota de saúde da API a cada 10 minutos.
-
-A rota já existe no backend:
-
-```
-GET https://fanaticos-fc.onrender.com/api/health
-→ { "status": "ok", "timestamp": "..." }
+```json
+// 201 Created
+{ "message": "Produto criado.", "id": 246 }
 ```
 
-### Configurar com UptimeRobot (gratuito)
+```json
+// 401 sem Basic Auth válido
+{ "error": "Basic auth credentials are required.", "code": "AUTH_BASIC_REQUIRED" }
+```
 
-1. Acesse [uptimerobot.com](https://uptimerobot.com) e crie uma conta gratuita.
-2. Clique em **Add New Monitor**.
-3. Preencha:
-   - **Monitor Type:** HTTP(s)
-   - **Friendly Name:** Fanáticos FC API
-   - **URL:** `https://fanaticos-fc.onrender.com/api/health`
-   - **Monitoring Interval:** 10 minutes
-4. Clique em **Create Monitor**.
+### `DELETE /product/:id` — autenticado com Basic Auth
 
-A partir daí o UptimeRobot pinga a API a cada 10 minutos, mantendo o servidor ativo 24h.
+Remove um produto específico pelo ID.
 
-### Alternativa: cron-job.org (gratuito)
+```bash
+curl -X DELETE https://fanaticos-fc.onrender.com/product/246 \
+  -u admin@fanaticosfc.com:admin123
+```
 
-1. Acesse [cron-job.org](https://cron-job.org) e crie uma conta.
-2. Clique em **Create cronjob**.
-3. Preencha:
-   - **URL:** `https://fanaticos-fc.onrender.com/api/health`
-   - **Schedule:** Every 10 minutes
-4. Salve.
+```json
+// 200
+{ "message": "Produto excluído." }
+```
 
-### Alternativa paga
+```json
+// 404
+{ "error": "Produto não encontrado.", "code": "PRODUCT_NOT_FOUND" }
+```
 
-Faça upgrade para o plano **Starter** do Render (US$ 7/mês) e o serviço nunca hiberna.
+### `GET /product/:id`
+
+Detalhe completo do produto.
+
+```bash
+curl https://fanaticos-fc.onrender.com/product/244
+```
+
+```json
+{
+  "id": 244,
+  "nome": "Venezia Third 25-26 Torcedor",
+  "preco": "179.99",
+  "descricao": "Camisa oficial torcedor.",
+  "cores": ["Verde", "Preto"],
+  "tamanhos": ["P", "M", "G"],
+  "peso": "0.300",
+  "categoria_id": 2
+}
+```
+
+### `GET /search?query=&cat=&page=&limit=`
+
+Lista produtos com base na pesquisa e filtros, paginados.
+
+- `query` — termo pesquisado no nome/atributos do produto
+- `cat` — categoria, por `id` ou por nome (case-insensitive)
+- `page` — número da página (inteiro ≥ 1, padrão `1`)
+- `limit` — itens por página (inteiro ≥ 1, padrão `24`)
+
+```bash
+curl "https://fanaticos-fc.onrender.com/search?query=camisa&cat=Brasileir%C3%A3o&page=1&limit=12"
+```
+
+```json
+{
+  "produtos": [
+    { "id": 244, "nome": "Venezia Third 25-26 Torcedor", "preco": "179.99" }
+  ],
+  "total": 231,
+  "page": 1,
+  "totalPages": 116
+}
+```
+
+```json
+// 400 — page/limit inválidos
+{ "error": "page deve ser um número inteiro >= 1.", "code": "INVALID_PAGE" }
+```
+
+### `POST /cart`
+
+Recebe os itens do carrinho e retorna o resumo calculado (sem necessidade de autenticação).
+
+```bash
+curl -X POST https://fanaticos-fc.onrender.com/cart \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [
+      { "productId": 244, "qty": 1 },
+      { "productId": 243, "qty": 1 }
+    ],
+    "cupomCode": "URI10"
+  }'
+```
+
+```json
+{
+  "items": [
+    { "productId": 244, "name": "Venezia Third 25-26 Torcedor", "price": 179.99, "qty": 1, "image": "https://.../foto.webp" },
+    { "productId": 243, "name": "...", "price": 179.99, "qty": 1, "image": "https://.../foto2.webp" }
+  ],
+  "subtotal": 359.98,
+  "freight": 0,
+  "discount": 36,
+  "total": 323.98
+}
+```
+
+Regra de frete simulado: `freight = subtotal >= 200 ? 0 : 25`. Cupom de exemplo: `URI10` → 10% de desconto sobre o subtotal.
+
+## Rotas internas do site (`/api/*`)
+
+Além das rotas acima (exigidas pelo trabalho), o site usa um conjunto mais completo de rotas sob `/api`, com autenticação JWT (Bearer token) para fluxos de cliente/admin:
+
+| Método | Rota | Auth | Descrição |
+| --- | --- | --- | --- |
+| GET | `/api/health` | — | Health check usado pelo Render e pelo keep-alive |
+| POST | `/api/auth/register` | — | Cadastro de cliente (nome, e-mail, senha, CPF, telefone) |
+| POST | `/api/auth/login` | — | Login, retorna JWT |
+| POST | `/api/auth/verificar-email` | — | Confirma código de verificação enviado por e-mail |
+| POST | `/api/auth/reenviar-codigo` | — | Reenvia código de verificação |
+| GET/PUT | `/api/auth/perfil` | JWT | Consulta/atualiza o perfil do cliente logado |
+| GET | `/api/produtos` | — | Lista produtos paginada (vitrine) |
+| GET | `/api/produtos/:id` | — | Detalhe do produto |
+| POST/PUT/DELETE | `/api/produtos[/:id]` | JWT admin | CRUD de produtos |
+| POST `/duplicar`, PATCH `/status`, `/destaque`, POST `/bulk-price`, GET `/export`, POST `/import` | `/api/produtos/...` | JWT admin | Operações administrativas extras |
+| GET/POST/PUT/PATCH/DELETE | `/api/categorias[/:id]` | leitura pública, escrita admin | CRUD de categorias |
+| GET/POST/PUT/PATCH/DELETE | `/api/cupons[/:id]` | JWT admin | CRUD de cupons de desconto |
+| POST | `/api/pedidos` | JWT | Cria pedido a partir do carrinho |
+| GET | `/api/pedidos` | JWT admin | Lista todos os pedidos |
+| GET | `/api/pedidos/meus` | JWT | Lista pedidos do cliente logado |
+| GET | `/api/pedidos/:id/rastreio` | — | Rastreio público do pedido |
+| PUT/DELETE | `/api/pedidos/:id` | JWT admin | Atualiza/remove pedido |
+| GET/DELETE | `/api/admin/usuarios[/:id]` | JWT admin | Lista/remove usuários |
+| GET | `/api/admin/dashboard` | JWT admin | Métricas do painel administrativo |
+| POST | `/api/cart` | — | Mesma lógica de `/cart`, usada internamente pelo site |
+
+Usuários administrativos são definidos pela flag `perfil = 'admin'` no registro do usuário (equivalente ao `isAdmin=true` citado no PDF).
 
 ## Fluxo de Arquitetura
 
@@ -207,7 +399,42 @@ Browser
   -> database/storage
 ```
 
-As imagens de produto devem ser tratadas como assets dinâmicos. Em produção, elas devem ir para Cloudinary ou outro storage externo, e o banco deve salvar apenas as URLs públicas. A pasta `backend/uploads` existe apenas como ponto transitório para futuras estratégias locais de upload.
+As imagens de produto são tratadas como assets dinâmicos: em produção vão para o Cloudinary e o banco salva apenas as URLs públicas. A pasta `backend/uploads` existe apenas como ponto transitório para futuras estratégias locais de upload.
+
+## Keep-alive no Render (free tier)
+
+O plano gratuito do Render hiberna o serviço após ~15 minutos sem requisições, causando um cold start de 30–50 segundos na primeira visita. Para evitar isso, configure um monitor externo que pinga a rota de saúde da API a cada 10 minutos.
+
+```txt
+GET https://fanaticos-fc.onrender.com/health
+→ { "status": "ok", "db": true, "timestamp": "..." }
+```
+
+### Configurar com UptimeRobot (gratuito)
+
+1. Acesse [uptimerobot.com](https://uptimerobot.com) e crie uma conta gratuita.
+2. Clique em **Add New Monitor**.
+3. Preencha:
+   - **Monitor Type:** HTTP(s)
+   - **Friendly Name:** Fanáticos FC API
+   - **URL:** `https://fanaticos-fc.onrender.com/health`
+   - **Monitoring Interval:** 10 minutes
+4. Clique em **Create Monitor**.
+
+A partir daí o UptimeRobot pinga a API a cada 10 minutos, mantendo o servidor ativo 24h.
+
+### Alternativa: cron-job.org (gratuito)
+
+1. Acesse [cron-job.org](https://cron-job.org) e crie uma conta.
+2. Clique em **Create cronjob**.
+3. Preencha:
+   - **URL:** `https://fanaticos-fc.onrender.com/health`
+   - **Schedule:** Every 10 minutes
+4. Salve.
+
+### Alternativa paga
+
+Faça upgrade para o plano **Starter** do Render (US$ 7/mês) e o serviço nunca hiberna.
 
 ## Guia de Contribuição
 
@@ -239,7 +466,7 @@ git commit -m "feat: reorganiza backend em MVC"
 - Como testar.
 - Se houve impacto em banco, `.env` ou frontend.
 
-## Credenciais Locais
+## Credenciais Padrão
 
 Quando o banco é inicializado sem usuários administradores, a API cria um admin padrão:
 
@@ -248,4 +475,6 @@ E-mail: admin@fanaticosfc.com
 Senha: admin123
 ```
 
-Em produção, altere `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD` e `JWT_SECRET`.
+Essas mesmas credenciais são usadas, por padrão, como usuário/senha do **HTTP Basic Auth** em `POST /products` e `DELETE /product/:id` (ver `BASIC_AUTH_USER`/`BASIC_AUTH_PASS` em [Variáveis de Ambiente](#variáveis-de-ambiente)).
+
+Em produção, altere `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD`, `BASIC_AUTH_USER`, `BASIC_AUTH_PASS` e `JWT_SECRET`.
