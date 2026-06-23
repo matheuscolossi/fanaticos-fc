@@ -7,6 +7,13 @@ let cupomAplicado = '';
 function getCupomAplicado() { return cupomAplicado; }
 function setCupomAplicado(codigo) { cupomAplicado = codigo || ''; }
 
+// Último resumo (subtotal/frete/desconto/total) calculado pelo backend na
+// página de carrinho — o checkout reusa esse valor para não mostrar um total
+// diferente do que o cliente acabou de ver com o cupom aplicado.
+let cartResumoAtual = null;
+function getCartResumo() { return cartResumoAtual; }
+function setCartResumo(resumo) { cartResumoAtual = resumo; }
+
 function makeCartKey(produto, options = {}) {
   const tamanho = options.tamanho || '';
   const pers = options.personalizacao;
@@ -154,9 +161,22 @@ function gerarPixPayload(chave, nomeLoja, cidade, valor) {
   return body + _crc16(body);
 }
 
+// Botão "Confirmar pagamento" do mini-carrinho (dropdown) leva para a página
+// de carrinho em vez de abrir o checkout direto — só lá tem o campo de cupom,
+// e sem ele o pedido sairia sem o desconto aplicado.
+function goToCartPage() {
+  if (cartItems.length === 0) return;
+  if (window.location.protocol !== 'file:') {
+    window.location.href = '/carrinho';
+    return;
+  }
+  const inPages = window.location.pathname.includes('/pages/');
+  window.location.href = inPages ? 'carrinho.html' : 'pages/carrinho.html';
+}
+
 // ── CHECKOUT MODAL (Step 1 — formulário) ─────────────────────────────────────
 
-function checkout() {
+async function checkout() {
   if (cartItems.length === 0) return;
   if (!localStorage.getItem('fc_token')) {
     closeCart();
@@ -166,7 +186,7 @@ function checkout() {
   }
   closeCart();
   const overlay = document.getElementById('checkoutOverlay');
-  renderCheckoutStep1();
+  await renderCheckoutStep1();
   overlay.style.display = 'flex';
 }
 
@@ -174,11 +194,29 @@ function closeCheckoutModal() {
   document.getElementById('checkoutOverlay').style.display = 'none';
 }
 
-function renderCheckoutStep1() {
+async function renderCheckoutStep1() {
   const content = document.getElementById('checkoutContent');
   const linhasResumo = cartItems.map(i =>
     `<div class="co-resumo-item"><span>${i.nome} <em>x${i.qty}</em></span><span>${formatBRL(i.preco * i.qty)}</span></div>`
   ).join('');
+
+  // Reaproveita o resumo já calculado na página de carrinho (com frete e
+  // cupom). Se não existir (ex.: checkout disparado sem visitar o carrinho),
+  // busca de novo no backend antes de exibir, pra nunca mostrar um total errado.
+  let resumo = getCartResumo();
+  if (!resumo) {
+    try {
+      resumo = await fetchCartSummary(
+        cartItems.map(i => ({ productId: i.id, qty: i.qty })),
+        getCupomAplicado() || undefined
+      );
+    } catch (e) {
+      const subtotal = getTotal();
+      const freight = subtotal >= 200 ? 0 : 25;
+      resumo = { subtotal, freight, discount: 0, total: subtotal + freight };
+    }
+    setCartResumo(resumo);
+  }
 
   content.innerHTML = `
     <div class="co-header">
@@ -187,7 +225,10 @@ function renderCheckoutStep1() {
     </div>
     <div class="co-resumo">
       ${linhasResumo}
-      <div class="co-resumo-total"><span>Total</span><strong>${formatBRL(getTotal())}</strong></div>
+      <div class="co-resumo-item"><span>Subtotal</span><span>${formatBRL(resumo.subtotal)}</span></div>
+      <div class="co-resumo-item"><span>Frete</span><span>${resumo.freight > 0 ? formatBRL(resumo.freight) : 'Grátis'}</span></div>
+      ${resumo.discount > 0 ? `<div class="co-resumo-item"><span>Desconto</span><span>− ${formatBRL(resumo.discount)}</span></div>` : ''}
+      <div class="co-resumo-total"><span>Total</span><strong>${formatBRL(resumo.total)}</strong></div>
     </div>
     <div class="co-form">
       <h3 class="co-section-title">Dados do cliente</h3>
@@ -298,7 +339,8 @@ async function confirmarPedido() {
     const metodoEl = document.querySelector('input[name="co_pagamento"]:checked');
     const metodo   = metodoEl ? metodoEl.value : 'pix';
     const endereco = `${endRua} — ${cidade} — CEP: ${cep}`;
-    let total      = getTotal();
+    const resumo   = getCartResumo();
+    let total      = resumo ? resumo.total : getTotal();
     const cupomCodigo = getCupomAplicado();
 
     const btn = document.getElementById('btnConfirmarPedido');
@@ -332,6 +374,7 @@ async function confirmarPedido() {
     cartItems = [];
     saveCart();
     setCupomAplicado('');
+    setCartResumo(null);
     renderCart();
     updateBadge();
 
@@ -552,7 +595,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnCart')?.addEventListener('click', openCart);
   document.getElementById('btnCloseCart')?.addEventListener('click', closeCart);
   document.getElementById('cartOverlay')?.addEventListener('click', closeCart);
-  document.getElementById('btnCheckout')?.addEventListener('click', checkout);
+  document.getElementById('btnCheckout')?.addEventListener('click', goToCartPage);
   document.getElementById('btnRastrear')?.addEventListener('click', openTrackingModal);
 
   // Fecha checkout form ao clicar no fundo

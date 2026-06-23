@@ -245,7 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnCart')?.addEventListener('click', openCart);
   document.getElementById('btnCloseCart')?.addEventListener('click', closeCart);
   document.getElementById('cartOverlay')?.addEventListener('click', closeCart);
-  document.getElementById('btnCheckout')?.addEventListener('click', checkout);
+  document.getElementById('btnCheckout')?.addEventListener('click', goToCartPage);
   document.getElementById('btnUser')?.addEventListener('click', () => {
     window.location.href = 'conta.html';
   });

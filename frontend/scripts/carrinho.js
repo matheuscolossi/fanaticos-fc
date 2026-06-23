@@ -134,6 +134,7 @@ async function atualizarResumoCarrinho() {
       items.map(i => ({ productId: i.id, qty: i.qty })),
       cupomAplicado || undefined
     );
+    setCartResumo(resumo);
 
     if (freteRow) {
       const span = freteRow.querySelector('span:last-child');
@@ -173,11 +174,13 @@ async function atualizarResumoCarrinho() {
       span.className = gratis ? 'cart-summary__frete-gratis' : 'cart-summary__frete-calc';
       span.textContent = gratis ? 'Frete grátis' : formatBRL(25);
     }
-    if (totalEl) totalEl.textContent = formatBRL(subtotal + (subtotal >= 200 ? 0 : 25));
+    const frete = subtotal >= 200 ? 0 : 25;
+    if (totalEl) totalEl.textContent = formatBRL(subtotal + frete);
     if (msgEl) {
       msgEl.textContent = cupomAplicado ? 'Não foi possível validar o cupom agora.' : '';
       msgEl.className = 'cart-summary__cupom-msg cart-summary__cupom-msg--erro';
     }
+    setCartResumo({ subtotal, freight: frete, discount: 0, total: subtotal + frete });
   }
 }
 
