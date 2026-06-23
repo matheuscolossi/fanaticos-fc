@@ -88,6 +88,12 @@ function renderCartPage() {
         </div>
 
         <div class="cart-page__cupom">
+          <input type="text" id="inputCepFrete" placeholder="CEP para calcular o frete" maxlength="9" value="${getCepFrete()}" />
+          <button class="btn btn--outline btn--sm" id="btnCalcularFrete">Calcular</button>
+        </div>
+        <p class="cart-summary__cupom-msg" id="cepMsg"></p>
+
+        <div class="cart-page__cupom">
           <input type="text" id="inputCupom" placeholder="Código do cupom (ex: URI10)" value="${getCupomAplicado()}" />
           <button class="btn btn--outline btn--sm" id="btnAplicarCupom">Aplicar</button>
         </div>
@@ -114,6 +120,33 @@ function renderCartPage() {
     if (e.key === 'Enter') document.getElementById('btnAplicarCupom').click();
   });
 
+  document.getElementById('inputCepFrete').addEventListener('input', (e) => {
+    e.target.value = maskCep(e.target.value);
+  });
+  document.getElementById('btnCalcularFrete').addEventListener('click', async () => {
+    const cepValue = document.getElementById('inputCepFrete').value.trim();
+    const cepMsgEl = document.getElementById('cepMsg');
+    const data = await buscarCep(cepValue);
+    if (!data) {
+      setCepFrete('', '');
+      if (cepMsgEl) {
+        cepMsgEl.textContent = 'CEP não encontrado.';
+        cepMsgEl.className = 'cart-summary__cupom-msg cart-summary__cupom-msg--erro';
+      }
+      atualizarResumoCarrinho();
+      return;
+    }
+    setCepFrete(cepValue, data.uf);
+    if (cepMsgEl) {
+      cepMsgEl.textContent = `Frete calculado para ${data.localidade} / ${data.uf}.`;
+      cepMsgEl.className = 'cart-summary__cupom-msg cart-summary__cupom-msg--ok';
+    }
+    atualizarResumoCarrinho();
+  });
+  document.getElementById('inputCepFrete').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('btnCalcularFrete').click();
+  });
+
   atualizarResumoCarrinho();
 }
 
@@ -132,7 +165,8 @@ async function atualizarResumoCarrinho() {
   try {
     const resumo = await fetchCartSummary(
       items.map(i => ({ productId: i.id, qty: i.qty })),
-      cupomAplicado || undefined
+      cupomAplicado || undefined,
+      getUfFrete() || undefined
     );
     setCartResumo(resumo);
 

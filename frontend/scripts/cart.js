@@ -14,6 +14,13 @@ let cartResumoAtual = null;
 function getCartResumo() { return cartResumoAtual; }
 function setCartResumo(resumo) { cartResumoAtual = resumo; }
 
+// CEP/UF informado para calcular o frete por região — também usado pelo checkout.
+let cepFrete = '';
+let ufFrete = '';
+function getCepFrete() { return cepFrete; }
+function getUfFrete() { return ufFrete; }
+function setCepFrete(cep, uf) { cepFrete = cep || ''; ufFrete = uf || ''; }
+
 function makeCartKey(produto, options = {}) {
   const tamanho = options.tamanho || '';
   const pers = options.personalizacao;
@@ -208,7 +215,8 @@ async function renderCheckoutStep1() {
     try {
       resumo = await fetchCartSummary(
         cartItems.map(i => ({ productId: i.id, qty: i.qty })),
-        getCupomAplicado() || undefined
+        getCupomAplicado() || undefined,
+        getUfFrete() || undefined
       );
     } catch (e) {
       const subtotal = getTotal();
@@ -225,10 +233,10 @@ async function renderCheckoutStep1() {
     </div>
     <div class="co-resumo">
       ${linhasResumo}
-      <div class="co-resumo-item"><span>Subtotal</span><span>${formatBRL(resumo.subtotal)}</span></div>
-      <div class="co-resumo-item"><span>Frete</span><span>${resumo.freight > 0 ? formatBRL(resumo.freight) : 'Grátis'}</span></div>
-      ${resumo.discount > 0 ? `<div class="co-resumo-item"><span>Desconto</span><span>− ${formatBRL(resumo.discount)}</span></div>` : ''}
-      <div class="co-resumo-total"><span>Total</span><strong>${formatBRL(resumo.total)}</strong></div>
+      <div class="co-resumo-item"><span>Subtotal</span><span id="coSubtotalVal">${formatBRL(resumo.subtotal)}</span></div>
+      <div class="co-resumo-item"><span>Frete</span><span id="coFreteVal">${resumo.freight > 0 ? formatBRL(resumo.freight) : 'Grátis'}</span></div>
+      <div class="co-resumo-item" id="coDescontoLinha" style="${resumo.discount > 0 ? '' : 'display:none'}"><span>Desconto</span><span id="coDescontoVal">${resumo.discount > 0 ? `− ${formatBRL(resumo.discount)}` : ''}</span></div>
+      <div class="co-resumo-total"><span>Total</span><strong id="coTotalVal">${formatBRL(resumo.total)}</strong></div>
     </div>
     <div class="co-form">
       <h3 class="co-section-title">Dados do cliente</h3>
@@ -307,6 +315,7 @@ async function renderCheckoutStep1() {
   btnConfirmarClean.addEventListener('click', confirmarPedido);
 
   const cepInput = document.getElementById('co_cep');
+  if (cepInput && getCepFrete()) cepInput.value = getCepFrete();
   cepInput?.addEventListener('input', (e) => { e.target.value = maskCep(e.target.value); });
   cepInput?.addEventListener('blur', async (e) => {
     const data = await buscarCep(e.target.value);
@@ -319,7 +328,36 @@ async function renderCheckoutStep1() {
     if (cidadeEl && !cidadeEl.value.trim()) {
       cidadeEl.value = `${data.localidade} / ${data.uf}`;
     }
+    if (data.uf !== getUfFrete()) {
+      setCepFrete(e.target.value, data.uf);
+      await atualizarResumoCheckout();
+    }
   });
+}
+
+// Recalcula o resumo do checkout (frete por UF + cupom) e atualiza a tela do
+// modal sem precisar re-renderizar tudo. Usado quando o cliente troca o CEP.
+async function atualizarResumoCheckout() {
+  try {
+    const resumo = await fetchCartSummary(
+      cartItems.map(i => ({ productId: i.id, qty: i.qty })),
+      getCupomAplicado() || undefined,
+      getUfFrete() || undefined
+    );
+    setCartResumo(resumo);
+    const subtotalEl = document.getElementById('coSubtotalVal');
+    const freteEl = document.getElementById('coFreteVal');
+    const descontoLinha = document.getElementById('coDescontoLinha');
+    const descontoEl = document.getElementById('coDescontoVal');
+    const totalEl = document.getElementById('coTotalVal');
+    if (subtotalEl) subtotalEl.textContent = formatBRL(resumo.subtotal);
+    if (freteEl) freteEl.textContent = resumo.freight > 0 ? formatBRL(resumo.freight) : 'Grátis';
+    if (descontoLinha) descontoLinha.style.display = resumo.discount > 0 ? '' : 'none';
+    if (descontoEl) descontoEl.textContent = resumo.discount > 0 ? `− ${formatBRL(resumo.discount)}` : '';
+    if (totalEl) totalEl.textContent = formatBRL(resumo.total);
+  } catch (e) {
+    // mantém os valores já exibidos se a busca falhar
+  }
 }
 
 async function confirmarPedido() {
@@ -375,6 +413,7 @@ async function confirmarPedido() {
     saveCart();
     setCupomAplicado('');
     setCartResumo(null);
+    setCepFrete('', '');
     renderCart();
     updateBadge();
 

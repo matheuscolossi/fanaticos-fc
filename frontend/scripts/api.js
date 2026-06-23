@@ -35,11 +35,11 @@ const api = {
 // POST /cart vive na raiz da API (fora do prefixo /api), no formato exigido pelo PDF
 const CART_ROOT_BASE = API_BASE.replace(/\/api\/?$/, '');
 
-async function fetchCartSummary(items, cupomCode) {
+async function fetchCartSummary(items, cupomCode, uf) {
   const res = await fetch(`${CART_ROOT_BASE}/cart`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ items, cupomCode }),
+    body: JSON.stringify({ items, cupomCode, uf }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
