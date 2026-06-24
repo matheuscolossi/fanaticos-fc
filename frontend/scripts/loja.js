@@ -131,16 +131,18 @@ function renderGrid(grid, produtos) {
 async function loadCategorias() {
   try {
     categorias = await api.get('/categorias');
+
     const cont = document.getElementById('filtroCats');
-    if (!cont) return;
-    categorias.forEach(c => {
-      const btn = document.createElement('button');
-      btn.className = 'cat-btn';
-      btn.dataset.cat = c.id;
-      btn.textContent = c.nome;
-      btn.addEventListener('click', () => filterByCategory(c.id));
-      cont.appendChild(btn);
-    });
+    if (cont) {
+      categorias.forEach(c => {
+        const btn = document.createElement('button');
+        btn.className = 'cat-btn';
+        btn.dataset.cat = c.id;
+        btn.textContent = c.nome;
+        btn.addEventListener('click', () => filterByCategory(c.id));
+        cont.appendChild(btn);
+      });
+    }
 
     const sel = document.getElementById('pCategoria');
     if (sel) {
@@ -150,7 +152,58 @@ async function loadCategorias() {
         sel.appendChild(opt);
       });
     }
+
+    await renderCategoriaCards();
   } catch(e) { console.error('Erro ao carregar categorias', e); }
+}
+
+function categoriaUrl(c) {
+  // Abrindo direto do disco (file://) o rewrite /busca da Vercel não existe — usa query relativa.
+  if (window.location.protocol === 'file:') return `?cat=${c.id}`;
+  return `/busca?cat=${c.id}`;
+}
+
+async function renderCategoriaCards() {
+  const grid = document.getElementById('gridCategorias');
+  if (!grid) return;
+
+  const cards = await Promise.all(categorias.map(async c => {
+    let img = c.imagem;
+    if (!img) {
+      try {
+        const { produtos } = await api.get(`/produtos?categoria=${c.id}&limit=1`);
+        img = (produtos[0]?.imagens || [])[0] || null;
+      } catch (_) { img = null; }
+    }
+    if (img && isGooglePhotosLink(img)) img = null;
+    return { c, img };
+  }));
+
+  grid.innerHTML = '';
+  cards.forEach(({ c, img }) => {
+    const card = document.createElement('a');
+    card.className = 'categoria-card';
+    card.href = categoriaUrl(c);
+    card.innerHTML = `
+      <div class="categoria-card__img"${img ? ` style="background-image:url('${img}')"` : ''}>
+        ${img ? '' : `<span class="categoria-card__placeholder">${c.nome.charAt(0)}</span>`}
+      </div>
+      <div class="categoria-card__nome">${c.nome}</div>
+      <div class="categoria-card__count">${c.produtos_count || 0} produto${c.produtos_count === '1' ? '' : 's'}</div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+// Esconde a grade de categorias e revela o catálogo completo (busca/filtro/categoria
+// específica), atualizando o breadcrumb para "Início > {label}".
+function mostrarCatalogo(label) {
+  const home = document.getElementById('categoriasHome');
+  if (home) home.style.display = 'none';
+  const catalogo = document.getElementById('catalogo');
+  if (catalogo) catalogo.style.display = '';
+  const bcAtual = document.getElementById('breadcrumbAtual');
+  if (bcAtual) bcAtual.textContent = label;
 }
 
 function filterByCategory(catId) {
@@ -440,6 +493,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.querySelector('.hero__cta')?.addEventListener('click', (e) => {
     e.preventDefault();
+    document.getElementById('categoriasHome')?.scrollIntoView({ behavior: 'smooth' });
+  });
+
+  document.getElementById('linkCatalogoCompleto')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    clearFilters();
+    mostrarCatalogo('Catálogo Completo');
     document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' });
   });
 
@@ -450,8 +510,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const queryParam = urlParams.get('query');
   const catParam = urlParams.get('cat');
   const termoBusca = timeParam || queryParam;
+  const isBuscaPage = window.location.pathname === '/busca';
 
-  if (termoBusca || catParam) {
+  if (termoBusca || catParam || isBuscaPage) {
     const inputBusca = document.getElementById('inputBusca');
     if (inputBusca && termoBusca) inputBusca.value = termoBusca;
 
@@ -464,6 +525,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (categoriaEncontrada) filterByCategory(categoriaEncontrada.id);
     else applyFilters();
+
+    mostrarCatalogo(
+      categoriaEncontrada ? categoriaEncontrada.nome
+      : termoBusca ? `Resultados para "${termoBusca}"`
+      : 'Catálogo Completo'
+    );
 
     setTimeout(() => {
       document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' });

@@ -252,7 +252,7 @@
       <p class="hero__eyebrow">Qualidade premium · Acabamento 1:1</p>
       <h1 class="hero__title">Fanáticos<br/><span class="hero__title--accent">Mantos</span></h1>
       <p class="hero__sub">Camisas de futebol com acabamento técnico e qualidade.</p>
-      <a href="#catalogo" class="btn btn--primary hero__cta">Acessar catálogo</a>
+      <a href="#categoriasHome" class="btn btn--primary hero__cta">Ver categorias</a>
     </div>
     <div class="hero__badges">
       <div class="badge">Acabamento premium</div>
@@ -270,8 +270,24 @@
   </section>
 
  
-  <section class="catalogo" id="catalogo">
+  <section class="categorias-home" id="categoriasHome">
     <div class="container">
+      <h2 class="section-title">Categorias</h2>
+      <div class="categorias-grid" id="gridCategorias">
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Carregando categorias...</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="catalogo" id="catalogo" style="display:none">
+    <div class="container">
+      <nav class="breadcrumb" id="catalogoBreadcrumb">
+        <a href="/">Início</a><span class="breadcrumb__sep">›</span><span id="breadcrumbAtual">Catálogo Completo</span>
+      </nav>
       <h2 class="section-title">Catálogo Completo</h2>
 
       <!-- Filtros -->
@@ -363,7 +379,7 @@
         <div class="footer__col">
           <h4 class="footer__col-title">Informações</h4>
           <ul class="footer__links">
-            <li><a href="#catalogo">Catálogo completo</a></li>
+            <li><a href="#catalogo" id="linkCatalogoCompleto">Catálogo completo</a></li>
             <li><a role="button" tabindex="0" onclick="document.getElementById('btnCart').click();return false;" onkeydown="if(event.key==='Enter'){document.getElementById('btnCart').click();}">Carrinho</a></li>
             <li><a href="https://wa.me/5554991138217" target="_blank" rel="noopener">WhatsApp: (54) 99113-8217</a></li>
           </ul>
@@ -476,6 +492,7 @@
       if (input) {
         input.value = nome;
         if (typeof applyFilters === 'function') applyFilters();
+        if (typeof mostrarCatalogo === 'function') mostrarCatalogo(`Resultados para "${nome}"`);
         document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' });
       }
     }

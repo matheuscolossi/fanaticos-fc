@@ -414,13 +414,57 @@ select option { background: var(--bg-card2); }
   color: var(--white); margin-bottom: 2rem;
   display: flex; align-items: center; gap: .6rem;
 }
-.destaques, .catalogo { padding: 5rem 0; }
+.destaques, .catalogo, .categorias-home, .sobre { scroll-margin-top: 120px; }
+.destaques, .catalogo, .categorias-home { padding: 5rem 0; }
 .destaques { background: var(--bg-card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .destaques,
 .catalogo,
+.categorias-home,
 .sobre {
   content-visibility: auto;
   contain-intrinsic-size: 1px 900px;
+}
+
+/* ══════════ BREADCRUMB ══════════ */
+.breadcrumb {
+  display: flex; align-items: center; gap: .5rem;
+  font-size: .85rem; color: var(--text-muted); margin-bottom: 1.25rem;
+}
+.breadcrumb a { color: var(--text-muted); text-decoration: none; }
+.breadcrumb a:hover { color: var(--green); }
+.breadcrumb__sep { color: var(--text-dim); }
+.breadcrumb #breadcrumbAtual { color: var(--text); font-weight: 600; }
+
+/* ══════════ CATEGORIAS (HOME) ══════════ */
+.categorias-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 1.5rem;
+}
+.categoria-card {
+  display: block; text-decoration: none;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+  cursor: pointer; transition: var(--transition);
+}
+.categoria-card:hover {
+  border-color: var(--green); transform: translateY(-3px);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5), 0 0 0 1px var(--green);
+}
+.categoria-card__img {
+  aspect-ratio: 16/10; background-color: var(--bg-card2);
+  background-size: cover; background-position: center;
+  display: flex; align-items: center; justify-content: center;
+}
+.categoria-card__placeholder {
+  font-family: var(--font-title); font-size: 2.6rem; color: var(--text-dim);
+}
+.categoria-card__nome {
+  font-family: var(--font-title); font-weight: 700; font-size: 1.05rem;
+  color: var(--white); padding: 1rem 1.1rem .25rem;
+}
+.categoria-card__count {
+  font-size: .8rem; color: var(--text-muted); padding: 0 1.1rem 1.1rem;
 }
 
 /* ══════════ FILTROS ══════════ */
