@@ -12,6 +12,7 @@ const productRoutes = require('./src/routes/productRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const couponRoutes = require('./src/routes/couponRoutes');
+const promocoesRoutes = require('./src/routes/promocoesRoutes');
 const specRoutes = require('./src/routes/specRoutes');
 
 const app = express();
@@ -58,6 +59,7 @@ app.use('/api/pedidos', orderRoutes({ adminMiddleware, authMiddleware }));
 app.use('/api/admin/usuarios', userRoutes({ adminMiddleware }));
 app.use('/api/admin/dashboard', dashboardRoutes(adminMiddleware));
 app.use('/api/cupons', couponRoutes(adminMiddleware));
+app.use('/api/promocoes', promocoesRoutes(adminMiddleware));
 
 // Rotas no formato exigido pelo PDF do trabalho (sem prefixo /api) — usadas pelo
 // professor no Postman. O site continua usando as rotas /api/produtos acima.

@@ -65,6 +65,31 @@ function isGooglePhotosLink(url) {
   return url && (url.includes('photos.app.goo.gl') || url.includes('photos.google.com'));
 }
 
+function precoCardHtml(p) {
+  if (!p.em_promocao) return `<div class="produto-card__preco">${formatBRL(p.preco)}</div>`;
+  return `
+    <div class="produto-card__preco-wrap">
+      <span class="produto-card__preco produto-card__preco--riscado">${formatBRL(p.preco)}</span>
+      <span class="produto-card__preco produto-card__preco--promo">${formatBRL(p.preco_exibicao)}</span>
+    </div>
+  `;
+}
+
+function attachCountdown(el, targetIso) {
+  if (!el || !targetIso) return;
+  const target = new Date(targetIso).getTime();
+  const timer = setInterval(() => {
+    if (!document.body.contains(el)) { clearInterval(timer); return; }
+    const diff = target - Date.now();
+    if (diff <= 0) { el.textContent = 'Promoção encerrada'; clearInterval(timer); return; }
+    const d = Math.floor(diff / 86400000);
+    const h = Math.floor((diff % 86400000) / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    el.textContent = d > 0 ? `Termina em ${d}d ${h}h ${m}m` : `Termina em ${h}h ${m}m ${s}s`;
+  }, 1000);
+}
+
 function produtoCardSafe(p) {
   const imagens = p.imagens || [];
   const img = imagens[0];
@@ -82,13 +107,17 @@ function produtoCardSafe(p) {
         : img
           ? `<img src="${img}" alt="${p.nome}" loading="lazy" decoding="async" />`
           : `<div class="produto-card__placeholder">${placeholderLabel}</div>`}
-      ${p.destaque ? `<span class="produto-card__badge">Destaque</span>` : ''}
+      <div class="produto-card__badges">
+        ${p.destaque ? `<span class="produto-card__badge">Destaque</span>` : ''}
+        ${p.em_promocao ? `<span class="produto-card__badge produto-card__badge--promo">${p.promocao_destaque ? '★ Oferta' : 'Promoção'}</span>` : ''}
+      </div>
       ${isJogador ? `<span class="produto-card__badge produto-card__badge--jogador">Jogador</span>` : ''}
     </div>
     <div class="produto-card__info">
       <div class="produto-card__cat">${p.categoria_nome || 'Sem categoria'}</div>
       <div class="produto-card__nome">${p.nome}</div>
-      <div class="produto-card__preco">${formatBRL(p.preco)}</div>
+      ${precoCardHtml(p)}
+      ${p.em_promocao && p.promocao_fim ? `<div class="produto-card__countdown"></div>` : ''}
       <button class="produto-card__btn">Adicionar ao Carrinho</button>
     </div>
   `;
@@ -109,6 +138,10 @@ function produtoCardSafe(p) {
         }
       });
     }
+  }
+
+  if (p.em_promocao && p.promocao_fim) {
+    attachCountdown(card.querySelector('.produto-card__countdown'), p.promocao_fim);
   }
 
   card.addEventListener('click', () => {

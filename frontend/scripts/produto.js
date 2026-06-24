@@ -15,6 +15,31 @@ function isGooglePhotosLink(url) {
   return url && (url.includes('photos.app.goo.gl') || url.includes('photos.google.com'));
 }
 
+function precoPaginaHtml(p) {
+  if (!p.em_promocao) return `<div class="produto-page__price">${formatBRL(p.preco)}</div>`;
+  return `
+    <div class="produto-page__price-wrap">
+      <span class="produto-page__price produto-page__price--riscado">${formatBRL(p.preco)}</span>
+      <span class="produto-page__price produto-page__price--promo">${formatBRL(p.preco_exibicao)}</span>
+    </div>
+  `;
+}
+
+function attachCountdown(el, targetIso) {
+  if (!el || !targetIso) return;
+  const target = new Date(targetIso).getTime();
+  const timer = setInterval(() => {
+    if (!document.body.contains(el)) { clearInterval(timer); return; }
+    const diff = target - Date.now();
+    if (diff <= 0) { el.textContent = 'Promoção encerrada'; clearInterval(timer); return; }
+    const d = Math.floor(diff / 86400000);
+    const h = Math.floor((diff % 86400000) / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    el.textContent = d > 0 ? `Termina em ${d}d ${h}h ${m}m` : `Termina em ${h}h ${m}m ${s}s`;
+  }, 1000);
+}
+
 function getProductPlaceholderLabel() {
   return 'Imagem indisponível';
 }
@@ -76,8 +101,10 @@ function renderProduto(p) {
     </div>
     <div class="produto-page__info">
       <div class="product-detail__cat">${p.categoria_nome || 'Sem categoria'}</div>
+      ${p.em_promocao ? `<span class="produto-page__badge produto-page__badge--promo">${p.promocao_destaque ? '★ Oferta' : 'Promoção'}</span>` : ''}
       <h1 class="produto-page__title">${p.nome}</h1>
-      <div class="produto-page__price">${formatBRL(p.preco)}</div>
+      ${precoPaginaHtml(p)}
+      ${p.em_promocao && p.promocao_fim ? `<div class="produto-page__countdown"></div>` : ''}
       <p class="produto-page__desc">${p.descricao || 'Camisa premium com acabamento de alta qualidade, ideal para jogo, treino ou coleção.'}</p>
 
       <div class="produto-options">
@@ -132,6 +159,11 @@ function renderProduto(p) {
   });
 
   document.getElementById('btnAddProduto')?.addEventListener('click', addProdutoSelecionado);
+
+  if (p.em_promocao && p.promocao_fim) {
+    attachCountdown(content.querySelector('.produto-page__countdown'), p.promocao_fim);
+  }
+
   renderComentarios();
 }
 

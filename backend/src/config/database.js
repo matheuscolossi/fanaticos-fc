@@ -235,6 +235,27 @@ async function createPostgresSchema() {
       created_at TIMESTAMPTZ DEFAULT now()
     )
   `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS promocoes (
+      id SERIAL PRIMARY KEY,
+      nome TEXT NOT NULL,
+      descricao TEXT,
+      tipo TEXT NOT NULL DEFAULT 'percentual',
+      valor NUMERIC(10,2),
+      compre_qtd INTEGER,
+      leve_qtd INTEGER,
+      regras_progressivas JSONB DEFAULT '[]'::jsonb,
+      produtos_ids JSONB DEFAULT '[]'::jsonb,
+      categorias_ids JSONB DEFAULT '[]'::jsonb,
+      data_inicio TIMESTAMPTZ,
+      data_fim TIMESTAMPTZ,
+      destaque BOOLEAN DEFAULT false,
+      mostrar_contador BOOLEAN DEFAULT false,
+      status TEXT DEFAULT 'ativo',
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
 }
 
 async function createSqliteSchema() {
@@ -304,6 +325,25 @@ async function createSqliteSchema() {
     categorias_ids TEXT DEFAULT '[]',
     clientes_ids TEXT DEFAULT '[]',
     frete_gratis INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'ativo',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  await run(`CREATE TABLE IF NOT EXISTS promocoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    descricao TEXT,
+    tipo TEXT NOT NULL DEFAULT 'percentual',
+    valor REAL,
+    compre_qtd INTEGER,
+    leve_qtd INTEGER,
+    regras_progressivas TEXT DEFAULT '[]',
+    produtos_ids TEXT DEFAULT '[]',
+    categorias_ids TEXT DEFAULT '[]',
+    data_inicio DATETIME,
+    data_fim DATETIME,
+    destaque INTEGER DEFAULT 0,
+    mostrar_contador INTEGER DEFAULT 0,
     status TEXT DEFAULT 'ativo',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);

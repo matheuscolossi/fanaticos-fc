@@ -389,6 +389,7 @@ function setTab(name) {
     pedidos:    ['Pedidos Recebidos',    'Visualize todos os pedidos finalizados via WhatsApp'],
     usuarios:   ['Usuários Cadastrados', 'Gerencie as contas de usuários'],
     cupons:     ['Gerenciar Cupons',     'Crie e administre cupons de desconto'],
+    promocoes:  ['Gerenciar Promoções',  'Descontos por produto/categoria, combos e promoções por período'],
   };
   document.getElementById('adminTabTitle').textContent = titles[name]?.[0] ?? name;
   document.getElementById('adminTabSub').textContent   = titles[name]?.[1] ?? '';
@@ -398,6 +399,7 @@ function setTab(name) {
   if (name === 'usuarios')  loadUsuarios();
   if (name === 'produtos' && allProdutosAdmin.length === 0) loadProdutosAdmin();
   if (name === 'cupons')   loadCuponsAdmin();
+  if (name === 'promocoes') loadPromocoesAdmin();
 }
 
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -2074,6 +2076,255 @@ async function verUsosCupom(id) {
   }
 }
 
+// ── Promoções ────────────────────────────────────────────────────────────────
+let promocoesCache = [];
+let promocaoDeleteTargetId = null;
+
+const PROMO_TIPO_LABEL = {
+  percentual: 'Desconto %',
+  fixo: 'Desconto fixo',
+  preco_fixo: 'Preço fixo',
+  compre_x_leve_y: 'Compre X leve Y',
+  progressivo: 'Progressivo',
+};
+
+async function loadPromocoesAdmin() {
+  const wrap = document.getElementById('tabelaPromocoesWrap');
+  try {
+    promocoesCache = await api.get('/promocoes');
+    renderTabelaPromocoes();
+  } catch (e) {
+    wrap.innerHTML = '<div class="loading-state" style="color:var(--danger)">Erro ao carregar promoções.</div>';
+  }
+}
+
+function _formatPromoValor(p) {
+  if (p.tipo === 'percentual') return `${Number(p.valor)}%`;
+  if (p.tipo === 'fixo') return `− ${formatBRL(p.valor)}`;
+  if (p.tipo === 'preco_fixo') return `${formatBRL(p.valor)} (fixo)`;
+  if (p.tipo === 'compre_x_leve_y') return `Compre ${p.compre_qtd} leve ${p.leve_qtd}`;
+  if (p.tipo === 'progressivo') {
+    const regras = p.regras_progressivas || [];
+    return regras.map(r => `${r.qtd_minima}+: ${r.desconto_pct}%`).join(' · ') || '—';
+  }
+  return '—';
+}
+
+function renderTabelaPromocoes() {
+  const wrap = document.getElementById('tabelaPromocoesWrap');
+  if (!wrap) return;
+
+  if (promocoesCache.length === 0) {
+    wrap.innerHTML = '<div class="loading-state">Nenhuma promoção cadastrada.</div>';
+    return;
+  }
+
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Nome</th><th>Tipo</th><th>Desconto</th><th>Validade</th><th>Destaque</th><th>Status</th><th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${promocoesCache.map(p => {
+          const isAtivo = p.status === 'ativo';
+          return `
+          <tr>
+            <td style="font-weight:700">${p.nome}</td>
+            <td>${PROMO_TIPO_LABEL[p.tipo] || p.tipo}</td>
+            <td style="font-size:.82rem">${_formatPromoValor(p)}</td>
+            <td style="color:var(--text-muted);font-size:.82rem">${_formatCupomValidade(p)}</td>
+            <td>${p.destaque ? '<span class="td-badge">Sim</span>' : '—'}${p.mostrar_contador ? ' <span class="td-badge">Contador</span>' : ''}</td>
+            <td><span class="td-badge ${isAtivo ? '' : 'td-badge--off'}">${isAtivo ? 'Ativo' : 'Inativo'}</span></td>
+            <td>
+              <div class="action-dropdown" id="promoActions${p.id}">
+                <button class="btn btn--outline btn--sm" onclick="toggleDropdown('promoActions${p.id}')">Ações ▾</button>
+                <div class="action-dropdown__menu">
+                  <div class="action-dropdown__item" onclick="closeAllDropdowns();openEditPromocaoModal(${p.id})">Editar</div>
+                  <div class="action-dropdown__item" onclick="closeAllDropdowns();togglePromocaoStatus(${p.id},'${p.status}')">${isAtivo ? 'Desativar' : 'Ativar'}</div>
+                  <div class="action-dropdown__sep"></div>
+                  <div class="action-dropdown__item action-dropdown__item--danger" onclick="closeAllDropdowns();confirmDeletePromocao(${p.id})">Excluir</div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        `;}).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function updatePromoTipoFields() {
+  const tipo = document.getElementById('promoTipo').value;
+  document.getElementById('grpPromoValor').style.display = ['percentual', 'fixo', 'preco_fixo'].includes(tipo) ? '' : 'none';
+  document.getElementById('grpPromoCompreLeve').style.display = tipo === 'compre_x_leve_y' ? '' : 'none';
+  document.getElementById('grpPromoProgressivo').style.display = tipo === 'progressivo' ? '' : 'none';
+
+  const labels = {
+    percentual: 'Valor do desconto (%) *',
+    fixo: 'Valor do desconto (R$) *',
+    preco_fixo: 'Preço promocional (R$) *',
+  };
+  const lbl = document.getElementById('lblPromoValor');
+  if (lbl && labels[tipo]) lbl.textContent = labels[tipo];
+}
+
+function renderPromoRegrasList(regras) {
+  const cont = document.getElementById('promoRegrasList');
+  cont.innerHTML = regras.map((r, i) => `
+    <div class="form-cols-2 promo-regra-row" data-idx="${i}" style="margin-bottom:.5rem">
+      <div class="form-group" style="margin-bottom:0">
+        <label>A partir de (qtd.)</label>
+        <input type="number" class="promoRegraQtd" min="1" step="1" value="${r.qtd_minima ?? ''}" />
+      </div>
+      <div class="form-group" style="margin-bottom:0;display:flex;gap:.5rem;align-items:flex-end">
+        <div style="flex:1">
+          <label>Desconto (%)</label>
+          <input type="number" class="promoRegraPct" min="1" max="100" step="0.01" value="${r.desconto_pct ?? ''}" />
+        </div>
+        <button type="button" class="btn btn--ghost btn--sm" onclick="removerRegraProgressiva(this)">Remover</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function removerRegraProgressiva(btn) {
+  btn.closest('.promo-regra-row').remove();
+}
+
+function coletarRegrasProgressivas() {
+  return Array.from(document.querySelectorAll('#promoRegrasList .promo-regra-row')).map(row => ({
+    qtd_minima: Number(row.querySelector('.promoRegraQtd').value),
+    desconto_pct: Number(row.querySelector('.promoRegraPct').value),
+  }));
+}
+
+async function _populatePromocaoPickers(promo = null) {
+  if (allProdutosAdmin.length === 0) await loadProdutosAdmin();
+
+  _populateCupomMultiSelect('promoCategoriasIds', 'promoFiltroCategorias', categoriasAdmin, c => c.nome, promo?.categorias_ids || []);
+  _populateCupomMultiSelect('promoProdutosIds', 'promoFiltroProdutos', allProdutosAdmin, p => `${p.nome}${p.sku ? ' — ' + p.sku : ''}`, promo?.produtos_ids || []);
+}
+
+async function openNovaPromocaoModal() {
+  document.getElementById('formPromocao').reset();
+  document.getElementById('promoId').value = '';
+  document.getElementById('promoStatus').value = 'ativo';
+  document.getElementById('promoTipo').value = 'percentual';
+  renderPromoRegrasList([]);
+  updatePromoTipoFields();
+  document.getElementById('promocaoModalTitle').textContent = 'Nova Promoção';
+  document.getElementById('promocaoModalOverlay').style.display = 'flex';
+  await _populatePromocaoPickers();
+}
+
+async function openEditPromocaoModal(id) {
+  const p = promocoesCache.find(x => x.id === id);
+  if (!p) { showToast('Promoção não encontrada.', 'error'); return; }
+
+  document.getElementById('promoId').value = p.id;
+  document.getElementById('promoNome').value = p.nome;
+  document.getElementById('promoDescricao').value = p.descricao || '';
+  document.getElementById('promoTipo').value = p.tipo;
+  document.getElementById('promoValor').value = p.valor ?? '';
+  document.getElementById('promoCompreQtd').value = p.compre_qtd ?? '';
+  document.getElementById('promoLeveQtd').value = p.leve_qtd ?? '';
+  document.getElementById('promoDataInicio').value = _toDatetimeLocal(p.data_inicio);
+  document.getElementById('promoDataFim').value = _toDatetimeLocal(p.data_fim);
+  document.getElementById('promoDestaque').checked = Boolean(p.destaque);
+  document.getElementById('promoMostrarContador').checked = Boolean(p.mostrar_contador);
+  document.getElementById('promoStatus').value = p.status;
+  renderPromoRegrasList(p.regras_progressivas || []);
+  updatePromoTipoFields();
+
+  document.getElementById('promocaoModalTitle').textContent = 'Editar Promoção';
+  document.getElementById('promocaoModalOverlay').style.display = 'flex';
+  await _populatePromocaoPickers(p);
+}
+
+function closePromocaoModal() {
+  document.getElementById('promocaoModalOverlay').style.display = 'none';
+}
+
+async function savePromocao(e) {
+  e.preventDefault();
+  const id = document.getElementById('promoId').value;
+  const tipo = document.getElementById('promoTipo').value;
+
+  const data = {
+    nome: document.getElementById('promoNome').value.trim(),
+    descricao: document.getElementById('promoDescricao').value.trim(),
+    tipo,
+    valor: document.getElementById('promoValor').value ? Number(document.getElementById('promoValor').value) : null,
+    compre_qtd: document.getElementById('promoCompreQtd').value ? Number(document.getElementById('promoCompreQtd').value) : null,
+    leve_qtd: document.getElementById('promoLeveQtd').value ? Number(document.getElementById('promoLeveQtd').value) : null,
+    regras_progressivas: tipo === 'progressivo' ? coletarRegrasProgressivas() : [],
+    data_inicio: document.getElementById('promoDataInicio').value || null,
+    data_fim: document.getElementById('promoDataFim').value || null,
+    destaque: document.getElementById('promoDestaque').checked,
+    mostrar_contador: document.getElementById('promoMostrarContador').checked,
+    status: document.getElementById('promoStatus').value,
+    categorias_ids: _selectedValues('promoCategoriasIds'),
+    produtos_ids: _selectedValues('promoProdutosIds'),
+  };
+
+  const btn = document.getElementById('btnSalvarPromocao');
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+  try {
+    if (id) {
+      await api.put(`/promocoes/${id}`, data);
+      showToast('Promoção atualizada!');
+    } else {
+      await api.post('/promocoes', data);
+      showToast('Promoção criada!');
+    }
+    closePromocaoModal();
+    await loadPromocoesAdmin();
+  } catch (e) {
+    showToast(e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Salvar Promoção'; }
+  }
+}
+
+async function togglePromocaoStatus(id, currentStatus) {
+  try {
+    const novo = currentStatus === 'ativo' ? 'inativo' : 'ativo';
+    await api.patch(`/promocoes/${id}/status`, { status: novo });
+    showToast(novo === 'ativo' ? 'Promoção ativada.' : 'Promoção desativada.');
+    await loadPromocoesAdmin();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function confirmDeletePromocao(id) {
+  const p = promocoesCache.find(x => x.id === id);
+  if (!p) return;
+  promocaoDeleteTargetId = id;
+  document.getElementById('promocaoDeleteBody').innerHTML =
+    `<p>Tem certeza que deseja excluir a promoção <strong>${p.nome}</strong>? Esta ação não pode ser desfeita.</p>`;
+  document.getElementById('promocaoDeleteOverlay').style.display = 'flex';
+}
+
+async function doDeletePromocao() {
+  if (!promocaoDeleteTargetId) return;
+  const btn = document.getElementById('btnConfirmDeletePromocao');
+  if (btn) { btn.disabled = true; btn.textContent = 'Excluindo...'; }
+  try {
+    await api.delete(`/promocoes/${promocaoDeleteTargetId}`);
+    showToast('Promoção excluída.');
+    document.getElementById('promocaoDeleteOverlay').style.display = 'none';
+    promocaoDeleteTargetId = null;
+    await loadPromocoesAdmin();
+  } catch (e) {
+    showToast(e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Excluir'; }
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   // Login inline quando sessão expirar
   document.getElementById('adminLoginForm')?.addEventListener('submit', async (e) => {
@@ -2240,6 +2491,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btnCloseCupomUsos')?.addEventListener('click', () => {
     document.getElementById('cupomUsosOverlay').style.display = 'none';
   });
+
+  document.getElementById('btnNovaPromocao')?.addEventListener('click', openNovaPromocaoModal);
+  document.getElementById('formPromocao')?.addEventListener('submit', savePromocao);
+  document.getElementById('btnClosePromocaoForm')?.addEventListener('click', closePromocaoModal);
+  document.getElementById('btnCancelarPromocao')?.addEventListener('click', closePromocaoModal);
+  document.getElementById('promoTipo')?.addEventListener('change', updatePromoTipoFields);
+  document.getElementById('btnAddRegraProgressiva')?.addEventListener('click', () => {
+    const atuais = coletarRegrasProgressivas();
+    atuais.push({ qtd_minima: '', desconto_pct: '' });
+    renderPromoRegrasList(atuais);
+  });
+  document.getElementById('btnCancelDeletePromocao')?.addEventListener('click', () => {
+    document.getElementById('promocaoDeleteOverlay').style.display = 'none';
+    promocaoDeleteTargetId = null;
+  });
+  document.getElementById('btnConfirmDeletePromocao')?.addEventListener('click', doDeletePromocao);
 
   document.getElementById('btnLogout')?.addEventListener('click', () => {
     if (confirm('Deseja sair do painel?')) {

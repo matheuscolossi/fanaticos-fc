@@ -55,7 +55,7 @@ function addToCart(produto, options = {}) {
       key,
       id: produto.id,
       nome: produto.nome,
-      preco: produto.preco,
+      preco: produto.preco_exibicao ?? produto.preco_promocional ?? produto.preco,
       imagem: (produto.imagens || [])[0] || null,
       tamanho: options.tamanho || null,
       personalizacao: options.personalizacao || null,

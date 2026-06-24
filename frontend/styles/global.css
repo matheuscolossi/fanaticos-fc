@@ -555,14 +555,33 @@ select option { background: var(--bg-card2); }
   align-items: center; justify-content: center;
   gap: .5rem; font-size: 3.5rem; background: #1a1a1a;
 }
-.produto-card__badge {
+.produto-card__badges {
   position: absolute; top: .5rem; left: .5rem;
+  display: flex; flex-direction: column; gap: .3rem; align-items: flex-start;
+}
+.produto-card__badge {
   background: var(--green); color: #fff; font-size: .65rem; font-weight: 800;
   padding: .2rem .55rem; border-radius: 4px; letter-spacing: .06em;
   text-transform: uppercase;
 }
 .produto-card__badge--jogador {
-  background: var(--gold); color: #000; top: .5rem; right: .5rem; left: auto;
+  position: absolute; background: var(--gold); color: #000; top: .5rem; right: .5rem;
+}
+.produto-card__badge--promo {
+  background: var(--danger);
+}
+.produto-card__preco-wrap {
+  display: flex; align-items: baseline; gap: .5rem; flex-wrap: wrap; margin-top: .1rem;
+}
+.produto-card__preco--riscado {
+  font-size: .82rem; font-weight: 500; color: var(--text-dim);
+  text-decoration: line-through; margin-top: 0;
+}
+.produto-card__preco--promo {
+  color: var(--danger); margin-top: 0;
+}
+.produto-card__countdown {
+  font-size: .72rem; font-weight: 700; color: var(--danger);
 }
 .produto-card__info {
   padding: .75rem .85rem 1rem; flex: 1; display: flex; flex-direction: column; gap: .4rem;

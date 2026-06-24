@@ -46,6 +46,10 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41 13.42 20.6a2 2 0 0 1-2.83 0L2.5 12.5V3h9.5l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor"/></svg>
         Cupons
       </a>
+      <a href="#" class="sidebar__link" data-tab="promocoes">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="4"/></svg>
+        Promoções
+      </a>
     </nav>
     <div class="sidebar__bottom">
       <a href="/" class="sidebar__link">
@@ -204,6 +208,17 @@
         </div>
       </div>
       <div class="table-wrap" id="tabelaCuponsWrap">
+        <div class="loading-state"><div class="spinner"></div><p>Carregando...</p></div>
+      </div>
+    </div>
+
+    <div id="tabPromocoes" class="tab-content">
+      <div class="prod-toolbar-top">
+        <div class="prod-toolbar-top__left">
+          <button class="btn btn--primary" id="btnNovaPromocao">+ Nova Promoção</button>
+        </div>
+      </div>
+      <div class="table-wrap" id="tabelaPromocoesWrap">
         <div class="loading-state"><div class="spinner"></div><p>Carregando...</p></div>
       </div>
     </div>
@@ -727,6 +742,130 @@
         <button class="modal__close" id="btnCloseCupomUsos">×</button>
       </div>
       <div id="cupomUsosBody" style="padding:0 1.5rem 1.5rem"></div>
+    </div>
+  </div>
+
+  <!-- Modal Promoção -->
+  <div class="modal-overlay" id="promocaoModalOverlay" style="display:none">
+    <div class="modal modal--form modal--form--xl">
+      <div class="modal__header">
+        <h2 id="promocaoModalTitle">Nova Promoção</h2>
+        <button class="modal__close" id="btnClosePromocaoForm">×</button>
+      </div>
+      <form id="formPromocao" class="product-form">
+        <input type="hidden" id="promoId" />
+
+        <div class="form-cols-2">
+          <div class="form-group">
+            <label>Nome *</label>
+            <input type="text" id="promoNome" placeholder="Ex: Black Friday Camisas Retrô" required />
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select id="promoStatus">
+              <option value="ativo">Ativo</option>
+              <option value="inativo">Inativo</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Descrição</label>
+          <input type="text" id="promoDescricao" placeholder="Ex: 20% de desconto em toda a linha retrô" />
+        </div>
+
+        <div class="form-group">
+          <label>Tipo de promoção *</label>
+          <select id="promoTipo">
+            <option value="percentual">Desconto percentual (%)</option>
+            <option value="fixo">Desconto em valor fixo (R$)</option>
+            <option value="preco_fixo">Preço promocional fixo (R$)</option>
+            <option value="compre_x_leve_y">Compre X e leve Y</option>
+            <option value="progressivo">Desconto progressivo por quantidade</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="grpPromoValor">
+          <label id="lblPromoValor">Valor do desconto (%) *</label>
+          <input type="number" id="promoValor" min="0" step="0.01" />
+        </div>
+
+        <div class="form-cols-2" id="grpPromoCompreLeve" style="display:none">
+          <div class="form-group">
+            <label>Compre (qtd.) *</label>
+            <input type="number" id="promoCompreQtd" min="1" step="1" placeholder="Ex: 2" />
+          </div>
+          <div class="form-group">
+            <label>Leve (qtd.) *</label>
+            <input type="number" id="promoLeveQtd" min="1" step="1" placeholder="Ex: 3" />
+          </div>
+        </div>
+
+        <div class="form-group" id="grpPromoProgressivo" style="display:none">
+          <label>Faixas de desconto progressivo *</label>
+          <div id="promoRegrasList"></div>
+          <button type="button" class="btn btn--outline btn--sm" id="btnAddRegraProgressiva">+ Adicionar faixa</button>
+          <small style="color:var(--text-dim);display:block;margin-top:.4rem">Ex: a partir de 2 unidades, 10% de desconto; a partir de 4 unidades, 20%.</small>
+        </div>
+
+        <div class="form-cols-2">
+          <div class="form-group">
+            <label>Data inicial</label>
+            <input type="datetime-local" id="promoDataInicio" />
+          </div>
+          <div class="form-group">
+            <label>Data final</label>
+            <input type="datetime-local" id="promoDataFim" />
+          </div>
+        </div>
+
+        <div class="form-cols-2">
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer">
+              <input type="checkbox" id="promoDestaque" style="width:auto" />
+              Destacar produtos promocionais na loja
+            </label>
+          </div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer">
+              <input type="checkbox" id="promoMostrarContador" style="width:auto" />
+              Mostrar contador regressivo até o encerramento
+            </label>
+          </div>
+        </div>
+
+        <div class="form-cols-2">
+          <div class="form-group">
+            <label>Categorias participantes</label>
+            <input type="text" id="promoFiltroCategorias" placeholder="Filtrar categorias..." style="margin-bottom:.4rem" />
+            <select id="promoCategoriasIds" multiple style="height:120px"></select>
+            <small style="color:var(--text-dim)">Nenhuma selecionada = vale para todas as categorias</small>
+          </div>
+          <div class="form-group">
+            <label>Produtos participantes</label>
+            <input type="text" id="promoFiltroProdutos" placeholder="Filtrar produtos..." style="margin-bottom:.4rem" />
+            <select id="promoProdutosIds" multiple style="height:120px"></select>
+            <small style="color:var(--text-dim)">Nenhum selecionado = vale para todos os produtos</small>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn--outline" id="btnCancelarPromocao">Cancelar</button>
+          <button type="submit" class="btn btn--primary" id="btnSalvarPromocao">Salvar Promoção</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Excluir Promoção -->
+  <div class="modal-overlay" id="promocaoDeleteOverlay" style="display:none">
+    <div class="modal modal--sm">
+      <div class="modal__header"><h2>Excluir Promoção</h2></div>
+      <div id="promocaoDeleteBody" style="padding:0 1.5rem 1rem;color:var(--text-muted)"></div>
+      <div class="form-actions" style="padding:0 1.5rem 1.5rem">
+        <button class="btn btn--outline" id="btnCancelDeletePromocao">Cancelar</button>
+        <button class="btn btn--danger" id="btnConfirmDeletePromocao">Excluir</button>
+      </div>
     </div>
   </div>
 

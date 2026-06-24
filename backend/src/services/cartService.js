@@ -1,5 +1,6 @@
 const { getProduct } = require('./productService');
 const couponService = require('./couponService');
+const promocaoService = require('./promocaoService');
 const { createHttpError } = require('../utils/http');
 
 // Frete por região, a partir do estado do CEP do cliente (loja em Caxias do
@@ -28,7 +29,10 @@ async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
     throw createHttpError(400, 'Informe ao menos um item no carrinho (items: [{productId, qty}]).', 'CART_ITEMS_REQUIRED');
   }
 
+  const promocoesAtivas = await promocaoService.getPromocoesAtivas();
+
   const resolvedItems = [];
+  let promocoesDesconto = 0;
   for (const item of items) {
     const qty = Number(item?.qty);
     if (!item?.productId || !Number.isInteger(qty) || qty < 1) {
@@ -36,7 +40,11 @@ async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
     }
 
     const product = await getProduct(item.productId); // lança 404 se o produto não existir
-    const price = Number(product.preco_promocional ?? product.preco);
+    const price = Number(product.preco_exibicao ?? product.preco_promocional ?? product.preco);
+
+    const { desconto, promocaoAplicada } = promocaoService.calcularDescontoQuantidade(product, qty, price, promocoesAtivas);
+    promocoesDesconto += desconto;
+
     resolvedItems.push({
       productId: product.id,
       categoria_id: product.categoria_id,
@@ -45,10 +53,13 @@ async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
       price,
       qty,
       image: product.imagens[0] || null,
+      promocaoAplicada: promocaoAplicada?.nome || product.promocao_nome || null,
     });
   }
 
-  const subtotal = round2(resolvedItems.reduce((sum, item) => sum + item.price * item.qty, 0));
+  const subtotalBruto = round2(resolvedItems.reduce((sum, item) => sum + item.price * item.qty, 0));
+  promocoesDesconto = round2(Math.min(promocoesDesconto, subtotalBruto));
+  const subtotal = round2(subtotalBruto - promocoesDesconto);
 
   let freight = calculateFreight(subtotal, uf);
   let discount = 0;
@@ -67,8 +78,10 @@ async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
   const total = round2(subtotal + freight - discount);
 
   const resposta = {
-    items: resolvedItems.map(({ productId, name, price, qty, image }) => ({ productId, name, price, qty, image })),
+    items: resolvedItems.map(({ productId, name, price, qty, image, promocaoAplicada }) =>
+      ({ productId, name, price, qty, image, promocaoAplicada })),
     subtotal, freight, discount, total,
+    promocoesDesconto,
   };
   if (cupomErro) resposta.cupomErro = cupomErro;
   return resposta;

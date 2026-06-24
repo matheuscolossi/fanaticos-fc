@@ -1,5 +1,6 @@
 const productModel = require('../models/productModel');
 const { normalizeProductImages } = require('./imageService');
+const promocaoService = require('./promocaoService');
 const { createHttpError } = require('../utils/http');
 
 function parseJson(value, fallback) {
@@ -98,15 +99,33 @@ function serializeProductForList(product) {
   return { ...product, imagens: imgs.slice(0, 1), destaque: Boolean(product.destaque) };
 }
 
+// Anexa o melhor preço promocional vigente (preço promocional manual ou promoção
+// percentual/fixo/preço fixo ativa) a cada produto, para exibição na loja.
+function aplicarInfoPromocional(produto, promocoesAtivas) {
+  const { precoFinal, promocaoAplicada } = promocaoService.calcularPrecoComPromocao(produto, promocoesAtivas);
+  const precoBase = Number(produto.preco);
+  return {
+    ...produto,
+    preco_exibicao: precoFinal,
+    em_promocao: precoFinal < precoBase,
+    promocao_destaque: Boolean(promocaoAplicada?.destaque),
+    promocao_nome: promocaoAplicada?.nome || null,
+    promocao_fim: promocaoAplicada?.mostrar_contador ? promocaoAplicada.data_fim : null,
+  };
+}
+
 async function listProductsPaginated(query) {
   const { produtos, total, page, totalPages } = await productModel.listPaginated(query);
-  return { produtos: produtos.map(serializeProductForList), total, page, totalPages };
+  const promocoesAtivas = await promocaoService.getPromocoesAtivas();
+  const comPromocao = produtos.map(p => aplicarInfoPromocional(p, promocoesAtivas));
+  return { produtos: comPromocao.map(serializeProductForList), total, page, totalPages };
 }
 
 async function getProduct(productId) {
   const product = await productModel.findById(productId);
   if (!product) throw createHttpError(404, 'Produto não encontrado.', 'PRODUCT_NOT_FOUND');
-  return serializeProduct(product);
+  const promocoesAtivas = await promocaoService.getPromocoesAtivas();
+  return serializeProduct(aplicarInfoPromocional(product, promocoesAtivas));
 }
 
 async function createProduct(data) {
