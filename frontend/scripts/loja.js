@@ -195,17 +195,6 @@ async function renderCategoriaCards() {
   });
 }
 
-// Esconde a grade de categorias e revela o catálogo completo (busca/filtro/categoria
-// específica), atualizando o breadcrumb para "Início > {label}".
-function mostrarCatalogo(label) {
-  const home = document.getElementById('categoriasHome');
-  if (home) home.style.display = 'none';
-  const catalogo = document.getElementById('catalogo');
-  if (catalogo) catalogo.style.display = '';
-  const bcAtual = document.getElementById('breadcrumbAtual');
-  if (bcAtual) bcAtual.textContent = label;
-}
-
 function filterByCategory(catId) {
   catAtiva = catId;
   document.querySelectorAll('.cat-btn').forEach(b => b.classList.toggle('active', String(b.dataset.cat) === String(catId)));
@@ -483,7 +472,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.querySelector('.cat-nav-btn[data-cat=""]')?.addEventListener('click', () => {
     filterByCategory('');
-    document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' });
   });
 
   document.getElementById('btnCloseModal')?.addEventListener('click', closeModal);
@@ -491,30 +479,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (e.target === document.getElementById('modalOverlay')) closeModal();
   });
 
-  document.querySelector('.hero__cta')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    document.getElementById('categoriasHome')?.scrollIntoView({ behavior: 'smooth' });
-  });
+  // Página /busca: aplica filtro vindo da URL — ?query=&cat= é o formato exigido pelo
+  // PDF do trabalho; ?time= é usado internamente pelos links de time no header da home.
+  const inputBusca = document.getElementById('inputBusca');
+  if (inputBusca) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const timeParam = urlParams.get('time');
+    const queryParam = urlParams.get('query');
+    const catParam = urlParams.get('cat');
+    const termoBusca = timeParam || queryParam;
 
-  document.getElementById('linkCatalogoCompleto')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    clearFilters();
-    mostrarCatalogo('Catálogo Completo');
-    document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' });
-  });
-
-  // Auto-filtro via parâmetros de URL: ?time=Flamengo (interno) ou
-  // ?query=&cat= (padrão exigido em /busca pelo trabalho da faculdade)
-  const urlParams = new URLSearchParams(window.location.search);
-  const timeParam = urlParams.get('time');
-  const queryParam = urlParams.get('query');
-  const catParam = urlParams.get('cat');
-  const termoBusca = timeParam || queryParam;
-  const isBuscaPage = window.location.pathname === '/busca';
-
-  if (termoBusca || catParam || isBuscaPage) {
-    const inputBusca = document.getElementById('inputBusca');
-    if (inputBusca && termoBusca) inputBusca.value = termoBusca;
+    if (termoBusca) inputBusca.value = termoBusca;
 
     let categoriaEncontrada = null;
     if (catParam) {
@@ -524,16 +499,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (categoriaEncontrada) filterByCategory(categoriaEncontrada.id);
-    else applyFilters();
+    else if (termoBusca) applyFilters();
 
-    mostrarCatalogo(
-      categoriaEncontrada ? categoriaEncontrada.nome
-      : termoBusca ? `Resultados para "${termoBusca}"`
-      : 'Catálogo Completo'
-    );
-
-    setTimeout(() => {
-      document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' });
-    }, 300);
+    const bcAtual = document.getElementById('breadcrumbAtual');
+    if (bcAtual) {
+      bcAtual.textContent = categoriaEncontrada ? categoriaEncontrada.nome
+        : termoBusca ? `Resultados para "${termoBusca}"`
+        : 'Catálogo Completo';
+    }
   }
 });

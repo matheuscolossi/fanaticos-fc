@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Catálogo — Fanáticos Mantos</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/images/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/images/favicon-16.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="/assets/images/favicon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles/global.css" />
+  <link rel="stylesheet" href="/styles/loja.css" />
+  <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('fc_theme') || 'dark');</script>
+</head>
+<body>
+  <header class="header" id="header">
+    <div class="header__inner">
+      <a href="/" class="logo">
+        <span class="logo__text">FANÁTICOS <em>MANTOS</em></span>
+      </a>
+      <nav class="nav">
+        <a href="/" class="nav__link">Loja</a>
+        <a href="/pages/carrinho.html" class="nav__link">Carrinho</a>
+        <a href="/pages/conta.html" class="nav__link">Minha Conta</a>
+      </nav>
+      <div class="header__actions">
+        <button class="btn-icon" id="btnCart" aria-label="Carrinho">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+          <span class="cart-badge" id="cartBadge">0</span>
+        </button>
+        <button class="btn-icon" id="btnUser" aria-label="Minha Conta" title="Minha Conta">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </button>
+        <button class="btn-icon btn-theme" title="Tema Claro" aria-label="Alternar tema"></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="catalogo">
+    <div class="container">
+      <nav class="breadcrumb" id="catalogoBreadcrumb">
+        <a href="/">Início</a><span class="breadcrumb__sep">›</span><span id="breadcrumbAtual">Catálogo Completo</span>
+      </nav>
+      <h1 class="section-title">Catálogo Completo</h1>
+
+      <!-- Filtros -->
+      <div class="filtros" id="filtros">
+
+        <!-- Linha 1: busca + ordenação -->
+        <div class="filtros__row filtros__row--top">
+          <div class="filtros__busca">
+            <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="text" id="inputBusca" placeholder="Buscar por clube, seleção ou modelo" class="input-busca" />
+          </div>
+          <div class="filtros__ordem">
+            <label class="filtros__label">Ordenar por</label>
+            <select id="selectOrdem" class="select-ordem">
+              <option value="recente">Mais recentes</option>
+              <option value="az" selected>A → Z</option>
+              <option value="za">Z → A</option>
+              <option value="preco_asc">Menor preço</option>
+              <option value="preco_desc">Maior preço</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Linha 2: categorias -->
+        <div class="filtros__cats" id="filtroCats">
+          <button class="cat-btn active" data-cat="">Todas</button>
+        </div>
+
+        <!-- Linha 3: faixa de preço -->
+        <div class="filtros__row filtros__row--preco">
+          <span class="filtros__label">Faixa de preço:</span>
+          <input type="number" id="precoMin" placeholder="Preço min" class="input-preco" />
+          <span class="filtros__sep">—</span>
+          <input type="number" id="precoMax" placeholder="Preço max" class="input-preco" />
+          <button class="btn btn--outline btn--sm" id="btnFiltrar">Aplicar</button>
+          <button class="btn btn--ghost btn--sm" id="btnLimpar">Limpar tudo</button>
+          <span class="filtros__count" id="filtrosCount"></span>
+        </div>
+
+      </div>
+
+      <div class="produtos-grid" id="gridProdutos">
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Carregando produtos...</p>
+        </div>
+      </div>
+
+      <div id="emptyState" class="empty-state" style="display:none">
+        <p>Nenhum produto encontrado para essa busca.</p>
+        <button class="btn btn--outline" id="btnLimpar2">Limpar filtros</button>
+      </div>
+
+      <div id="paginacaoProdutos" class="pagination" style="display:none"></div>
+    </div>
+  </main>
+
+  <aside class="side-cart" id="sideCart">
+    <div class="side-cart__overlay" id="cartOverlay"></div>
+    <div class="side-cart__panel">
+      <div class="side-cart__header">
+        <h3>Seu Carrinho</h3>
+        <button class="btn-icon" id="btnCloseCart">Fechar</button>
+      </div>
+      <div class="side-cart__body" id="cartBody">
+        <div class="cart-empty">
+          <span></span>
+          <p>Seu carrinho está vazio</p>
+        </div>
+      </div>
+      <div class="side-cart__footer" id="cartFooter" style="display:none">
+        <div class="cart-total">
+          <span>Total</span>
+          <strong id="cartTotal">R$ 0,00</strong>
+        </div>
+        <button class="btn btn--whatsapp" id="btnCheckout">Confirmar pagamento</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="modal-overlay" id="authOverlay" style="display:none">
+    <div class="modal modal--auth" id="authModal">
+      <button class="modal__close" id="btnCloseAuth">×</button>
+      <div id="authContent"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay modal-overlay--checkout" id="checkoutOverlay" style="display:none">
+    <div class="modal modal--checkout">
+      <div id="checkoutContent"></div>
+    </div>
+  </div>
+
+  <div id="pixOverlay" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.82);backdrop-filter:blur(4px);overflow-y:auto;padding:1rem;align-items:flex-start;justify-content:center">
+    <div class="modal modal--checkout" style="margin:auto">
+      <div id="pixContent"></div>
+    </div>
+  </div>
+
+  <script src="/scripts/api.js"></script>
+  <script src="/scripts/cart.js"></script>
+  <script src="/scripts/auth.js"></script>
+  <script src="/scripts/loja.js"></script>
+</body>
+</html>
