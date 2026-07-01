@@ -27,12 +27,20 @@ function countAdmins() {
   return get("SELECT COUNT(*) as c FROM usuarios WHERE perfil = 'admin'");
 }
 
+function countAdminsAtivos() {
+  return get("SELECT COUNT(*) as c FROM usuarios WHERE perfil = 'admin' AND status = 'ativo'");
+}
+
 function countPedidos(userId) {
   return get('SELECT COUNT(*) as c FROM pedidos WHERE usuario_id = ?', [userId]);
 }
 
 function unlinkPedidos(userId) {
   return run('UPDATE pedidos SET usuario_id = NULL WHERE usuario_id = ?', [userId]);
+}
+
+function unlinkLogs(userId) {
+  return run('UPDATE logs_acoes SET usuario_id = NULL WHERE usuario_id = ?', [userId]);
 }
 
 function remove(userId) {
@@ -75,19 +83,65 @@ function markEmailVerified(userId) {
   );
 }
 
+function updateUltimoAcesso(userId) {
+  return run('UPDATE usuarios SET ultimo_acesso = CURRENT_TIMESTAMP WHERE id = ?', [userId]);
+}
+
+// ── Funcionários/administradores (perfil = 'admin') ────────────────────────
+
+function listFuncionarios() {
+  return all(`
+    SELECT id, nome, email, perfil, cargo, permissoes, status, ultimo_acesso, created_at
+    FROM usuarios
+    WHERE perfil = 'admin'
+    ORDER BY created_at DESC
+  `);
+}
+
+function createFuncionario({ nome, email, senha, cargo, permissoes, status }) {
+  return run(
+    `INSERT INTO usuarios (nome, email, senha, perfil, cargo, permissoes, status, email_verificado)
+     VALUES (?, ?, ?, 'admin', ?, JSON_VALUE(?), ?, ?)`,
+    [nome, email, senha, cargo || null, JSON.stringify(permissoes || []), status || 'ativo', 1]
+  );
+}
+
+function updateFuncionario(userId, { nome, cargo, permissoes, status }) {
+  return run(
+    `UPDATE usuarios SET nome = ?, cargo = ?, permissoes = JSON_VALUE(?), status = ? WHERE id = ?`,
+    [nome, cargo || null, JSON.stringify(permissoes || []), status || 'ativo', userId]
+  );
+}
+
+function updateFuncionarioSenha(userId, senhaHash) {
+  return run('UPDATE usuarios SET senha = ? WHERE id = ?', [senhaHash, userId]);
+}
+
+function setFuncionarioStatus(userId, status) {
+  return run('UPDATE usuarios SET status = ? WHERE id = ?', [status, userId]);
+}
+
 module.exports = {
   countAdmins,
+  countAdminsAtivos,
   countPedidos,
   create,
+  createFuncionario,
   findByEmail,
   findById,
   findPublicById,
   listAdminsView,
+  listFuncionarios,
   markEmailVerified,
   remove,
+  setFuncionarioStatus,
   setVerificationCode,
+  unlinkLogs,
   unlinkPedidos,
   updateAddress,
+  updateFuncionario,
+  updateFuncionarioSenha,
   updateName,
   updateNameAndPassword,
+  updateUltimoAcesso,
 };

@@ -390,6 +390,7 @@ function setTab(name) {
     usuarios:   ['Usuários Cadastrados', 'Gerencie as contas de usuários'],
     cupons:     ['Gerenciar Cupons',     'Crie e administre cupons de desconto'],
     promocoes:  ['Gerenciar Promoções',  'Descontos por produto/categoria, combos e promoções por período'],
+    administradores: ['Administradores e Permissões', 'Cadastre funcionários, defina cargos e permissões individuais'],
   };
   document.getElementById('adminTabTitle').textContent = titles[name]?.[0] ?? name;
   document.getElementById('adminTabSub').textContent   = titles[name]?.[1] ?? '';
@@ -400,6 +401,7 @@ function setTab(name) {
   if (name === 'produtos' && allProdutosAdmin.length === 0) loadProdutosAdmin();
   if (name === 'cupons')   loadCuponsAdmin();
   if (name === 'promocoes') loadPromocoesAdmin();
+  if (name === 'administradores') loadFuncionariosAdmin();
 }
 
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -2325,6 +2327,211 @@ async function doDeletePromocao() {
   }
 }
 
+// ── Administradores e Permissões ──────────────────────────────────────────
+let funcionariosCache = [];
+
+const PERMISSOES = [
+  { key: 'produtos.visualizar',      label: 'Visualizar produtos' },
+  { key: 'produtos.cadastrar',        label: 'Cadastrar produtos' },
+  { key: 'produtos.editar',           label: 'Editar produtos' },
+  { key: 'produtos.excluir',          label: 'Excluir produtos' },
+  { key: 'estoque.gerenciar',         label: 'Gerenciar estoque' },
+  { key: 'pedidos.visualizar',        label: 'Visualizar pedidos' },
+  { key: 'pedidos.alterar',           label: 'Alterar pedidos' },
+  { key: 'clientes.gerenciar',        label: 'Gerenciar clientes' },
+  { key: 'cupons.criar',              label: 'Criar cupons' },
+  { key: 'financeiro.visualizar',     label: 'Visualizar financeiro' },
+  { key: 'configuracoes.acessar',     label: 'Acessar configurações' },
+  { key: 'administradores.gerenciar', label: 'Gerenciar administradores' },
+];
+
+function renderPermissoesGrid(selecionadas = []) {
+  const grid = document.getElementById('funcPermissoesGrid');
+  if (!grid) return;
+  const selecionadasSet = new Set(selecionadas);
+  grid.innerHTML = PERMISSOES.map(p => `
+    <label>
+      <input type="checkbox" class="funcPermissaoCheck" value="${p.key}" ${selecionadasSet.has(p.key) ? 'checked' : ''} />
+      ${p.label}
+    </label>
+  `).join('');
+}
+
+function coletarPermissoesSelecionadas() {
+  return Array.from(document.querySelectorAll('.funcPermissaoCheck:checked')).map(el => el.value);
+}
+
+async function loadFuncionariosAdmin() {
+  const wrap = document.getElementById('tabelaFuncionariosWrap');
+  try {
+    funcionariosCache = await api.get('/admin/funcionarios');
+    renderTabelaFuncionarios();
+  } catch (e) {
+    wrap.innerHTML = '<div class="loading-state" style="color:var(--danger)">Erro ao carregar funcionários.</div>';
+  }
+}
+
+function renderTabelaFuncionarios() {
+  const wrap = document.getElementById('tabelaFuncionariosWrap');
+  if (!wrap) return;
+
+  if (funcionariosCache.length === 0) {
+    wrap.innerHTML = '<div class="loading-state">Nenhum funcionário cadastrado.</div>';
+    return;
+  }
+
+  const currentUser = JSON.parse(localStorage.getItem('fc_user') || 'null');
+
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Nome</th><th>E-mail</th><th>Cargo</th><th>Permissões</th>
+          <th>Último acesso</th><th>Status</th><th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${funcionariosCache.map(f => {
+          const isAtivo = f.status === 'ativo';
+          const isSelf = currentUser && String(currentUser.id) === String(f.id);
+          const numPerm = (f.permissoes || []).length;
+          return `
+          <tr>
+            <td style="font-weight:700">${f.nome}${isSelf ? ' <span style="color:var(--text-dim);font-size:.75rem">(você)</span>' : ''}</td>
+            <td style="color:var(--text-muted)">${f.email}</td>
+            <td>${f.cargo || '—'}</td>
+            <td style="font-size:.82rem;color:var(--text-muted)">${numPerm === PERMISSOES.length ? 'Todas' : `${numPerm} de ${PERMISSOES.length}`}</td>
+            <td style="color:var(--text-muted);font-size:.82rem">${f.ultimo_acesso ? new Date(f.ultimo_acesso).toLocaleString('pt-BR') : 'Nunca acessou'}</td>
+            <td><span class="td-badge ${isAtivo ? '' : 'td-badge--off'}">${isAtivo ? 'Ativo' : 'Inativo'}</span></td>
+            <td>
+              <div class="action-dropdown" id="funcActions${f.id}">
+                <button class="btn btn--outline btn--sm" onclick="toggleDropdown('funcActions${f.id}')">Ações ▾</button>
+                <div class="action-dropdown__menu">
+                  <div class="action-dropdown__item" onclick="closeAllDropdowns();openEditFuncionarioModal(${f.id})">Editar</div>
+                  ${isSelf ? '' : `<div class="action-dropdown__item" onclick="closeAllDropdowns();toggleFuncionarioStatus(${f.id},'${f.status}')">${isAtivo ? 'Desativar acesso' : 'Ativar acesso'}</div>`}
+                  <div class="action-dropdown__item" onclick="closeAllDropdowns();verHistorico(${f.id}, '${f.nome}')">Ver histórico</div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        `;}).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function openNovoFuncionarioModal() {
+  document.getElementById('formFuncionario').reset();
+  document.getElementById('funcId').value = '';
+  document.getElementById('funcStatus').value = 'ativo';
+  document.getElementById('funcSenha').required = true;
+  document.getElementById('lblFuncSenha').textContent = 'Senha *';
+  document.getElementById('hintFuncSenha').textContent = '';
+  renderPermissoesGrid([]);
+  document.getElementById('funcionarioModalTitle').textContent = 'Novo Funcionário';
+  document.getElementById('funcionarioModalOverlay').style.display = 'flex';
+}
+
+function openEditFuncionarioModal(id) {
+  const f = funcionariosCache.find(x => x.id === id);
+  if (!f) { showToast('Funcionário não encontrado.', 'error'); return; }
+
+  document.getElementById('funcId').value = f.id;
+  document.getElementById('funcNome').value = f.nome;
+  document.getElementById('funcEmail').value = f.email;
+  document.getElementById('funcCargo').value = f.cargo || '';
+  document.getElementById('funcStatus').value = f.status;
+  document.getElementById('funcSenha').value = '';
+  document.getElementById('funcSenha').required = false;
+  document.getElementById('lblFuncSenha').textContent = 'Senha';
+  document.getElementById('hintFuncSenha').textContent = 'Deixe em branco para manter a senha atual.';
+  renderPermissoesGrid(f.permissoes || []);
+
+  document.getElementById('funcionarioModalTitle').textContent = 'Editar Funcionário';
+  document.getElementById('funcionarioModalOverlay').style.display = 'flex';
+}
+
+function closeFuncionarioModal() {
+  document.getElementById('funcionarioModalOverlay').style.display = 'none';
+}
+
+async function saveFuncionario(e) {
+  e.preventDefault();
+  const id = document.getElementById('funcId').value;
+
+  const data = {
+    nome: document.getElementById('funcNome').value.trim(),
+    email: document.getElementById('funcEmail').value.trim(),
+    cargo: document.getElementById('funcCargo').value.trim(),
+    status: document.getElementById('funcStatus').value,
+    permissoes: coletarPermissoesSelecionadas(),
+  };
+  const senha = document.getElementById('funcSenha').value;
+  if (senha) data.senha = senha;
+
+  const btn = document.getElementById('btnSalvarFuncionario');
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+  try {
+    if (id) {
+      await api.put(`/admin/funcionarios/${id}`, data);
+      showToast('Funcionário atualizado!');
+    } else {
+      await api.post('/admin/funcionarios', data);
+      showToast('Funcionário cadastrado!');
+    }
+    closeFuncionarioModal();
+    await loadFuncionariosAdmin();
+  } catch (e) {
+    showToast(e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Salvar Funcionário'; }
+  }
+}
+
+async function toggleFuncionarioStatus(id, currentStatus) {
+  try {
+    const novo = currentStatus === 'ativo' ? 'inativo' : 'ativo';
+    await api.patch(`/admin/funcionarios/${id}/status`, { status: novo });
+    showToast(novo === 'ativo' ? 'Acesso reativado.' : 'Acesso desativado.');
+    await loadFuncionariosAdmin();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function verHistorico(usuarioId, nome) {
+  const overlay = document.getElementById('historicoOverlay');
+  const body = document.getElementById('historicoBody');
+  document.getElementById('historicoTitle').textContent = usuarioId ? `Histórico — ${nome}` : 'Histórico de Ações';
+  body.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+  overlay.style.display = 'flex';
+
+  try {
+    const logs = await api.get(usuarioId ? `/admin/logs?usuario_id=${usuarioId}` : '/admin/logs');
+    if (logs.length === 0) {
+      body.innerHTML = '<p style="color:var(--text-muted)">Nenhuma ação registrada ainda.</p>';
+      return;
+    }
+    body.innerHTML = `
+      <table>
+        <thead><tr><th>Ação</th><th>Detalhes</th><th>Responsável</th><th>Data</th></tr></thead>
+        <tbody>
+          ${logs.map(l => `
+            <tr>
+              <td style="font-weight:600">${l.acao}</td>
+              <td style="color:var(--text-muted);font-size:.85rem">${l.detalhes || '—'}</td>
+              <td style="font-size:.85rem">${l.usuario_nome || '—'}</td>
+              <td style="font-size:.8rem;color:var(--text-muted)">${new Date(l.created_at).toLocaleString('pt-BR')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    body.innerHTML = `<p style="color:var(--danger)">Erro ao carregar histórico.</p>`;
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   // Login inline quando sessão expirar
   document.getElementById('adminLoginForm')?.addEventListener('submit', async (e) => {
@@ -2507,6 +2714,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     promocaoDeleteTargetId = null;
   });
   document.getElementById('btnConfirmDeletePromocao')?.addEventListener('click', doDeletePromocao);
+
+  document.getElementById('btnNovoFuncionario')?.addEventListener('click', openNovoFuncionarioModal);
+  document.getElementById('formFuncionario')?.addEventListener('submit', saveFuncionario);
+  document.getElementById('btnCloseFuncionarioForm')?.addEventListener('click', closeFuncionarioModal);
+  document.getElementById('btnCancelarFuncionario')?.addEventListener('click', closeFuncionarioModal);
+  document.getElementById('btnVerHistoricoGeral')?.addEventListener('click', () => verHistorico(null, null));
+  document.getElementById('btnCloseHistorico')?.addEventListener('click', () => {
+    document.getElementById('historicoOverlay').style.display = 'none';
+  });
 
   document.getElementById('btnLogout')?.addEventListener('click', () => {
     if (confirm('Deseja sair do painel?')) {

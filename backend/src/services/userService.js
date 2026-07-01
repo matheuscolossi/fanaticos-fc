@@ -21,6 +21,7 @@ async function deleteUser(targetId, requesterId) {
   }
 
   await userModel.unlinkPedidos(targetId);
+  await userModel.unlinkLogs(targetId);
   await userModel.remove(targetId);
   return { message: 'Usuário excluído.' };
 }

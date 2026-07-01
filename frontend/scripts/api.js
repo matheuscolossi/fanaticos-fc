@@ -1,4 +1,5 @@
 const API_BASE = window.FANATICOS_API_BASE || 'https://fanaticos-fc.onrender.com/api';
+let STRIPE_PUBLISHABLE_KEY = window.FANATICOS_STRIPE_PUBLISHABLE || '';
 
 async function apiFetch(path, options = {}) {
   const token = localStorage.getItem('fc_token');
@@ -48,6 +49,17 @@ async function fetchCartSummary(items, cupomCode, uf) {
     throw error;
   }
   return res.json();
+}
+
+async function loadStripeConfig() {
+  if (STRIPE_PUBLISHABLE_KEY) return STRIPE_PUBLISHABLE_KEY;
+  try {
+    const config = await api.get('/config');
+    STRIPE_PUBLISHABLE_KEY = config.stripePublishableKey || '';
+    return STRIPE_PUBLISHABLE_KEY;
+  } catch (err) {
+    return '';
+  }
 }
 
 function showToast(msg, type = 'success') {

@@ -397,6 +397,27 @@ async function confirmarPedido() {
 
     let pedidoId = null;
     try {
+      if (metodo === 'stripe') {
+        const publishableKey = await loadStripeConfig();
+        if (!publishableKey) {
+          throw new Error('Stripe não está configurado no frontend. Verifique STRIPE_PUBLISHABLE_KEY.');
+        }
+
+        const session = await api.post('/pagamentos/stripe/create-session', {
+          itens: cartItems.map(i => ({ productId: i.id, qty: i.qty })),
+          nome_cliente: nome,
+          email_cliente: email,
+          telefone_cliente: telefone,
+          endereco,
+          uf: getUfFrete(),
+          cupom_codigo: cupomCodigo || null,
+        });
+
+        const stripe = Stripe(publishableKey);
+        await stripe.redirectToCheckout({ sessionId: session.sessionId });
+        return;
+      }
+
       const res = await api.post('/pedidos', {
         itens: cartItems, total,
         nome_cliente: nome, email_cliente: email,
@@ -455,11 +476,34 @@ async function confirmarPedido() {
     }
   } catch(err) {
     console.error('[checkout:unexpected:error]', err);
-    showToast('Erro ao processar pedido. Tente novamente.', 'error');
+    showToast(err.message || 'Erro ao processar pedido. Tente novamente.', 'error');
     const btn = document.getElementById('btnConfirmarPedido');
     if (btn) { btn.disabled = false; btn.textContent = 'Confirmar pedido'; }
   }
 }
+
+function handleStripeCheckoutResult() {
+  const params = new URLSearchParams(window.location.search);
+  const status = params.get('checkout');
+  if (!status) return;
+
+  if (status === 'success') {
+    cartItems = [];
+    saveCart();
+    setCupomAplicado('');
+    setCartResumo(null);
+    setCepFrete('', '');
+    renderCart();
+    updateBadge();
+    showToast('Pagamento confirmado! Pedido registrado com Stripe.');
+  }
+
+  if (status === 'cancel') {
+    showToast('Pagamento cancelado. Seu carrinho foi mantido.');
+  }
+}
+
+handleStripeCheckoutResult();
 
 // Conta logada nunca confirmou o e-mail (ex.: criada antes dessa verificação
 // existir). Mostra o mesmo passo de código do cadastro, sem perder os dados

@@ -50,6 +50,10 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="4"/></svg>
         Promoções
       </a>
+      <a href="#" class="sidebar__link" data-tab="administradores">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        Administradores
+      </a>
     </nav>
     <div class="sidebar__bottom">
       <a href="/" class="sidebar__link">
@@ -219,6 +223,18 @@
         </div>
       </div>
       <div class="table-wrap" id="tabelaPromocoesWrap">
+        <div class="loading-state"><div class="spinner"></div><p>Carregando...</p></div>
+      </div>
+    </div>
+
+    <div id="tabAdministradores" class="tab-content">
+      <div class="prod-toolbar-top">
+        <div class="prod-toolbar-top__left">
+          <button class="btn btn--primary" id="btnNovoFuncionario">+ Novo Funcionário</button>
+          <button class="btn btn--outline btn--sm" id="btnVerHistoricoGeral">Histórico de ações</button>
+        </div>
+      </div>
+      <div class="table-wrap" id="tabelaFuncionariosWrap">
         <div class="loading-state"><div class="spinner"></div><p>Carregando...</p></div>
       </div>
     </div>
@@ -866,6 +882,71 @@
         <button class="btn btn--outline" id="btnCancelDeletePromocao">Cancelar</button>
         <button class="btn btn--danger" id="btnConfirmDeletePromocao">Excluir</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal Funcionário -->
+  <div class="modal-overlay" id="funcionarioModalOverlay" style="display:none">
+    <div class="modal modal--form modal--form--xl">
+      <div class="modal__header">
+        <h2 id="funcionarioModalTitle">Novo Funcionário</h2>
+        <button class="modal__close" id="btnCloseFuncionarioForm">×</button>
+      </div>
+      <form id="formFuncionario" class="product-form">
+        <input type="hidden" id="funcId" />
+
+        <div class="form-cols-2">
+          <div class="form-group">
+            <label>Nome *</label>
+            <input type="text" id="funcNome" placeholder="Nome completo" required />
+          </div>
+          <div class="form-group">
+            <label>E-mail *</label>
+            <input type="email" id="funcEmail" placeholder="email@fanaticosfc.com" required />
+          </div>
+        </div>
+
+        <div class="form-cols-2">
+          <div class="form-group">
+            <label>Cargo *</label>
+            <input type="text" id="funcCargo" placeholder="Ex: Atendente, Estoquista, Gerente" required />
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select id="funcStatus">
+              <option value="ativo">Ativo</option>
+              <option value="inativo">Inativo</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label id="lblFuncSenha">Senha *</label>
+          <input type="password" id="funcSenha" placeholder="Mín. 8 caracteres, com letras e números" />
+          <small style="color:var(--text-dim)" id="hintFuncSenha"></small>
+        </div>
+
+        <div class="form-group">
+          <label>Permissões</label>
+          <div class="permissoes-grid" id="funcPermissoesGrid"></div>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn--outline" id="btnCancelarFuncionario">Cancelar</button>
+          <button type="submit" class="btn btn--primary" id="btnSalvarFuncionario">Salvar Funcionário</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Histórico de Ações -->
+  <div class="modal-overlay" id="historicoOverlay" style="display:none">
+    <div class="modal modal--sm">
+      <div class="modal__header">
+        <h2 id="historicoTitle">Histórico de Ações</h2>
+        <button class="modal__close" id="btnCloseHistorico">×</button>
+      </div>
+      <div id="historicoBody" style="padding:0 1.5rem 1.5rem"></div>
     </div>
   </div>
 

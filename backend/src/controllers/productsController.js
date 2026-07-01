@@ -13,6 +13,7 @@ const {
   updateProduct,
 } = require('../services/productService');
 const categoryModel = require('../models/categoryModel');
+const logService = require('../services/logService');
 
 async function index(req, res) {
   if (req.query.admin === 'true') {
@@ -26,15 +27,21 @@ async function show(req, res) {
 }
 
 async function store(req, res) {
-  sendCreated(res, await createProduct(req.body));
+  const result = await createProduct(req.body);
+  await logService.registrar(req.staffUser, 'Produto cadastrado', req.body.nome);
+  sendCreated(res, result);
 }
 
 async function update(req, res) {
-  res.json(await updateProduct(req.params.id, req.body));
+  const result = await updateProduct(req.params.id, req.body);
+  await logService.registrar(req.staffUser, 'Produto editado', `ID ${req.params.id} — ${req.body.nome || ''}`);
+  res.json(result);
 }
 
 async function destroy(req, res) {
-  res.json(await deleteProduct(req.params.id));
+  const result = await deleteProduct(req.params.id);
+  await logService.registrar(req.staffUser, 'Produto excluído', `ID ${req.params.id}`);
+  res.json(result);
 }
 
 async function duplicate(req, res) {

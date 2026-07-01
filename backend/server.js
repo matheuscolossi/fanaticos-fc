@@ -3,7 +3,7 @@ const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const openapiSpec = require('./src/docs/openapi');
 const { init } = require('./src/config/database');
-const { buildAdminMiddleware, buildAuthMiddleware, buildBasicAuthMiddleware } = require('./src/middleware/auth');
+const { buildAdminMiddleware, buildAuthMiddleware, buildBasicAuthMiddleware, buildPermissionMiddleware } = require('./src/middleware/auth');
 const { errorHandler } = require('./src/utils/http');
 const authRoutes = require('./src/routes/authRoutes');
 const categoryRoutes = require('./src/routes/categoryRoutes');
@@ -12,7 +12,11 @@ const productRoutes = require('./src/routes/productRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const couponRoutes = require('./src/routes/couponRoutes');
+const paymentRoutes = require('./src/routes/paymentRoutes');
+const configRoutes = require('./src/routes/configRoutes');
 const promocoesRoutes = require('./src/routes/promocoesRoutes');
+const funcionariosRoutes = require('./src/routes/funcionariosRoutes');
+const logRoutes = require('./src/routes/logRoutes');
 const specRoutes = require('./src/routes/specRoutes');
 
 const app = express();
@@ -21,6 +25,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) { console.error('[api] JWT_SECRET não definido'); process.exit(1); }
 const authMiddleware = buildAuthMiddleware(JWT_SECRET);
 const adminMiddleware = buildAdminMiddleware(authMiddleware);
+const perm = (key) => buildPermissionMiddleware(authMiddleware, key);
 const basicAuthMiddleware = buildBasicAuthMiddleware(
   process.env.BASIC_AUTH_USER || process.env.DEFAULT_ADMIN_EMAIL || 'admin@fanaticosfc.com',
   process.env.BASIC_AUTH_PASS || process.env.DEFAULT_ADMIN_PASSWORD || 'admin123'
@@ -54,12 +59,16 @@ app.use('/api', (req, res, next) => {
 
 app.use('/api/auth', authRoutes({ authMiddleware, jwtSecret: JWT_SECRET }));
 app.use('/api/categorias', categoryRoutes(adminMiddleware));
-app.use('/api/produtos', productRoutes(adminMiddleware));
-app.use('/api/pedidos', orderRoutes({ adminMiddleware, authMiddleware }));
-app.use('/api/admin/usuarios', userRoutes({ adminMiddleware }));
-app.use('/api/admin/dashboard', dashboardRoutes(adminMiddleware));
-app.use('/api/cupons', couponRoutes(adminMiddleware));
+app.use('/api/produtos', productRoutes({ adminMiddleware, perm }));
+app.use('/api/pedidos', orderRoutes({ adminMiddleware, authMiddleware, perm }));
+app.use('/api/pagamentos', paymentRoutes({ authMiddleware }));
+app.use('/api/config', configRoutes());
+app.use('/api/admin/usuarios', userRoutes({ adminMiddleware, perm }));
+app.use('/api/admin/dashboard', dashboardRoutes(perm('financeiro.visualizar')));
+app.use('/api/cupons', couponRoutes(perm('cupons.criar')));
 app.use('/api/promocoes', promocoesRoutes(adminMiddleware));
+app.use('/api/admin/funcionarios', funcionariosRoutes(perm('administradores.gerenciar')));
+app.use('/api/admin/logs', logRoutes(perm('administradores.gerenciar')));
 
 // Rotas no formato exigido pelo PDF do trabalho (sem prefixo /api) — usadas pelo
 // professor no Postman. O site continua usando as rotas /api/produtos acima.

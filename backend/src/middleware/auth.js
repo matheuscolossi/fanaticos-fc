@@ -15,14 +15,59 @@ function buildAuthMiddleware(jwtSecret) {
   };
 }
 
+function parsePermissoes(value) {
+  if (Array.isArray(value)) return value;
+  try { return JSON.parse(value || '[]'); } catch { return []; }
+}
+
+// Carrega o usuário atual do banco (não confia apenas no JWT) para que uma
+// desativação de acesso tenha efeito imediato, sem esperar o token expirar.
+async function loadActiveAdmin(req) {
+  const userModel = require('../models/userModel');
+  if (req.user?.perfil !== 'admin') {
+    throw createHttpError(403, 'Administrator access is required.', 'ADMIN_ACCESS_REQUIRED');
+  }
+  const user = await userModel.findById(req.user.id);
+  if (!user || user.perfil !== 'admin') {
+    throw createHttpError(403, 'Administrator access is required.', 'ADMIN_ACCESS_REQUIRED');
+  }
+  if (user.status === 'inativo') {
+    throw createHttpError(403, 'Seu acesso foi desativado.', 'ACCESS_DISABLED');
+  }
+  return user;
+}
+
 function buildAdminMiddleware(authMiddleware) {
   return function adminMiddleware(req, res, next) {
-    authMiddleware(req, res, (err) => {
+    authMiddleware(req, res, async (err) => {
       if (err) return next(err);
-      if (req.user.perfil !== 'admin') {
-        return next(createHttpError(403, 'Administrator access is required.', 'ADMIN_ACCESS_REQUIRED'));
+      try {
+        req.staffUser = await loadActiveAdmin(req);
+        next();
+      } catch (e) {
+        next(e);
       }
-      next();
+    });
+  };
+}
+
+// Igual ao adminMiddleware, mas também exige uma permissão específica
+// (ex.: "produtos.excluir") dentre as concedidas individualmente ao funcionário.
+function buildPermissionMiddleware(authMiddleware, permissionKey) {
+  return function permissionMiddleware(req, res, next) {
+    authMiddleware(req, res, async (err) => {
+      if (err) return next(err);
+      try {
+        const user = await loadActiveAdmin(req);
+        const permissoes = parsePermissoes(user.permissoes);
+        if (!permissoes.includes(permissionKey)) {
+          return next(createHttpError(403, 'Você não tem permissão para esta ação.', 'PERMISSION_DENIED'));
+        }
+        req.staffUser = user;
+        next();
+      } catch (e) {
+        next(e);
+      }
     });
   };
 }
@@ -52,4 +97,5 @@ module.exports = {
   buildAdminMiddleware,
   buildAuthMiddleware,
   buildBasicAuthMiddleware,
+  buildPermissionMiddleware,
 };

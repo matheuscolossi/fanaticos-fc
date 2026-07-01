@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const userModel = require('../models/userModel');
 const { createHttpError } = require('../utils/http');
 const { enviarCodigoVerificacao } = require('./emailService');
+const logService = require('./logService');
 
 const CODE_TTL_MINUTES = 15;
 
@@ -111,6 +112,14 @@ async function loginUser({ email, senha }, jwtSecret) {
   if (!user || !bcrypt.compareSync(senha, user.senha)) {
     throw createHttpError(401, 'Invalid credentials.', 'INVALID_CREDENTIALS');
   }
+  if (user.perfil === 'admin' && user.status === 'inativo') {
+    throw createHttpError(403, 'Seu acesso foi desativado. Fale com um administrador.', 'ACCESS_DISABLED');
+  }
+
+  if (user.perfil === 'admin') {
+    await userModel.updateUltimoAcesso(user.id);
+    await logService.registrar(user, 'Login realizado', null);
+  }
 
   const publicUser = toPublicUser(user);
   const token = jwt.sign(publicUser, jwtSecret, { expiresIn: '7d' });
@@ -165,5 +174,6 @@ module.exports = {
   registerUser,
   reenviarCodigoEmail,
   updateProfile,
+  validarForcaSenha,
   verificarCodigoEmail,
 };

@@ -209,6 +209,17 @@ td { padding: .85rem 1rem; color: var(--text); vertical-align: middle; }
 .form-cols-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
 .form-cols-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; }
 
+.permissoes-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: .5rem .75rem;
+  background: var(--bg-card2); border: 1px solid var(--border); border-radius: 8px;
+  padding: .9rem 1rem;
+}
+.permissoes-grid label {
+  display: flex; align-items: center; gap: .5rem; cursor: pointer;
+  font-size: .85rem; color: var(--text); font-weight: 400;
+}
+.permissoes-grid input[type="checkbox"] { width: auto; }
+
 .form-checks { display: flex; gap: 1.25rem; flex-wrap: wrap; margin-top: .25rem; }
 .check-label {
   display: flex;

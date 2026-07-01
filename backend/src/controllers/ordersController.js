@@ -1,4 +1,5 @@
 const { sendCreated } = require('../utils/http');
+const logService = require('../services/logService');
 const {
   createOrder,
   deleteOrder,
@@ -25,11 +26,15 @@ async function tracking(req, res) {
 }
 
 async function update(req, res) {
-  res.json(await updateOrder(req.params.id, req.body));
+  const result = await updateOrder(req.params.id, req.body);
+  await logService.registrar(req.staffUser, 'Pedido alterado', `ID ${req.params.id}`);
+  res.json(result);
 }
 
 async function destroy(req, res) {
-  res.json(await deleteOrder(req.params.id));
+  const result = await deleteOrder(req.params.id);
+  await logService.registrar(req.staffUser, 'Pedido excluído', `ID ${req.params.id}`);
+  res.json(result);
 }
 
 module.exports = {

@@ -1,4 +1,5 @@
 const couponService = require('../services/couponService');
+const logService = require('../services/logService');
 const { sendCreated } = require('../utils/http');
 
 async function index(req, res) {
@@ -10,7 +11,9 @@ async function show(req, res) {
 }
 
 async function store(req, res) {
-  sendCreated(res, await couponService.createCoupon(req.body));
+  const result = await couponService.createCoupon(req.body);
+  await logService.registrar(req.staffUser, 'Cupom criado', req.body.codigo);
+  sendCreated(res, result);
 }
 
 async function update(req, res) {

@@ -2,11 +2,11 @@ const express = require('express');
 const controller = require('../controllers/usersController');
 const { asyncHandler } = require('../utils/http');
 
-module.exports = ({ adminMiddleware }) => {
+module.exports = ({ perm }) => {
   const router = express.Router();
 
-  router.get('/', adminMiddleware, asyncHandler(controller.index));
-  router.delete('/:id', adminMiddleware, asyncHandler(controller.destroy));
+  router.get('/', perm('clientes.gerenciar'), asyncHandler(controller.index));
+  router.delete('/:id', perm('clientes.gerenciar'), asyncHandler(controller.destroy));
 
   return router;
 };

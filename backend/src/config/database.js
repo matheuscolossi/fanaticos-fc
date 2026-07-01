@@ -193,6 +193,10 @@ async function createPostgresSchema() {
       endereco_rua TEXT,
       cidade TEXT,
       cep TEXT,
+      cargo TEXT,
+      permissoes JSONB DEFAULT '[]'::jsonb,
+      status TEXT DEFAULT 'ativo',
+      ultimo_acesso TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT now()
     )
   `);
@@ -256,6 +260,17 @@ async function createPostgresSchema() {
       created_at TIMESTAMPTZ DEFAULT now()
     )
   `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS logs_acoes (
+      id SERIAL PRIMARY KEY,
+      usuario_id INTEGER REFERENCES usuarios(id),
+      usuario_nome TEXT,
+      acao TEXT NOT NULL,
+      detalhes TEXT,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
 }
 
 async function createSqliteSchema() {
@@ -291,6 +306,10 @@ async function createSqliteSchema() {
     endereco_rua TEXT,
     cidade TEXT,
     cep TEXT,
+    cargo TEXT,
+    permissoes TEXT DEFAULT '[]',
+    status TEXT DEFAULT 'ativo',
+    ultimo_acesso DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
@@ -346,6 +365,16 @@ async function createSqliteSchema() {
     mostrar_contador INTEGER DEFAULT 0,
     status TEXT DEFAULT 'ativo',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  await run(`CREATE TABLE IF NOT EXISTS logs_acoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    usuario_id INTEGER,
+    usuario_nome TEXT,
+    acao TEXT NOT NULL,
+    detalhes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
   )`);
 }
 
@@ -406,6 +435,11 @@ async function runMigrations() {
     // Rastreio de cupom aplicado no pedido
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cupom_codigo TEXT');
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cupom_desconto NUMERIC(10,2)');
+    // Funcionários/administradores: cargo, permissões granulares, acesso e auditoria
+    await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS cargo TEXT');
+    await runOptionalMigration("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permissoes JSONB DEFAULT '[]'::jsonb");
+    await runOptionalMigration("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ativo'");
+    await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ultimo_acesso TIMESTAMPTZ');
     return;
   }
 
@@ -456,6 +490,11 @@ async function runMigrations() {
   // Rastreio de cupom aplicado no pedido
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN cupom_codigo TEXT');
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN cupom_desconto REAL');
+  // Funcionários/administradores: cargo, permissões granulares, acesso e auditoria
+  await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN cargo TEXT');
+  await runOptionalMigration("ALTER TABLE usuarios ADD COLUMN permissoes TEXT DEFAULT '[]'");
+  await runOptionalMigration("ALTER TABLE usuarios ADD COLUMN status TEXT DEFAULT 'ativo'");
+  await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN ultimo_acesso DATETIME');
 }
 
 async function seedDefaults() {
@@ -469,14 +508,35 @@ async function seedDefaults() {
 
   const admin = await get("SELECT COUNT(*) as c FROM usuarios WHERE perfil='admin'");
   if (Number(admin.c) === 0) {
+    const { PERMISSOES_KEYS } = require('../constants/permissions');
     const hash = bcrypt.hashSync(process.env.DEFAULT_ADMIN_PASSWORD || 'admin123', 10);
-    await run('INSERT INTO usuarios (nome, email, senha, perfil) VALUES (?, ?, ?, ?)', [
-      'Administrador',
-      process.env.DEFAULT_ADMIN_EMAIL || 'admin@fanaticosfc.com',
-      hash,
-      'admin',
-    ]);
+    await run(
+      `INSERT INTO usuarios (nome, email, senha, perfil, cargo, permissoes, status) VALUES (?, ?, ?, ?, ?, JSON_VALUE(?), ?)`,
+      [
+        'Administrador',
+        process.env.DEFAULT_ADMIN_EMAIL || 'admin@fanaticosfc.com',
+        hash,
+        'admin',
+        'Administrador',
+        JSON.stringify(PERMISSOES_KEYS),
+        'ativo',
+      ]
+    );
     console.log('[database] Default admin created.');
+  }
+
+  // Migra admins criados antes do sistema de permissões granulares (cargo
+  // ainda nulo) para terem acesso total — evita travar quem já era admin.
+  const adminsLegados = await all("SELECT id FROM usuarios WHERE perfil = 'admin' AND cargo IS NULL");
+  if (adminsLegados.length > 0) {
+    const { PERMISSOES_KEYS } = require('../constants/permissions');
+    for (const u of adminsLegados) {
+      await run(
+        `UPDATE usuarios SET cargo = ?, permissoes = JSON_VALUE(?), status = 'ativo' WHERE id = ?`,
+        ['Administrador', JSON.stringify(PERMISSOES_KEYS), u.id]
+      );
+    }
+    console.log(`[database] ${adminsLegados.length} admin(s) legado(s) migrado(s) com todas as permissões.`);
   }
 
   const cupons = await get('SELECT COUNT(*) as c FROM cupons');

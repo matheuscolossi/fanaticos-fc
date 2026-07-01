@@ -64,6 +64,40 @@ async function createOrder(data) {
   return { message: 'Order created.', id: result.lastID, total: totalFinal };
 }
 
+async function createPaidOrderFromStripe(data) {
+  const {
+    itens,
+    total,
+    usuario_id,
+    nome_cliente,
+    email_cliente,
+    telefone_cliente,
+    endereco,
+    cupom_codigo,
+    cupom_desconto,
+  } = data;
+
+  if (!Array.isArray(itens) || itens.length === 0 || !Number(total)) {
+    throw createHttpError(400, 'Dados do pedido Stripe inválidos.', 'VALIDATION_ERROR');
+  }
+
+  const result = await orderModel.create({
+    usuario_id: usuario_id || null,
+    itens: JSON.stringify(itens),
+    total: Number(total),
+    nome_cliente: nome_cliente || null,
+    email_cliente: email_cliente || null,
+    telefone_cliente: telefone_cliente || null,
+    endereco: endereco || null,
+    metodo_pagamento: 'stripe',
+    status: 'pago',
+    cupom_codigo: cupom_codigo || null,
+    cupom_desconto: cupom_desconto ?? null,
+  });
+
+  return { message: 'Order created.', id: result.lastID, total: Number(total) };
+}
+
 async function listOrders() {
   const orders = await orderModel.list();
   return orders.map(parseOrderItems);
@@ -98,6 +132,7 @@ async function deleteOrder(orderId) {
 
 module.exports = {
   createOrder,
+  createPaidOrderFromStripe,
   deleteOrder,
   getTrackingById,
   listOrders,
