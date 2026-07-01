@@ -1,12 +1,21 @@
 const fs = require("fs");
 const { init, run, get } = require("../config/database");
 
+function limparDescricao(html = "") {
+  return html
+    .replace(/<img[^>]*>/gi, "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#8211;/g, "-")
+    .replace(/&#8212;/g, "-")
+    .replace(/&amp;/g, "&")
+    .trim();
+}
+
 async function importar() {
   await init();
 
   const produtos = JSON.parse(fs.readFileSync("produtos.json", "utf-8"));
-
-  // TESTE: importa só 1 produto
   const produtosTeste = produtos.slice(0, 1);
 
   console.log(`Importando ${produtosTeste.length} produto de teste...`);
@@ -15,10 +24,12 @@ async function importar() {
     const nome = p.name;
     const slug = p.slug;
     const sku = p.sku || `fornecedor-${p.id}`;
-    const descricao = p.description || "";
+    const descricao = limparDescricao(p.short_description || p.description || "");
     const preco = Number(p.prices?.price || 0) / 100;
     const imagem = p.images?.[0]?.src || null;
-    const categoriaNome = p.categories?.[0]?.name || "Fornecedor";
+
+    // categoria fixa para não criar Bahia, Flamengo etc.
+    const categoriaNome = "Brasileirão";
 
     let categoria = await get(
       "SELECT id FROM categorias WHERE LOWER(nome) = LOWER(?)",
@@ -26,10 +37,7 @@ async function importar() {
     );
 
     if (!categoria) {
-      await run(
-        "INSERT INTO categorias (nome) VALUES (?)",
-        [categoriaNome]
-      );
+      await run("INSERT INTO categorias (nome) VALUES (?)", [categoriaNome]);
 
       categoria = await get(
         "SELECT id FROM categorias WHERE LOWER(nome) = LOWER(?)",
@@ -37,10 +45,7 @@ async function importar() {
       );
     }
 
-    const existente = await get(
-      "SELECT id FROM produtos WHERE sku = ?",
-      [sku]
-    );
+    const existente = await get("SELECT id FROM produtos WHERE sku = ?", [sku]);
 
     if (existente) {
       await run(
@@ -48,15 +53,7 @@ async function importar() {
          SET nome = ?, slug = ?, preco = ?, descricao = ?, imagens = JSON_VALUE(?),
              categoria_id = ?, status = 'ativo', estoque = 999
          WHERE sku = ?`,
-        [
-          nome,
-          slug,
-          preco,
-          descricao,
-          JSON.stringify([imagem]),
-          categoria.id,
-          sku,
-        ]
+        [nome, slug, preco, descricao, JSON.stringify([imagem]), categoria.id, sku]
       );
 
       console.log(`Atualizado: ${nome}`);
@@ -65,15 +62,7 @@ async function importar() {
         `INSERT INTO produtos
          (nome, slug, sku, preco, descricao, imagens, categoria_id, status, estoque)
          VALUES (?, ?, ?, ?, ?, JSON_VALUE(?), ?, 'ativo', 999)`,
-        [
-          nome,
-          slug,
-          sku,
-          preco,
-          descricao,
-          JSON.stringify([imagem]),
-          categoria.id,
-        ]
+        [nome, slug, sku, preco, descricao, JSON.stringify([imagem]), categoria.id]
       );
 
       console.log(`Criado: ${nome}`);
