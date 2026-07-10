@@ -15,46 +15,25 @@ function buildAuthMiddleware(jwtSecret) {
   };
 }
 
+function parsePermissoes(value) {
+  if (Array.isArray(value)) return value;
+  try { return JSON.parse(value || '[]'); } catch { return []; }
+}
+
+// Carrega o usuário atual do banco (não confia apenas no JWT) para que uma
+// desativação de acesso tenha efeito imediato, sem esperar o token expirar.
 async function loadActiveAdmin(req) {
   const userModel = require('../models/userModel');
-
-  const userId = req.user?.id;
-
-  if (!userId) {
-    throw createHttpError(
-      401,
-      'Usuário não identificado.',
-      'AUTH_USER_INVALID'
-    );
+  if (req.user?.perfil !== 'admin') {
+    throw createHttpError(403, 'Administrator access is required.', 'ADMIN_ACCESS_REQUIRED');
   }
-
-  // O perfil e o status são consultados diretamente no banco.
-  const user = await userModel.findById(userId);
-
-  if (!user) {
-    throw createHttpError(
-      401,
-      'Usuário não encontrado.',
-      'AUTH_USER_NOT_FOUND'
-    );
+  const user = await userModel.findById(req.user.id);
+  if (!user || user.perfil !== 'admin') {
+    throw createHttpError(403, 'Administrator access is required.', 'ADMIN_ACCESS_REQUIRED');
   }
-
   if (user.status === 'inativo') {
-    throw createHttpError(
-      403,
-      'Seu acesso foi desativado.',
-      'ACCESS_DISABLED'
-    );
+    throw createHttpError(403, 'Seu acesso foi desativado.', 'ACCESS_DISABLED');
   }
-
-  if (user.perfil !== 'admin') {
-    throw createHttpError(
-      403,
-      'Administrator access is required.',
-      'ADMIN_ACCESS_REQUIRED'
-    );
-  }
-
   return user;
 }
 
