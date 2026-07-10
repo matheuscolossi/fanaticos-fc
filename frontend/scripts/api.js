@@ -1,4 +1,4 @@
-const API_BASE = window.FANATICOS_API_BASE || 'https://fanaticos-fc.onrender.com/api';
+const API_BASE = window.FANATICOS_API_BASE || `${window.location.origin}/api`;
 let STRIPE_PUBLISHABLE_KEY = window.FANATICOS_STRIPE_PUBLISHABLE || '';
 
 async function apiFetch(path, options = {}) {

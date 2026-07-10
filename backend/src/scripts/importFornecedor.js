@@ -1,159 +1,100 @@
 const fs = require("fs");
 const { init, run, get } = require("../config/database");
 
+function categoriaDoProduto(p) {
+  const nomes = p.categories?.map(c => c.name) || [];
+
+  if (nomes.includes("Feminina")) return "Feminina";
+  if (nomes.includes("Retrô")) return "Retrô";
+  if (nomes.includes("Seleções")) return "Seleções";
+
+  if (
+    nomes.includes("Premier League") ||
+    nomes.includes("La Liga") ||
+    nomes.includes("Serie A") ||
+    nomes.includes("Bundesliga") ||
+    nomes.includes("Ligue 1") ||
+    nomes.includes("Europa") ||
+    nomes.includes("América do Sul") ||
+    nomes.includes("América do Norte") ||
+    nomes.includes("Times Internacionais")
+  ) {
+    return "Times Internacionais";
+  }
+
+  if (
+    nomes.includes("Brasileirão Série A") ||
+    nomes.includes("Brasileirão Série B") ||
+    nomes.includes("Libertadores")
+  ) {
+    return "Brasileirão";
+  }
+
+  return "Brasileirão";
+}
+
 async function importar() {
   await init();
 
   const produtos = JSON.parse(fs.readFileSync("produtos.json", "utf-8"));
 
   const timesExistentes = [
-    // Brasileirão
-
-  "Athletico Paranaense",
-
-  "Bahia",
-
-  "Botafogo",
-
-  "Grêmio",
-
-  "Internacional",
-
-  "Vitória",
-
-  "Volta Redonda",
-
-
-
-  // Seleções
-
-  "Alemanha",
-
-  "Argentina",
-
-  "Austrália",
-
-  "Áustria",
-
-  "Bélgica",
-
-  "Brasil",
-
-  "Kit",
-
-  "Noruega",
-
-  "Venezuela",
-
-
-
-  // Liga Espanhola
-
-  "Athletic Bilbao",
-
-  "Atlético de Madrid",
-
-  "Barcelona",
-
-  "Villarreal",
-
-
-
-  // Liga Inglesa
-
-  "AFC Richmond",
-
-  "Arsenal",
-
-  "Aston Villa",
-
-  "West Ham",
-
-
-
-  // Liga Italiana
-
-  "Atalanta",
-
-  "Bologna",
-
-  "Venezia",
-
-
-
-  // Liga Alemã
-
-  "Bayer Leverkusen",
-
-  "Bayern de Munique",
-
-  "Borussia Dortmund",
-
-  "Wolfsburg",
-
-
-
-  // Liga Portuguesa
-
-  "Braga",
-
-
-
-  // Liga Argentina
-
-  "Boca Juniors",
-
-
-
-  // Liga Holandesa
-
-  "Ajax",
-
-
-
-  // Liga Mexicana
-
-  "América",
-
-
-
-  // MLS
-
-  "Atlanta United",
-
-
-
-  // Outras Ligas
-
-  "Al Hilal",
-
-  "Al Nassr",
-
-  "Atlético Nacional",
-
-  "Besiktas",
-
-  "Zenit",
-
-
-
-  // Outros
-
-  "Alaves",
-
-  "Borussia Monchengladbach",
-
-  "New York Red Bull",
-
-  "Watford",
-
-  "Wolves",
-
-  "Zaragoza"
-
-
-
-];
+    "Athletico Paranaense",
+    "Bahia",
+    "Botafogo",
+    "Grêmio",
+    "Internacional",
+    "Vitória",
+    "Volta Redonda",
+
+    "Alemanha",
+    "Argentina",
+    "Austrália",
+    "Áustria",
+    "Bélgica",
+    "Brasil",
+    "Kit",
+    "Noruega",
+    "Venezuela",
+
+    "Athletic Bilbao",
+    "Atlético de Madrid",
+    "Barcelona",
+    "Villarreal",
+
+    "AFC Richmond",
+    "Arsenal",
+    "Aston Villa",
+    "West Ham",
+
+    "Atalanta",
+    "Bologna",
+    "Venezia",
+
+    "Bayer Leverkusen",
+    "Bayern de Munique",
+    "Borussia Dortmund",
+    "Wolfsburg",
+
+    "Braga",
+    "Boca Juniors",
+    "Ajax",
+    "América",
+    "Atlanta United",
+
+    "Al Hilal",
+    "Al Nassr",
+    "Atlético Nacional",
+    "Besiktas",
+    "Zenit",
+
+    "Alaves",
+    "Borussia Monchengladbach",
+    "New York Red Bull",
+    "Watford",
+    "Wolves",
+    "Zaragoza"
+  ];
 
   console.log(`Verificando ${produtos.length} produtos...`);
 
@@ -161,10 +102,10 @@ async function importar() {
   let pulados = 0;
 
   for (const p of produtos) {
-    const timeFornecedor = p.categories?.[0]?.name || "";
+    const nomesCategorias = p.categories?.map(c => c.name) || [];
 
-    if (timesExistentes.includes(timeFornecedor)) {
-      console.log(`Pulando time já criado: ${timeFornecedor} - ${p.name}`);
+    if (timesExistentes.some(time => nomesCategorias.includes(time))) {
+      console.log(`Pulando time já criado: ${p.name}`);
       pulados++;
       continue;
     }
@@ -177,7 +118,7 @@ async function importar() {
     const preco = +(precoOriginal * 2).toFixed(2);
 
     const imagem = p.images?.[0]?.src || null;
-    const categoriaNome = "Brasileirão";
+    const categoriaNome = categoriaDoProduto(p);
 
     let categoria = await get(
       "SELECT id FROM categorias WHERE LOWER(nome) = LOWER(?)",
@@ -215,7 +156,7 @@ async function importar() {
       ]
     );
 
-    console.log(`Criado: ${nome} | R$ ${preco}`);
+    console.log(`Criado: ${nome} | Categoria: ${categoriaNome} | R$ ${preco}`);
     criados++;
   }
 
