@@ -15,80 +15,14 @@ function buildAuthMiddleware(jwtSecret) {
   };
 }
 
-async function loadActiveAdmin(req) {
-  const userModel = require('../models/userModel');
-
-  const userId = req.user?.id;
-
-  if (!userId) {
-    throw createHttpError(
-      401,
-      'Usuário não identificado.',
-      'AUTH_USER_INVALID'
-    );
-  }
-
-  // O perfil e o status são consultados diretamente no banco.
-  const user = await userModel.findById(userId);
-
-  if (!user) {
-    throw createHttpError(
-      401,
-      'Usuário não encontrado.',
-      'AUTH_USER_NOT_FOUND'
-    );
-  }
-
-  if (user.status === 'inativo') {
-    throw createHttpError(
-      403,
-      'Seu acesso foi desativado.',
-      'ACCESS_DISABLED'
-    );
-  }
-
-  if (user.perfil !== 'admin') {
-    throw createHttpError(
-      403,
-      'Administrator access is required.',
-      'ADMIN_ACCESS_REQUIRED'
-    );
-  }
-
-  return user;
-}
-
 function buildAdminMiddleware(authMiddleware) {
   return function adminMiddleware(req, res, next) {
-    authMiddleware(req, res, async (err) => {
+    authMiddleware(req, res, (err) => {
       if (err) return next(err);
-      try {
-        req.staffUser = await loadActiveAdmin(req);
-        next();
-      } catch (e) {
-        next(e);
+      if (req.user.perfil !== 'admin') {
+        return next(createHttpError(403, 'Administrator access is required.', 'ADMIN_ACCESS_REQUIRED'));
       }
-    });
-  };
-}
-
-// Igual ao adminMiddleware, mas também exige uma permissão específica
-// (ex.: "produtos.excluir") dentre as concedidas individualmente ao funcionário.
-function buildPermissionMiddleware(authMiddleware, permissionKey) {
-  return function permissionMiddleware(req, res, next) {
-    authMiddleware(req, res, async (err) => {
-      if (err) return next(err);
-      try {
-        const user = await loadActiveAdmin(req);
-        const permissoes = parsePermissoes(user.permissoes);
-        if (!permissoes.includes(permissionKey)) {
-          return next(createHttpError(403, 'Você não tem permissão para esta ação.', 'PERMISSION_DENIED'));
-        }
-        req.staffUser = user;
-        next();
-      } catch (e) {
-        next(e);
-      }
+      next();
     });
   };
 }
@@ -118,5 +52,4 @@ module.exports = {
   buildAdminMiddleware,
   buildAuthMiddleware,
   buildBasicAuthMiddleware,
-  buildPermissionMiddleware,
 };
