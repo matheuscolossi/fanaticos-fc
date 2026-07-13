@@ -1,4 +1,5 @@
-const API_BASE = window.FANATICOS_API_BASE || `${window.location.origin}/api`;
+const DEFAULT_API_BASE = 'https://fanaticosmantos.com.br';
+const API_BASE = window.FANATICOS_API_BASE || DEFAULT_API_BASE;
 let STRIPE_PUBLISHABLE_KEY = window.FANATICOS_STRIPE_PUBLISHABLE || '';
 
 async function apiFetch(path, options = {}) {
