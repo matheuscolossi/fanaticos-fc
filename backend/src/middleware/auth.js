@@ -27,7 +27,24 @@ function buildAdminMiddleware(authMiddleware) {
   };
 }
 
-// HTTP Basic Auth — exigido pelo PDF do trabalho para POST /products e DELETE /product/:id
+function buildPermissionMiddleware(authMiddleware, permissionKey) {
+  return function permissionMiddleware(req, res, next) {
+    authMiddleware(req, res, (err) => {
+      if (err) return next(err);
+
+      if (req.user.perfil === 'admin') return next();
+
+      const permissions = Array.isArray(req.user.permissoes) ? req.user.permissoes : [];
+      if (!permissions.includes(permissionKey)) {
+        return next(createHttpError(403, 'You do not have permission to access this resource.', 'PERMISSION_DENIED'));
+      }
+
+      next();
+    });
+  };
+}
+
+// HTTP Basic Auth - exigido pelo PDF do trabalho para POST /products e DELETE /product/:id
 function buildBasicAuthMiddleware(expectedUser, expectedPass) {
   return function basicAuthMiddleware(req, res, next) {
     const header = req.headers.authorization || '';
@@ -52,4 +69,5 @@ module.exports = {
   buildAdminMiddleware,
   buildAuthMiddleware,
   buildBasicAuthMiddleware,
+  buildPermissionMiddleware,
 };
