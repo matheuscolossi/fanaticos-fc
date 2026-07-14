@@ -551,7 +551,7 @@ function _renderChartReceita(grafico) {
         label: 'Receita (R$)',
         data: grafico.map(g => g.receita),
         borderColor: '#ff6b00',
-        backgroundColor: 'rgba(255,107,0,.1)',
+        backgroundColor: 'rgba(37,99,235,.1)',
         fill: true,
         tension: 0.4,
         pointRadius: grafico.length <= 14 ? 4 : 2,
