@@ -256,7 +256,7 @@ async function createPostgresSchema() {
       email_cliente TEXT,
       telefone_cliente TEXT,
       endereco TEXT,
-      metodo_pagamento TEXT DEFAULT 'whatsapp',
+      metodo_pagamento TEXT DEFAULT 'stripe',
       codigo_rastreio TEXT,
       stripe_session_id TEXT,
       stripe_payment_intent_id TEXT,
@@ -420,7 +420,7 @@ async function createSqliteSchema() {
     email_cliente TEXT,
     telefone_cliente TEXT,
     endereco TEXT,
-    metodo_pagamento TEXT DEFAULT 'whatsapp',
+    metodo_pagamento TEXT DEFAULT 'stripe',
     codigo_rastreio TEXT,
     stripe_session_id TEXT,
     stripe_payment_intent_id TEXT,
@@ -545,7 +545,7 @@ async function runMigrations() {
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS email_cliente TEXT');
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS telefone_cliente TEXT');
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS endereco TEXT');
-    await runOptionalMigration("ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS metodo_pagamento TEXT DEFAULT 'whatsapp'");
+    await runOptionalMigration("ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS metodo_pagamento TEXT DEFAULT 'stripe'");
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS codigo_rastreio TEXT');
     // Extended product fields
     await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS slug TEXT');
@@ -611,7 +611,7 @@ async function runMigrations() {
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN email_cliente TEXT');
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN telefone_cliente TEXT');
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN endereco TEXT');
-  await runOptionalMigration("ALTER TABLE pedidos ADD COLUMN metodo_pagamento TEXT DEFAULT 'whatsapp'");
+  await runOptionalMigration("ALTER TABLE pedidos ADD COLUMN metodo_pagamento TEXT DEFAULT 'stripe'");
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN codigo_rastreio TEXT');
   // Extended product fields
   await runOptionalMigration('ALTER TABLE produtos ADD COLUMN slug TEXT');

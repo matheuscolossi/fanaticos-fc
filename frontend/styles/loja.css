@@ -383,6 +383,10 @@
   border-color: var(--green);
   background: var(--bg-card2);
 }
+.co-payment-opt--selected .co-payment-card {
+  border-color: var(--primary);
+  background: var(--bg-card2);
+}
 
 .co-btn-submit {
   width: 100%;

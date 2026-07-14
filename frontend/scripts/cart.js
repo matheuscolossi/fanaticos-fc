@@ -136,38 +136,6 @@ function renderCart() {
   }
 }
 
-// ── PIX PAYLOAD (EMV/BRCode) ──────────────────────────────────────────────────
-
-function _pixCampo(id, valor) {
-  return `${id}${String(valor.length).padStart(2, '0')}${valor}`;
-}
-
-function _crc16(str) {
-  let crc = 0xFFFF;
-  for (let i = 0; i < str.length; i++) {
-    crc ^= str.charCodeAt(i) << 8;
-    for (let j = 0; j < 8; j++) {
-      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
-    }
-  }
-  return (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
-}
-
-function gerarPixPayload(chave, nomeLoja, cidade, valor) {
-  const gui      = _pixCampo('00', 'BR.GOV.BCB.PIX');
-  const key      = _pixCampo('01', chave);
-  const merchant = _pixCampo('26', gui + key);
-  const mcc      = _pixCampo('52', '0000');
-  const currency = _pixCampo('53', '986');
-  const amount   = valor ? _pixCampo('54', valor.toFixed(2)) : '';
-  const country  = _pixCampo('58', 'BR');
-  const name     = _pixCampo('59', nomeLoja.substring(0, 25));
-  const city     = _pixCampo('60', cidade.substring(0, 15));
-  const addData  = _pixCampo('62', _pixCampo('05', '***'));
-  const body     = '000201' + merchant + mcc + currency + amount + country + name + city + addData + '6304';
-  return body + _crc16(body);
-}
-
 // Botão "Confirmar pagamento" do mini-carrinho (dropdown) leva para a página
 // de carrinho em vez de abrir o checkout direto — só lá tem o campo de cupom,
 // e sem ele o pedido sairia sem o desconto aplicado.
@@ -274,27 +242,12 @@ async function renderCheckoutStep1() {
       </div>
       <h3 class="co-section-title">Forma de pagamento</h3>
       <div class="co-payment-opts">
-        <label class="co-payment-opt">
-          <input type="radio" name="co_pagamento" value="stripe" />
+        <div class="co-payment-opt co-payment-opt--selected">
           <div class="co-payment-card">
             <span class="co-payment-icon"></span>
-            <div><strong>Cartão</strong><small>Pagamento seguro pelo Stripe</small></div>
+            <div><strong>Stripe</strong><small>Cartão ou PIX com confirmação automática</small></div>
           </div>
-        </label>
-        <label class="co-payment-opt">
-          <input type="radio" name="co_pagamento" value="pix" checked />
-          <div class="co-payment-card">
-            <span class="co-payment-icon"></span>
-            <div><strong>PIX</strong><small>Pagamento instantâneo</small></div>
-          </div>
-        </label>
-        <label class="co-payment-opt">
-          <input type="radio" name="co_pagamento" value="whatsapp" />
-          <div class="co-payment-card">
-            <span class="co-payment-icon"></span>
-            <div><strong>WhatsApp</strong><small>Combine pelo chat</small></div>
-          </div>
-        </label>
+        </div>
       </div>
       <button type="button" id="btnConfirmarPedido" class="btn btn--primary co-btn-submit">Confirmar pedido</button>
     </div>
@@ -387,54 +340,37 @@ async function confirmarPedido() {
     const cidade   = document.getElementById('co_cidade').value.trim();
     const cep      = document.getElementById('co_cep').value.trim();
 
-    const metodoEl = document.querySelector('input[name="co_pagamento"]:checked');
-    const metodo   = metodoEl ? metodoEl.value : 'pix';
-
-    if (!nome || !telefone || !email || (metodo !== 'stripe' && (!endRua || !cidade || !cep))) {
+    if (!nome || !telefone || !email) {
       showToast('Preencha todos os campos obrigatórios.', 'error');
       return;
     }
 
     const endereco = `${endRua} — ${cidade} — CEP: ${cep}`;
-    const resumo   = getCartResumo();
-    let total      = resumo ? resumo.total : getTotal();
     const cupomCodigo = getCupomAplicado();
 
     const btn = document.getElementById('btnConfirmarPedido');
     if (btn) { btn.disabled = true; btn.textContent = 'Processando...'; }
 
-    let pedidoId = null;
     try {
-      if (metodo === 'stripe') {
-        const session = await api.post('/pagamentos/stripe/create-session', {
-          itens: cartItems.map(i => ({
-            productId: i.id,
-            qty: i.qty,
-            tamanho: i.tamanho || null,
-            personalizacao: i.personalizacao || null,
-          })),
-          nome_cliente: nome,
-          email_cliente: email,
-          telefone_cliente: telefone,
-          endereco,
-          uf: getUfFrete(),
-          cupom_codigo: cupomCodigo || null,
-        });
-
-        if (!session?.url) throw new Error('O Stripe não retornou a URL de pagamento.');
-        window.location.assign(session.url);
-        return;
-      }
-
-      const res = await api.post('/pedidos', {
-        itens: cartItems, total,
-        nome_cliente: nome, email_cliente: email,
-        telefone_cliente: telefone, endereco,
-        metodo_pagamento: metodo,
+      const session = await api.post('/pagamentos/stripe/create-session', {
+        itens: cartItems.map(i => ({
+          productId: i.id,
+          qty: i.qty,
+          tamanho: i.tamanho || null,
+          personalizacao: i.personalizacao || null,
+        })),
+        nome_cliente: nome,
+        email_cliente: email,
+        telefone_cliente: telefone,
+        endereco,
+        uf: getUfFrete(),
         cupom_codigo: cupomCodigo || null,
       });
-      pedidoId = res.id;
-      if (typeof res.total === 'number') total = res.total; // recalculado pelo backend quando há cupom
+
+      if (!session?.url) throw new Error('O Stripe não retornou a URL de pagamento.');
+      window.location.assign(session.url);
+      return;
+
     } catch(apiErr) {
       console.warn('[checkout:order:create:error]', apiErr);
       if (btn) { btn.disabled = false; btn.textContent = 'Confirmar pedido'; }
@@ -449,39 +385,13 @@ async function confirmarPedido() {
       if (apiErr.code === 'EMAIL_NOT_VERIFIED') {
         showToast('Confirme seu e-mail para finalizar a compra.', 'error');
         try { await api.post('/auth/reenviar-codigo', { email }); } catch (_) {}
-        renderCheckoutVerification(email, { nome, telefone, email, endRua, cidade, cep, metodo });
+        renderCheckoutVerification(email, { nome, telefone, email, endRua, cidade, cep });
         return;
       }
       showToast(apiErr.message || 'Erro ao criar pedido. Tente novamente.', 'error');
       return;
     }
 
-    // Captura itens antes de limpar (para mensagem WhatsApp)
-    const itensCopia = [...cartItems];
-
-    // Limpa carrinho
-    cartItems = [];
-    saveCart();
-    setCupomAplicado('');
-    setCartResumo(null);
-    setCepFrete('', '');
-    renderCart();
-    updateBadge();
-
-    // Fecha o checkout form
-    closeCheckoutModal();
-
-    if (metodo === 'pix') {
-      abrirPixOverlay(pedidoId, total);
-    } else {
-      const linhas = itensCopia.map(i => {
-        const details = cartItemDetails(i);
-        return `• ${i.nome}${details ? ` — ${details}` : ''} (x${i.qty}) — ${formatBRL(i.preco * i.qty)}`;
-      }).join('\n');
-      const msg = `Novo pedido - Fanáticos FC\n\nPedido #${pedidoId || '?'}\n\n${linhas}\n\nTotal: ${formatBRL(total)}\n\n${nome}\n${telefone}\n${email}\n${endereco}\n\nSolicito a finalização deste pedido.`;
-      window.open(`https://wa.me/5554991138217?text=${encodeURIComponent(msg)}`, '_blank');
-      showToast('Pedido enviado via WhatsApp.');
-    }
   } catch(err) {
     console.error('[checkout:unexpected:error]', err);
     showToast(err.message || 'Erro ao processar pedido. Tente novamente.', 'error');
@@ -489,20 +399,6 @@ async function confirmarPedido() {
     if (btn) { btn.disabled = false; btn.textContent = 'Confirmar pedido'; }
   }
 }
-
-function handleStripeCheckoutResult() {
-  const params = new URLSearchParams(window.location.search);
-  const status = params.get('checkout');
-  if (!status) return;
-
-  if (status === 'success') showToast('Pagamento em confirmação. Aguarde o retorno do Stripe.', 'info');
-
-  if (status === 'cancel') {
-    showToast('Pagamento cancelado. Seu carrinho foi mantido.');
-  }
-}
-
-handleStripeCheckoutResult();
 
 // Conta logada nunca confirmou o e-mail (ex.: criada antes dessa verificação
 // existir). Mostra o mesmo passo de código do cadastro, sem perder os dados
@@ -551,9 +447,6 @@ function renderCheckoutVerification(email, dadosForm) {
         const el = document.getElementById(id);
         if (el && dadosForm[campo]) el.value = dadosForm[campo];
       }
-      if (dadosForm.metodo === 'whatsapp') {
-        document.querySelector('input[name="co_pagamento"][value="whatsapp"]').checked = true;
-      }
     } catch (e) {
       errEl.textContent = e.message;
       errEl.style.display = 'block';
@@ -575,6 +468,7 @@ function renderCheckoutVerification(email, dadosForm) {
 
 // ── PIX OVERLAY (criado dinamicamente, imune a interferências) ────────────────
 
+/* Legacy manual Pix overlay removed; Stripe Checkout handles Pix and card.
 function abrirPixOverlay(pedidoId, total) {
   console.log('[pix:overlay:open]', { total });
   // Se já está aberto, não faz nada (evita fechar e reabrir)
@@ -671,6 +565,7 @@ function abrirPixOverlay(pedidoId, total) {
 function fecharPixOverlay() {
   document.getElementById('_pixModal')?.remove();
 }
+*/
 
 // ── RASTREAR PEDIDO ───────────────────────────────────────────────────────────
 

@@ -1330,7 +1330,9 @@ function verDetalhesPedido(id) {
   if (!p) return;
 
   const st = STATUS_PEDIDO[p.status] || { label: p.status, color: '#888' };
-  const metodo = p.metodo_pagamento === 'stripe' ? ' Cartão / Stripe' : (p.metodo_pagamento === 'pix' ? ' PIX' : ' WhatsApp');
+  const metodo = p.stripe_session_id || p.metodo_pagamento === 'stripe'
+    ? 'Stripe (cartão ou PIX)'
+    : 'Pagamento legado';
   const itensHtml = p.itens.map(i =>
     `<div style="display:flex;justify-content:space-between;padding:.35rem 0;border-bottom:1px solid var(--border)">
       <span>${i.nome} <em style="color:var(--text-muted)">x${i.qty}</em></span>
@@ -1395,13 +1397,6 @@ function verDetalhesPedido(id) {
         </div>` : ''}
 
         <!-- Ações -->
-        ${p.telefone_cliente ? `
-        <div style="margin-top:1rem">
-          <a href="https://wa.me/55${p.telefone_cliente.replace(/\D/g,'')}" target="_blank"
-             class="btn btn--whatsapp" style="width:100%;justify-content:center">
-             Contatar cliente pelo WhatsApp
-          </a>
-        </div>` : ''}
       </div>
     </div>
   `;
@@ -1477,7 +1472,9 @@ function renderPedidos() {
         <tbody>
           ${pagePedidos.map(p => {
             const st = STATUS_PEDIDO[p.status] || { label: p.status, color: '#888' };
-            const metodoIcon = p.metodo_pagamento === 'stripe' ? ' Cartão / Stripe' : (p.metodo_pagamento === 'pix' ? ' PIX' : ' WhatsApp');
+            const metodoIcon = p.stripe_session_id || p.metodo_pagamento === 'stripe'
+              ? 'Stripe (cartão ou PIX)'
+              : 'Pagamento legado';
             return `
             <tr id="pedido-row-${p.id}">
               <td><strong>#${p.id}</strong></td>
@@ -1512,9 +1509,6 @@ function renderPedidos() {
               <td>
                 <div style="display:flex;gap:4px;flex-wrap:wrap">
                   <button class="btn btn--outline btn--sm" onclick="verDetalhesPedido(${p.id})" title="Ver detalhes do pedido">Ver</button>
-                  ${p.telefone_cliente ? `
-                  <a href="https://wa.me/55${p.telefone_cliente.replace(/\D/g,'')}" target="_blank"
-                     class="btn btn--whatsapp btn--sm" title="Contatar cliente"></a>` : ''}
                   <button class="btn btn--danger btn--sm" onclick="excluirPedido(${p.id})" title="Excluir pedido">Excluir</button>
                 </div>
               </td>

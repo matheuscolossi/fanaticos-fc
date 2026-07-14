@@ -12,7 +12,8 @@ O projeto já possuía uma integração parcial. Ela foi reorganizada para usar 
 - Os itens são copiados para `pedido_itens` com nome e preço do momento da compra.
 - O pedido mantém os identificadores da sessão, Payment Intent, cliente e evento Stripe.
 - O retorno de sucesso consulta o status real no backend antes de limpar o carrinho.
-- PIX e WhatsApp continuam disponíveis.
+- O checkout oferece somente Stripe, com cartão e PIX dentro da página hospedada pelo Stripe.
+- O fluxo manual antigo de PIX e WhatsApp foi removido.
 
 ## Arquivos principais
 
@@ -102,7 +103,7 @@ As estruturas funcionam com PostgreSQL e SQLite. O registro do pedido e de seus 
 3. Abra **Developers / Desenvolvedores → API keys**.
 4. Copie a **Publishable key** e coloque em `STRIPE_PUBLISHABLE_KEY`.
 5. Copie a **Secret key** e coloque somente no `.env` do backend em `STRIPE_SECRET_KEY`.
-6. Em **Settings → Payment methods**, deixe habilitados somente os métodos disponíveis para sua conta. O código usa `automatic_payment_methods`, então o Checkout exibirá os métodos efetivamente disponíveis.
+6. Em **Settings → Payment methods**, habilite **Pix** para a conta de teste. O checkout deste projeto envia explicitamente `card` e `pix`.
 
 Referência oficial: [criar uma Checkout Session](https://docs.stripe.com/api/checkout/sessions/create).
 

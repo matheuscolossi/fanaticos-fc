@@ -146,7 +146,9 @@ async function createCheckoutSession({ items, customer, cupomCodigo, uf, userId 
     client_reference_id: checkoutId,
     customer_creation: 'always',
     ...(customer?.email ? { customer_email: cleanText(customer.email, 180) } : {}),
-    automatic_payment_methods: { enabled: true },
+    // O Checkout hospedado exibe os métodos habilitados na conta. Mantemos
+    // somente cartão e Pix; ambos são confirmados pelo webhook Stripe.
+    payment_method_types: ['card', 'pix'],
     shipping_address_collection: { allowed_countries: ['BR'] },
     phone_number_collection: { enabled: true },
     billing_address_collection: 'required',

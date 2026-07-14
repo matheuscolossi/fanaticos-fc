@@ -11,6 +11,7 @@ const database = require('../src/config/database');
 const cartService = require('../src/services/cartService');
 const paymentModel = require('../src/models/paymentModel');
 const stripeService = require('../src/services/stripeService');
+const orderService = require('../src/services/orderService');
 
 let productId;
 const eventIds = ['evt_test_duplicate', 'evt_test_rollback', 'evt_test_paid'];
@@ -76,6 +77,13 @@ test('exige usuário autenticado para criar checkout', async () => {
   await assert.rejects(
     () => stripeService.createCheckoutSession({ items: [{ productId, qty: 1 }], userId: null }),
     (error) => error.code === 'AUTH_REQUIRED'
+  );
+});
+
+test('bloqueia o endpoint antigo de pedidos fora do Checkout Stripe', async () => {
+  await assert.rejects(
+    () => orderService.createOrder({ metodo_pagamento: 'whatsapp' }),
+    (error) => error.code === 'STRIPE_CHECKOUT_REQUIRED'
   );
 });
 
