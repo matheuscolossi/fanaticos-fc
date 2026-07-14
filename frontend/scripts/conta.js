@@ -267,7 +267,7 @@ async function renderPerfilTab() {
               value="${perfil.cidade || ''}" />
           </div>
           <div class="co-form-group">
-            <label>WhatsApp / Telefone</label>
+            <label>Telefone</label>
             <input type="tel" id="endTelefone" placeholder="(54) 99999-9999"
               value="${perfil.telefone || ''}" />
           </div>

@@ -135,7 +135,6 @@ function renderProduto(p) {
       ${p.estoque ? `<p class="product-detail__estoque">${p.estoque} em estoque</p>` : ''}
       <div class="produto-page__actions">
         <button class="btn btn--primary" id="btnAddProduto">Adicionar ao Carrinho</button>
-        <a href="https://wa.me/5554991138217?text=${encodeURIComponent(`Olá! Tenho interesse no produto ${p.nome}.`)}" target="_blank" rel="noopener" class="btn btn--outline">Tirar dúvida</a>
       </div>
     </div>
   `;
