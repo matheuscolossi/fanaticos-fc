@@ -9,7 +9,8 @@
     "import:produtos": "node src/scripts/importProducts.js",
     "import:produtos:dry": "node src/scripts/importProducts.js --dry-run",
     "migrate:catalog": "node src/scripts/migrateCatalogToPostgres.js",
-    "reclassify:categorias": "node src/scripts/reclassifyCategories.js"
+    "reclassify:categorias": "node src/scripts/reclassifyCategories.js",
+    "delete:sem-sku": "node src/scripts/deleteProductsWithoutSku.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

@@ -1,5 +1,5 @@
 const fs = require("fs");
-const { init, run, get } = require("../config/database");
+const { all, init, run } = require("../config/database");
 const { classifyProduct } = require("../utils/categoryClassifier");
 
 function categoriaDoProduto(p) {
@@ -10,6 +10,16 @@ async function importar() {
   await init();
 
   const produtos = JSON.parse(fs.readFileSync("produtos.json", "utf-8"));
+  const produtosCadastrados = await all(
+    "SELECT sku FROM produtos WHERE COALESCE(TRIM(sku), '') <> ''"
+  );
+  const skusExistentes = new Set(
+    produtosCadastrados.map((produto) => String(produto.sku).trim())
+  );
+  const categoriasCadastradas = await all("SELECT id, nome FROM categorias");
+  const categoriasPorNome = new Map(
+    categoriasCadastradas.map((categoria) => [categoria.nome.toLowerCase(), categoria])
+  );
 
   const timesExistentes = [
     "Athletico Paranaense",
@@ -75,17 +85,21 @@ async function importar() {
   let pulados = 0;
 
   for (const p of produtos) {
-    const nomesCategorias = p.categories?.map(c => c.name) || [];
+    const nome = p.name;
+    const slug = p.slug;
+    const sku = String(p.sku || '').trim();
 
-    if (timesExistentes.some(time => nomesCategorias.includes(time))) {
-      console.log(`Pulando time já criado: ${p.name}`);
+    if (!sku) {
+      console.log(`Pulando sem SKU: ${nome}`);
       pulados++;
       continue;
     }
 
-    const nome = p.name;
-    const slug = p.slug;
-    const sku = p.sku || `fornecedor-${p.id}`;
+    if (skusExistentes.has(sku)) {
+      console.log(`Já existe, pulando: ${nome}`);
+      pulados++;
+      continue;
+    }
 
     const precoOriginal = Number(p.prices?.price || 0) / 100;
     const preco = +(precoOriginal * 2).toFixed(2);
@@ -93,26 +107,12 @@ async function importar() {
     const imagem = p.images?.[0]?.src || null;
     const categoriaNome = categoriaDoProduto(p);
 
-    let categoria = await get(
-      "SELECT id FROM categorias WHERE LOWER(nome) = LOWER(?)",
-      [categoriaNome]
-    );
+    let categoria = categoriasPorNome.get(categoriaNome.toLowerCase());
 
     if (!categoria) {
-      await run("INSERT INTO categorias (nome) VALUES (?)", [categoriaNome]);
-
-      categoria = await get(
-        "SELECT id FROM categorias WHERE LOWER(nome) = LOWER(?)",
-        [categoriaNome]
-      );
-    }
-
-    const existente = await get("SELECT id FROM produtos WHERE sku = ?", [sku]);
-
-    if (existente) {
-      console.log(`Já existe, pulando: ${nome}`);
-      pulados++;
-      continue;
+      const resultado = await run("INSERT INTO categorias (nome) VALUES (?)", [categoriaNome]);
+      categoria = { id: resultado.lastID, nome: categoriaNome };
+      categoriasPorNome.set(categoriaNome.toLowerCase(), categoria);
     }
 
     await run(
@@ -129,6 +129,7 @@ async function importar() {
       ]
     );
 
+    skusExistentes.add(sku);
     console.log(`Criado: ${nome} | Categoria: ${categoriaNome} | R$ ${preco}`);
     criados++;
   }
