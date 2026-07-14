@@ -1,36 +1,9 @@
 const fs = require("fs");
 const { init, run, get } = require("../config/database");
+const { classifyProduct } = require("../utils/categoryClassifier");
 
 function categoriaDoProduto(p) {
-  const nomes = p.categories?.map(c => c.name) || [];
-
-  if (nomes.includes("Feminina")) return "Feminina";
-  if (nomes.includes("Retrô")) return "Retrô";
-  if (nomes.includes("Seleções")) return "Seleções";
-
-  if (
-    nomes.includes("Premier League") ||
-    nomes.includes("La Liga") ||
-    nomes.includes("Serie A") ||
-    nomes.includes("Bundesliga") ||
-    nomes.includes("Ligue 1") ||
-    nomes.includes("Europa") ||
-    nomes.includes("América do Sul") ||
-    nomes.includes("América do Norte") ||
-    nomes.includes("Times Internacionais")
-  ) {
-    return "Times Internacionais";
-  }
-
-  if (
-    nomes.includes("Brasileirão Série A") ||
-    nomes.includes("Brasileirão Série B") ||
-    nomes.includes("Libertadores")
-  ) {
-    return "Brasileirão";
-  }
-
-  return "Brasileirão";
+  return classifyProduct({ name: p.name, categories: p.categories });
 }
 
 async function importar() {
