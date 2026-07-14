@@ -2,6 +2,8 @@
   "rewrites": [
     { "source": "/busca", "destination": "/pages/busca.html" },
     { "source": "/carrinho", "destination": "/pages/carrinho.html" },
+    { "source": "/pagamento-sucesso", "destination": "/pages/pagamento-sucesso.html" },
+    { "source": "/pagamento-cancelado", "destination": "/pages/pagamento-cancelado.html" },
     { "source": "/p/:nome/:id", "destination": "/pages/produto.html" }
   ]
 }

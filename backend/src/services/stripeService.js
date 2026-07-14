@@ -1,50 +1,132 @@
+const crypto = require('crypto');
 const Stripe = require('stripe');
-const couponService = require('./couponService');
 const cartService = require('./cartService');
+const orderModel = require('../models/orderModel');
 const orderService = require('./orderService');
+const paymentModel = require('../models/paymentModel');
+const { transaction } = require('../config/database');
 const { createHttpError } = require('../utils/http');
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+const stripe = stripeSecret ? new Stripe(stripeSecret) : null;
 
 if (!stripeSecret) {
-  console.warn('[stripeService] STRIPE_SECRET_KEY não configurado. Rotas Stripe ficarão indisponíveis.');
+  console.warn('[stripeService] STRIPE_SECRET_KEY não configurado.');
 }
 
-const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: '2024-08-01' }) : null;
+function cleanText(value, maxLength = 120) {
+  return String(value || '').trim().slice(0, maxLength);
+}
+
+function normalizePersonalization(value) {
+  if (!value || typeof value !== 'object') return null;
+  const nome = cleanText(value.nome, 30);
+  const numero = cleanText(value.numero, 10);
+  return nome || numero ? { nome, numero } : null;
+}
 
 function normalizeCartItems(items) {
   if (!Array.isArray(items)) return [];
-  return items.map(i => ({
-    productId: Number(i.productId ?? i.id),
-    qty: Number(i.qty ?? 0),
+  return items.map((item) => ({
+    productId: Number(item?.productId ?? item?.id),
+    qty: Number(item?.qty),
+    tamanho: cleanText(item?.tamanho, 20) || null,
+    personalizacao: normalizePersonalization(item?.personalizacao),
   }));
 }
 
-async function createCheckoutSession({ items, customer, cupomCodigo, uf, userId, successUrl, cancelUrl }) {
+function getFrontendBaseUrl() {
+  return (process.env.FRONTEND_URL || process.env.CLIENT_BASE_URL || 'http://localhost:5500').replace(/\/$/, '');
+}
+
+function formatShippingAddress(shippingDetails) {
+  const address = shippingDetails?.address || {};
+  return [
+    address.line1,
+    address.line2,
+    address.city,
+    address.state,
+    address.postal_code,
+    address.country,
+  ].filter(Boolean).join(' — ');
+}
+
+function getShippingSnapshot(session) {
+  const shipping = session.shipping_details || null;
+  const address = shipping?.address || session.customer_details?.address || {};
+  return {
+    formatted: formatShippingAddress(shipping || { address }),
+    raw: {
+      name: shipping?.name || session.customer_details?.name || null,
+      address,
+    },
+  };
+}
+
+function buildLineItem(item) {
+  const details = [
+    item.tamanho ? `Tamanho: ${item.tamanho}` : '',
+    item.personalizacao?.nome ? `Nome: ${item.personalizacao.nome}` : '',
+    item.personalizacao?.numero ? `Número: ${item.personalizacao.numero}` : '',
+  ].filter(Boolean).join(' · ');
+
+  return {
+    price_data: {
+      currency: 'brl',
+      product_data: {
+        name: cleanText(item.name, 250),
+        ...(details ? { description: details } : {}),
+      },
+      unit_amount: Math.round(Number(item.price) * 100),
+    },
+    quantity: item.qty,
+  };
+}
+
+async function createCheckoutSession({ items, customer, cupomCodigo, uf, userId }) {
   if (!stripe) throw createHttpError(500, 'Stripe não está configurado.', 'STRIPE_NOT_CONFIGURED');
+  if (!Number.isInteger(Number(userId)) || Number(userId) < 1) {
+    throw createHttpError(401, 'Faça login para finalizar a compra.', 'AUTH_REQUIRED');
+  }
 
   const normalizedItems = normalizeCartItems(items);
   if (!normalizedItems.length) {
     throw createHttpError(400, 'Informe ao menos um item no carrinho.', 'CART_ITEMS_REQUIRED');
   }
 
-  const summary = await cartService.buildCartSummary({ items: normalizedItems, cupomCode: cupomCodigo, usuarioId: userId, uf });
+  const summary = await cartService.buildCartSummary({
+    items: normalizedItems,
+    cupomCode: cupomCodigo,
+    usuarioId: userId,
+    uf,
+  });
+  if (cupomCodigo && summary.cupomErro) {
+    throw createHttpError(400, summary.cupomErro, 'COUPON_INVALID');
+  }
   if (summary.total <= 0) {
-    throw createHttpError(400, 'O valor do pedido deve ser maior que zero para pagamento com Stripe.', 'INVALID_ORDER_TOTAL');
+    throw createHttpError(400, 'O valor do pedido deve ser maior que zero.', 'INVALID_ORDER_TOTAL');
   }
 
-  const lineItems = summary.items.map((item) => ({
-    price_data: {
-      currency: 'brl',
-      product_data: {
-        name: item.name,
-      },
-      unit_amount: Math.round(Number(item.price) * 100),
-    },
-    quantity: item.qty,
-  }));
+  const checkoutId = crypto.randomUUID();
+  await paymentModel.createCheckoutDraft({
+    id: checkoutId,
+    usuario_id: Number(userId),
+    itens: summary.items,
+    subtotal: summary.subtotal,
+    frete: summary.freight,
+    desconto: Number(summary.discount || 0),
+    total: summary.total,
+    currency: 'BRL',
+    nome_cliente: cleanText(customer?.name, 120),
+    email_cliente: cleanText(customer?.email, 180),
+    telefone_cliente: cleanText(customer?.phone, 40),
+    endereco: cleanText(customer?.address, 300),
+    uf: cleanText(uf, 2).toUpperCase(),
+    cupom_codigo: cleanText(cupomCodigo, 50),
+  });
 
+  const lineItems = summary.items.map(buildLineItem);
   if (summary.freight > 0) {
     lineItems.push({
       price_data: {
@@ -57,88 +139,162 @@ async function createCheckoutSession({ items, customer, cupomCodigo, uf, userId,
   }
 
   const sessionParams = {
-    payment_method_types: ['card'],
     mode: 'payment',
     line_items: lineItems,
-    success_url: successUrl,
-    cancel_url: cancelUrl,
+    success_url: `${getFrontendBaseUrl()}/pages/pagamento-sucesso.html?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${getFrontendBaseUrl()}/pages/pagamento-cancelado.html?session_id={CHECKOUT_SESSION_ID}`,
+    client_reference_id: checkoutId,
+    customer_creation: 'always',
+    ...(customer?.email ? { customer_email: cleanText(customer.email, 180) } : {}),
+    automatic_payment_methods: { enabled: true },
+    shipping_address_collection: { allowed_countries: ['BR'] },
+    phone_number_collection: { enabled: true },
+    billing_address_collection: 'required',
     metadata: {
-      user_id: userId ? String(userId) : 'null',
-      customer_name: customer?.name || '',
-      customer_email: customer?.email || '',
-      customer_phone: customer?.phone || '',
-      address: customer?.address || '',
-      cupom_codigo: cupomCodigo || '',
-      uf: uf || '',
-      items: JSON.stringify(normalizedItems),
+      checkout_id: checkoutId,
+      user_id: String(userId),
     },
   };
-
-  if (customer?.email) {
-    sessionParams.customer_email = customer.email;
-  }
 
   if (cupomCodigo && summary.discount > 0) {
     const stripeCoupon = await stripe.coupons.create({
       amount_off: Math.round(summary.discount * 100),
       currency: 'brl',
       duration: 'once',
-      name: `Cupom ${cupomCodigo}`,
-    });
+      name: `Cupom ${cleanText(cupomCodigo, 40)}`,
+    }, { idempotencyKey: `checkout-coupon:${checkoutId}` });
     sessionParams.discounts = [{ coupon: stripeCoupon.id }];
   }
 
-  return stripe.checkout.sessions.create(sessionParams);
+  const session = await stripe.checkout.sessions.create(sessionParams, {
+    idempotencyKey: `checkout-session:${checkoutId}`,
+  });
+  await paymentModel.attachStripeSession(checkoutId, session.id);
+  return session;
 }
 
-async function createOrderFromCheckoutSession(session) {
-  if (!session || session.payment_status !== 'paid') {
-    throw createHttpError(400, 'Sessão Stripe inválida ou não paga.', 'STRIPE_SESSION_INVALID');
+async function fulfillCheckoutSession(session, eventId, db) {
+  const checkoutId = session?.metadata?.checkout_id || session?.client_reference_id;
+  if (!checkoutId) {
+    throw createHttpError(400, 'Checkout sem identificador interno.', 'STRIPE_CHECKOUT_ID_MISSING');
   }
 
-  const metadata = session.metadata || {}; // Stripe metadata volta como objeto com strings
-  let items = [];
-  try {
-    items = JSON.parse(metadata.items || '[]');
-  } catch (err) {
-    throw createHttpError(400, 'Falha ao ler os itens do pedido Stripe.', 'STRIPE_METADATA_INVALID');
+  const draft = await paymentModel.findDraftById(checkoutId, db);
+  if (!draft) throw createHttpError(404, 'Checkout interno não encontrado.', 'CHECKOUT_DRAFT_NOT_FOUND');
+
+  const existingOrder = await orderModel.findByStripeSession(session.id, db);
+  if (existingOrder) {
+    await paymentModel.updateDraftStatus(draft.id, 'paid', db);
+    return existingOrder;
   }
 
-  if (!Array.isArray(items) || items.length === 0) {
-    throw createHttpError(400, 'Itens do pedido Stripe inválidos.', 'STRIPE_METADATA_INVALID');
+  const stripeTotal = Number(session.amount_total || 0) / 100;
+  if (Math.abs(stripeTotal - Number(draft.total)) > 0.01) {
+    throw createHttpError(400, 'O total confirmado pelo Stripe não corresponde ao checkout.', 'STRIPE_TOTAL_MISMATCH');
   }
 
-  const total = Number(session.amount_total || 0) / 100;
-  const cupomDesconto = Number(session.total_details?.amount_discount || 0) / 100;
+  const shippingAddress = getShippingSnapshot(session);
+  const order = await orderService.createPaidOrderFromStripe({
+    draft,
+    session,
+    eventId,
+    shippingAddress,
+  }, db);
+  await paymentModel.updateDraftStatus(draft.id, 'paid', db);
+  console.log('[stripe] Pedido confirmado pelo webhook', { orderId: order.id, sessionId: session.id });
+  return order;
+}
 
-  return orderService.createPaidOrderFromStripe({
-    itens: items.map((item) => ({ productId: Number(item.productId), qty: Number(item.qty) })),
-    total,
-    usuario_id: metadata.user_id && metadata.user_id !== 'null' ? Number(metadata.user_id) : null,
-    nome_cliente: metadata.customer_name || null,
-    email_cliente: metadata.customer_email || null,
-    telefone_cliente: metadata.customer_phone || null,
-    endereco: metadata.address || null,
-    metodo_pagamento: 'stripe',
-    cupom_codigo: metadata.cupom_codigo || null,
-    cupom_desconto: cupomDesconto,
+async function processWebhookEvent(event) {
+  return transaction(async (db) => {
+    const alreadyProcessed = await paymentModel.findWebhookEvent(event.id, db);
+    if (alreadyProcessed) return { duplicate: true };
+
+    await paymentModel.createWebhookEvent(event.id, event.type, db);
+    const object = event.data.object;
+
+    switch (event.type) {
+      case 'checkout.session.completed':
+        if (object.payment_status === 'paid') {
+          await fulfillCheckoutSession(object, event.id, db);
+        } else {
+          const checkoutId = object.metadata?.checkout_id || object.client_reference_id;
+          if (checkoutId) await paymentModel.updateDraftStatus(checkoutId, 'awaiting_payment', db);
+        }
+        break;
+      case 'checkout.session.async_payment_succeeded':
+        await fulfillCheckoutSession(object, event.id, db);
+        break;
+      case 'checkout.session.async_payment_failed': {
+        const checkoutId = object.metadata?.checkout_id || object.client_reference_id;
+        if (checkoutId) await paymentModel.updateDraftStatus(checkoutId, 'payment_failed', db);
+        break;
+      }
+      case 'payment_intent.payment_failed':
+        await orderModel.updatePaymentStatusByPaymentIntent(object.id, 'failed', 'cancelado', db);
+        break;
+      case 'charge.refunded': {
+        const paymentIntentId = typeof object.payment_intent === 'string' ? object.payment_intent : null;
+        if (paymentIntentId) {
+          await orderModel.updatePaymentStatusByPaymentIntent(paymentIntentId, 'refunded', 'cancelado', db);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+
+    return { duplicate: false };
   });
 }
 
 async function handleWebhook(rawBody, signatureHeader) {
   if (!stripe) throw createHttpError(500, 'Stripe não está configurado.', 'STRIPE_NOT_CONFIGURED');
-  if (!stripeWebhookSecret) throw createHttpError(500, 'Stripe webhook secret não está configurada.', 'STRIPE_WEBHOOK_NOT_CONFIGURED');
+  if (!stripeWebhookSecret) throw createHttpError(500, 'STRIPE_WEBHOOK_SECRET não configurado.', 'STRIPE_WEBHOOK_NOT_CONFIGURED');
 
-  const event = stripe.webhooks.constructEvent(rawBody, signatureHeader, stripeWebhookSecret);
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    await createOrderFromCheckoutSession(session);
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(rawBody, signatureHeader, stripeWebhookSecret);
+  } catch (error) {
+    throw createHttpError(400, 'Assinatura do webhook Stripe inválida.', 'STRIPE_WEBHOOK_SIGNATURE_INVALID');
   }
 
-  return event;
+  return processWebhookEvent(event);
+}
+
+async function getCheckoutStatus(sessionId, userId) {
+  if (!sessionId || !String(sessionId).startsWith('cs_')) {
+    throw createHttpError(400, 'Sessão Stripe inválida.', 'STRIPE_SESSION_INVALID');
+  }
+
+  const order = await orderModel.findPaymentStatusForUser(sessionId, userId);
+  if (order) {
+    return {
+      sessionId,
+      orderId: order.id,
+      status: order.status,
+      paymentStatus: order.payment_status,
+      total: Number(order.total),
+      currency: order.currency || 'BRL',
+    };
+  }
+
+  const draft = await paymentModel.findDraftBySessionForUser(sessionId, userId);
+  if (!draft) throw createHttpError(404, 'Sessão de checkout não encontrada.', 'CHECKOUT_NOT_FOUND');
+  return {
+    sessionId,
+    orderId: null,
+    status: draft.status,
+    paymentStatus: draft.status === 'paid' ? 'paid' : 'pending',
+    total: Number(draft.total),
+    currency: draft.currency || 'BRL',
+  };
 }
 
 module.exports = {
   createCheckoutSession,
+  getCheckoutStatus,
   handleWebhook,
+  normalizeCartItems,
+  processWebhookEvent,
 };

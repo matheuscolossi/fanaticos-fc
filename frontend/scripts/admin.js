@@ -401,7 +401,7 @@ function setTab(name) {
     dashboard:  ['Dashboard',            'Visão geral das métricas e vendas'],
     produtos:   ['Gerenciar Produtos',   'Cadastre, edite e remova produtos do catálogo'],
     categorias: ['Gerenciar Categorias', 'Organize as categorias e subcategorias da loja'],
-    pedidos:    ['Pedidos Recebidos',    'Visualize todos os pedidos finalizados via WhatsApp'],
+    pedidos:    ['Pedidos Recebidos',    'Visualize pedidos, pagamentos e entregas'],
     usuarios:   ['Usuários Cadastrados', 'Gerencie as contas de usuários'],
     cupons:     ['Gerenciar Cupons',     'Crie e administre cupons de desconto'],
     promocoes:  ['Gerenciar Promoções',  'Descontos por produto/categoria, combos e promoções por período'],
@@ -1330,7 +1330,7 @@ function verDetalhesPedido(id) {
   if (!p) return;
 
   const st = STATUS_PEDIDO[p.status] || { label: p.status, color: '#888' };
-  const metodo = p.metodo_pagamento === 'pix' ? ' PIX' : ' WhatsApp';
+  const metodo = p.metodo_pagamento === 'stripe' ? ' Cartão / Stripe' : (p.metodo_pagamento === 'pix' ? ' PIX' : ' WhatsApp');
   const itensHtml = p.itens.map(i =>
     `<div style="display:flex;justify-content:space-between;padding:.35rem 0;border-bottom:1px solid var(--border)">
       <span>${i.nome} <em style="color:var(--text-muted)">x${i.qty}</em></span>
@@ -1385,8 +1385,14 @@ function verDetalhesPedido(id) {
         <!-- Pagamento -->
         <div style="display:flex;gap:.75rem;font-size:.85rem;color:var(--text-muted)">
           <span>Pagamento: <strong style="color:var(--text)">${metodo}</strong></span>
+          ${p.payment_status ? `<span>| Status financeiro: <strong style="color:var(--text)">${p.payment_status}</strong></span>` : ''}
           ${p.codigo_rastreio ? `<span>| Rastreio: <strong style="color:var(--text)">${p.codigo_rastreio}</strong></span>` : ''}
         </div>
+        ${p.stripe_session_id ? `
+        <div style="margin-top:.75rem;font-size:.74rem;color:var(--text-dim);word-break:break-all">
+          <div>Stripe Session: ${p.stripe_session_id}</div>
+          ${p.stripe_payment_intent_id ? `<div>Payment Intent: ${p.stripe_payment_intent_id}</div>` : ''}
+        </div>` : ''}
 
         <!-- Ações -->
         ${p.telefone_cliente ? `
@@ -1471,7 +1477,7 @@ function renderPedidos() {
         <tbody>
           ${pagePedidos.map(p => {
             const st = STATUS_PEDIDO[p.status] || { label: p.status, color: '#888' };
-            const metodoIcon = p.metodo_pagamento === 'pix' ? ' PIX' : ' WhatsApp';
+            const metodoIcon = p.metodo_pagamento === 'stripe' ? ' Cartão / Stripe' : (p.metodo_pagamento === 'pix' ? ' PIX' : ' WhatsApp');
             return `
             <tr id="pedido-row-${p.id}">
               <td><strong>#${p.id}</strong></td>

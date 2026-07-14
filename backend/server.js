@@ -40,6 +40,13 @@ app.use(cors({
   },
   credentials: true,
 }));
+
+// O Stripe exige o corpo exatamente como recebido para validar a assinatura.
+// Este parser precisa ficar antes do express.json() global.
+app.use('/api/pagamentos/stripe/webhook', express.raw({ type: 'application/json' }));
+app.use('/api/pagamentos/webhook', express.raw({ type: 'application/json' }));
+app.use('/api/payments/stripe/webhook', express.raw({ type: 'application/json' }));
+app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '10mb' }));
 
 // Documentação mínima da API (Swagger/OpenAPI), exigida pelo PDF do trabalho
@@ -62,6 +69,7 @@ app.use('/api/categorias', categoryRoutes(adminMiddleware));
 app.use('/api/produtos', productRoutes({ adminMiddleware, perm }));
 app.use('/api/pedidos', orderRoutes({ adminMiddleware, authMiddleware, perm }));
 app.use('/api/pagamentos', paymentRoutes({ authMiddleware }));
+app.use('/api/payments', paymentRoutes({ authMiddleware }));
 app.use('/api/config', configRoutes());
 app.use('/api/admin/usuarios', userRoutes({ adminMiddleware, perm }));
 app.use('/api/admin/dashboard', dashboardRoutes(perm('financeiro.visualizar')));

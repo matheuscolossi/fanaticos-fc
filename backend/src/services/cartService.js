@@ -35,11 +35,14 @@ async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
   let promocoesDesconto = 0;
   for (const item of items) {
     const qty = Number(item?.qty);
-    if (!item?.productId || !Number.isInteger(qty) || qty < 1) {
-      throw createHttpError(400, 'Cada item precisa de productId e qty inteiro >= 1.', 'CART_ITEM_INVALID');
+    if (!item?.productId || !Number.isInteger(qty) || qty < 1 || qty > 99) {
+      throw createHttpError(400, 'Cada item precisa de productId e qty inteiro entre 1 e 99.', 'CART_ITEM_INVALID');
     }
 
     const product = await getProduct(item.productId); // lança 404 se o produto não existir
+    if (product.status && product.status !== 'ativo') {
+      throw createHttpError(400, `O produto "${product.nome}" não está disponível.`, 'PRODUCT_UNAVAILABLE');
+    }
     const price = Number(product.preco_exibicao ?? product.preco_promocional ?? product.preco);
 
     const { desconto, promocaoAplicada } = promocaoService.calcularDescontoQuantidade(product, qty, price, promocoesAtivas);
@@ -53,6 +56,8 @@ async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
       price,
       qty,
       image: product.imagens[0] || null,
+      tamanho: item.tamanho || null,
+      personalizacao: item.personalizacao || null,
       promocaoAplicada: promocaoAplicada?.nome || product.promocao_nome || null,
     });
   }
@@ -78,8 +83,8 @@ async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
   const total = round2(subtotal + freight - discount);
 
   const resposta = {
-    items: resolvedItems.map(({ productId, name, price, qty, image, promocaoAplicada }) =>
-      ({ productId, name, price, qty, image, promocaoAplicada })),
+    items: resolvedItems.map(({ productId, name, price, qty, image, tamanho, personalizacao, promocaoAplicada }) =>
+      ({ productId, name, price, qty, image, tamanho, personalizacao, promocaoAplicada })),
     subtotal, freight, discount, total,
     promocoesDesconto,
   };

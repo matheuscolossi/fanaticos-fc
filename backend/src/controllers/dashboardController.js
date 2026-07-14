@@ -82,10 +82,10 @@ async function dashboard(req, res, next) {
             ? JSON.parse(order.itens)
             : (order.itens || []);
           for (const item of itens) {
-            const nome = item.nome || 'Desconhecido';
+            const nome = item.nome || item.name || 'Desconhecido';
             const existing = prodMap.get(nome) || { nome, vendido: 0, receita: 0 };
             existing.vendido += Number(item.qty) || 1;
-            existing.receita += (Number(item.preco) || 0) * (Number(item.qty) || 1);
+            existing.receita += (Number(item.preco ?? item.price) || 0) * (Number(item.qty) || 1);
             prodMap.set(nome, existing);
           }
         } catch { /* malformed itens — skip */ }

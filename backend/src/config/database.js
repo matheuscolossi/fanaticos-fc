@@ -142,6 +142,50 @@ function all(sql, params = []) {
   return isPostgres ? allPostgres(sql, params) : allSqlite(sql, params);
 }
 
+async function transaction(work) {
+  if (isPostgres) {
+    const client = await pgPool.connect();
+    const tx = {
+      run: async (sql, params = []) => {
+        const finalSql = toPostgresSql(shouldReturnId(sql) ? `${sql} RETURNING id` : sql);
+        const result = await client.query(finalSql, params);
+        return { lastID: result.rows[0]?.id, changes: result.rowCount };
+      },
+      get: async (sql, params = []) => {
+        const result = await client.query(toPostgresSql(sql), params);
+        return result.rows[0];
+      },
+      all: async (sql, params = []) => {
+        const result = await client.query(toPostgresSql(sql), params);
+        return result.rows;
+      },
+    };
+
+    try {
+      await client.query('BEGIN');
+      const result = await work(tx);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  await runSqlite('BEGIN TRANSACTION');
+  const tx = { run: runSqlite, get: getSqlite, all: allSqlite };
+  try {
+    const result = await work(tx);
+    await runSqlite('COMMIT');
+    return result;
+  } catch (error) {
+    await runSqlite('ROLLBACK').catch(() => {});
+    throw error;
+  }
+}
+
 async function close() {
   if (pgPool) {
     await pgPool.end();
@@ -214,6 +258,59 @@ async function createPostgresSchema() {
       endereco TEXT,
       metodo_pagamento TEXT DEFAULT 'whatsapp',
       codigo_rastreio TEXT,
+      stripe_session_id TEXT,
+      stripe_payment_intent_id TEXT,
+      stripe_customer_id TEXT,
+      stripe_event_id TEXT,
+      payment_status TEXT DEFAULT 'unpaid',
+      currency TEXT DEFAULT 'BRL',
+      shipping_address JSONB,
+      updated_at TIMESTAMPTZ DEFAULT now(),
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS pedido_itens (
+      id SERIAL PRIMARY KEY,
+      pedido_id INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE CASCADE,
+      produto_id INTEGER,
+      nome TEXT NOT NULL,
+      preco_unitario NUMERIC(10,2) NOT NULL,
+      quantidade INTEGER NOT NULL,
+      tamanho TEXT,
+      variacao JSONB DEFAULT '{}'::jsonb,
+      subtotal NUMERIC(10,2) NOT NULL
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS checkout_drafts (
+      id TEXT PRIMARY KEY,
+      usuario_id INTEGER REFERENCES usuarios(id),
+      itens JSONB NOT NULL,
+      subtotal NUMERIC(10,2) NOT NULL,
+      frete NUMERIC(10,2) NOT NULL DEFAULT 0,
+      desconto NUMERIC(10,2) NOT NULL DEFAULT 0,
+      total NUMERIC(10,2) NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'BRL',
+      nome_cliente TEXT,
+      email_cliente TEXT,
+      telefone_cliente TEXT,
+      endereco TEXT,
+      uf TEXT,
+      cupom_codigo TEXT,
+      status TEXT NOT NULL DEFAULT 'created',
+      stripe_session_id TEXT,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS stripe_webhook_events (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
       created_at TIMESTAMPTZ DEFAULT now()
     )
   `);
@@ -325,6 +422,54 @@ async function createSqliteSchema() {
     endereco TEXT,
     metodo_pagamento TEXT DEFAULT 'whatsapp',
     codigo_rastreio TEXT,
+    stripe_session_id TEXT,
+    stripe_payment_intent_id TEXT,
+    stripe_customer_id TEXT,
+    stripe_event_id TEXT,
+    payment_status TEXT DEFAULT 'unpaid',
+    currency TEXT DEFAULT 'BRL',
+    shipping_address TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  await run(`CREATE TABLE IF NOT EXISTS pedido_itens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pedido_id INTEGER NOT NULL,
+    produto_id INTEGER,
+    nome TEXT NOT NULL,
+    preco_unitario REAL NOT NULL,
+    quantidade INTEGER NOT NULL,
+    tamanho TEXT,
+    variacao TEXT DEFAULT '{}',
+    subtotal REAL NOT NULL,
+    FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE
+  )`);
+
+  await run(`CREATE TABLE IF NOT EXISTS checkout_drafts (
+    id TEXT PRIMARY KEY,
+    usuario_id INTEGER,
+    itens TEXT NOT NULL,
+    subtotal REAL NOT NULL,
+    frete REAL NOT NULL DEFAULT 0,
+    desconto REAL NOT NULL DEFAULT 0,
+    total REAL NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'BRL',
+    nome_cliente TEXT,
+    email_cliente TEXT,
+    telefone_cliente TEXT,
+    endereco TEXT,
+    uf TEXT,
+    cupom_codigo TEXT,
+    status TEXT NOT NULL DEFAULT 'created',
+    stripe_session_id TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  await run(`CREATE TABLE IF NOT EXISTS stripe_webhook_events (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
@@ -435,6 +580,17 @@ async function runMigrations() {
     // Rastreio de cupom aplicado no pedido
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cupom_codigo TEXT');
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cupom_desconto NUMERIC(10,2)');
+    // Stripe: payment identity, status and delivery snapshot
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS stripe_session_id TEXT');
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT');
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT');
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS stripe_event_id TEXT');
+    await runOptionalMigration("ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'unpaid'");
+    await runOptionalMigration("ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'BRL'");
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS shipping_address JSONB');
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now()');
+    await runOptionalMigration('CREATE UNIQUE INDEX IF NOT EXISTS pedidos_stripe_session_idx ON pedidos(stripe_session_id)');
+    await runOptionalMigration('CREATE UNIQUE INDEX IF NOT EXISTS checkout_drafts_stripe_session_idx ON checkout_drafts(stripe_session_id)');
     // Funcionários/administradores: cargo, permissões granulares, acesso e auditoria
     await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS cargo TEXT');
     await runOptionalMigration("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permissoes JSONB DEFAULT '[]'::jsonb");
@@ -490,6 +646,17 @@ async function runMigrations() {
   // Rastreio de cupom aplicado no pedido
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN cupom_codigo TEXT');
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN cupom_desconto REAL');
+  // Stripe: payment identity, status and delivery snapshot
+  await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN stripe_session_id TEXT');
+  await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN stripe_payment_intent_id TEXT');
+  await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN stripe_customer_id TEXT');
+  await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN stripe_event_id TEXT');
+  await runOptionalMigration("ALTER TABLE pedidos ADD COLUMN payment_status TEXT DEFAULT 'unpaid'");
+  await runOptionalMigration("ALTER TABLE pedidos ADD COLUMN currency TEXT DEFAULT 'BRL'");
+  await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN shipping_address TEXT');
+  await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN updated_at DATETIME');
+  await runOptionalMigration('CREATE UNIQUE INDEX IF NOT EXISTS pedidos_stripe_session_idx ON pedidos(stripe_session_id)');
+  await runOptionalMigration('CREATE UNIQUE INDEX IF NOT EXISTS checkout_drafts_stripe_session_idx ON checkout_drafts(stripe_session_id)');
   // Funcionários/administradores: cargo, permissões granulares, acesso e auditoria
   await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN cargo TEXT');
   await runOptionalMigration("ALTER TABLE usuarios ADD COLUMN permissoes TEXT DEFAULT '[]'");
@@ -562,4 +729,4 @@ async function init() {
   console.log('[database] Initialized.');
 }
 
-module.exports = { all, close, get, init, isPostgres, run };
+module.exports = { all, close, get, init, isPostgres, run, transaction };

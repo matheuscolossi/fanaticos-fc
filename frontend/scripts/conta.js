@@ -159,7 +159,7 @@ async function renderPedidosTab() {
               </div>
 
               <div class="pedido-conta-card__meta">
-                <span>${pedido.metodo_pagamento === 'pix' ? ' PIX' : ' WhatsApp'}</span>
+                <span>${pedido.metodo_pagamento === 'stripe' ? ' Cartão / Stripe' : (pedido.metodo_pagamento === 'pix' ? ' PIX' : ' WhatsApp')}</span>
                 ${pedido.endereco ? `<span>${pedido.endereco}</span>` : ''}
                 <strong class="pedido-conta-card__total">${formatBRL(pedido.total)}</strong>
               </div>

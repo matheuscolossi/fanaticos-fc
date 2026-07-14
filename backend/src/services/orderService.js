@@ -5,8 +5,16 @@ const couponService = require('../services/couponService');
 const { createHttpError } = require('../utils/http');
 
 function parseOrderItems(order) {
-  if (Array.isArray(order.itens)) return order;
-  return { ...order, itens: JSON.parse(order.itens || '[]') };
+  const itens = Array.isArray(order.itens) ? order.itens : JSON.parse(order.itens || '[]');
+  return {
+    ...order,
+    itens: itens.map((item) => ({
+      ...item,
+      id: item.id ?? item.productId,
+      nome: item.nome ?? item.name,
+      preco: Number(item.preco ?? item.price ?? 0),
+    })),
+  };
 }
 
 function getInitialOrderStatus(paymentMethod) {
@@ -64,38 +72,41 @@ async function createOrder(data) {
   return { message: 'Order created.', id: result.lastID, total: totalFinal };
 }
 
-async function createPaidOrderFromStripe(data) {
-  const {
-    itens,
-    total,
-    usuario_id,
-    nome_cliente,
-    email_cliente,
-    telefone_cliente,
-    endereco,
-    cupom_codigo,
-    cupom_desconto,
-  } = data;
+async function createPaidOrderFromStripe(data, db) {
+  const { draft, session, eventId, shippingAddress } = data;
+  const itens = Array.isArray(draft?.itens)
+    ? draft.itens
+    : JSON.parse(draft?.itens || '[]');
+  const total = session?.amount_total != null
+    ? Number(session.amount_total) / 100
+    : Number(draft?.total || 0);
 
   if (!Array.isArray(itens) || itens.length === 0 || !Number(total)) {
     throw createHttpError(400, 'Dados do pedido Stripe inválidos.', 'VALIDATION_ERROR');
   }
 
-  const result = await orderModel.create({
-    usuario_id: usuario_id || null,
-    itens: JSON.stringify(itens),
-    total: Number(total),
-    nome_cliente: nome_cliente || null,
-    email_cliente: email_cliente || null,
-    telefone_cliente: telefone_cliente || null,
-    endereco: endereco || null,
-    metodo_pagamento: 'stripe',
-    status: 'pago',
-    cupom_codigo: cupom_codigo || null,
-    cupom_desconto: cupom_desconto ?? null,
-  });
+  const payload = {
+    usuario_id: draft.usuario_id,
+    itens,
+    total,
+    nome_cliente: session.customer_details?.name || draft.nome_cliente,
+    email_cliente: session.customer_details?.email || draft.email_cliente,
+    telefone_cliente: session.customer_details?.phone || draft.telefone_cliente,
+    endereco: shippingAddress?.formatted || draft.endereco,
+    cupom_codigo: draft.cupom_codigo,
+    cupom_desconto: Number(session.total_details?.amount_discount || 0) / 100,
+    stripe_session_id: session.id,
+    stripe_payment_intent_id: session.payment_intent,
+    stripe_customer_id: session.customer,
+    stripe_event_id: eventId,
+    currency: String(session.currency || draft.currency || 'brl').toUpperCase(),
+    shipping_address: shippingAddress?.raw || {},
+  };
 
-  return { message: 'Order created.', id: result.lastID, total: Number(total) };
+  if (db) return orderModel.createPaidFromStripe(payload, db);
+
+  const result = await orderModel.create(payload);
+  return { message: 'Order created.', id: result.lastID, total };
 }
 
 async function listOrders() {

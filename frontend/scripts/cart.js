@@ -275,6 +275,13 @@ async function renderCheckoutStep1() {
       <h3 class="co-section-title">Forma de pagamento</h3>
       <div class="co-payment-opts">
         <label class="co-payment-opt">
+          <input type="radio" name="co_pagamento" value="stripe" />
+          <div class="co-payment-card">
+            <span class="co-payment-icon"></span>
+            <div><strong>Cartão</strong><small>Pagamento seguro pelo Stripe</small></div>
+          </div>
+        </label>
+        <label class="co-payment-opt">
           <input type="radio" name="co_pagamento" value="pix" checked />
           <div class="co-payment-card">
             <span class="co-payment-icon"></span>
@@ -380,13 +387,14 @@ async function confirmarPedido() {
     const cidade   = document.getElementById('co_cidade').value.trim();
     const cep      = document.getElementById('co_cep').value.trim();
 
-    if (!nome || !telefone || !email || !endRua || !cidade || !cep) {
+    const metodoEl = document.querySelector('input[name="co_pagamento"]:checked');
+    const metodo   = metodoEl ? metodoEl.value : 'pix';
+
+    if (!nome || !telefone || !email || (metodo !== 'stripe' && (!endRua || !cidade || !cep))) {
       showToast('Preencha todos os campos obrigatórios.', 'error');
       return;
     }
 
-    const metodoEl = document.querySelector('input[name="co_pagamento"]:checked');
-    const metodo   = metodoEl ? metodoEl.value : 'pix';
     const endereco = `${endRua} — ${cidade} — CEP: ${cep}`;
     const resumo   = getCartResumo();
     let total      = resumo ? resumo.total : getTotal();
@@ -398,13 +406,13 @@ async function confirmarPedido() {
     let pedidoId = null;
     try {
       if (metodo === 'stripe') {
-        const publishableKey = await loadStripeConfig();
-        if (!publishableKey) {
-          throw new Error('Stripe não está configurado no frontend. Verifique STRIPE_PUBLISHABLE_KEY.');
-        }
-
         const session = await api.post('/pagamentos/stripe/create-session', {
-          itens: cartItems.map(i => ({ productId: i.id, qty: i.qty })),
+          itens: cartItems.map(i => ({
+            productId: i.id,
+            qty: i.qty,
+            tamanho: i.tamanho || null,
+            personalizacao: i.personalizacao || null,
+          })),
           nome_cliente: nome,
           email_cliente: email,
           telefone_cliente: telefone,
@@ -413,8 +421,8 @@ async function confirmarPedido() {
           cupom_codigo: cupomCodigo || null,
         });
 
-        const stripe = Stripe(publishableKey);
-        await stripe.redirectToCheckout({ sessionId: session.sessionId });
+        if (!session?.url) throw new Error('O Stripe não retornou a URL de pagamento.');
+        window.location.assign(session.url);
         return;
       }
 
@@ -487,16 +495,7 @@ function handleStripeCheckoutResult() {
   const status = params.get('checkout');
   if (!status) return;
 
-  if (status === 'success') {
-    cartItems = [];
-    saveCart();
-    setCupomAplicado('');
-    setCartResumo(null);
-    setCepFrete('', '');
-    renderCart();
-    updateBadge();
-    showToast('Pagamento confirmado! Pedido registrado com Stripe.');
-  }
+  if (status === 'success') showToast('Pagamento em confirmação. Aguarde o retorno do Stripe.', 'info');
 
   if (status === 'cancel') {
     showToast('Pagamento cancelado. Seu carrinho foi mantido.');
