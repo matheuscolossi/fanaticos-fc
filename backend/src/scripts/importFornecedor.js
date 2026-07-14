@@ -1,93 +1,49 @@
-const fs = require("fs");
-const { all, init, run } = require("../config/database");
-const { classifyProduct } = require("../utils/categoryClassifier");
+const fs = require('fs');
+const { all, init, run } = require('../config/database');
+const { classifyProduct } = require('../utils/categoryClassifier');
 
-function categoriaDoProduto(p) {
-  return classifyProduct({ name: p.name, categories: p.categories });
+function categoriaDoProduto(produto) {
+  return classifyProduct({
+    name: produto.name,
+    categories: produto.categories,
+  });
 }
 
 async function importar() {
   await init();
 
-  const produtos = JSON.parse(fs.readFileSync("produtos.json", "utf-8"));
-  const produtosCadastrados = await all(
-    "SELECT sku FROM produtos WHERE COALESCE(TRIM(sku), '') <> ''"
+  const produtos = JSON.parse(fs.readFileSync('produtos.json', 'utf-8'));
+
+  // O fornecedor reutiliza o mesmo SKU em produtos diferentes, por exemplo
+  // em camisas de temporadas distintas. O slug identifica cada registro do
+  // catalogo; usar somente o SKU descartava produtos validos.
+  const produtosCadastrados = await all('SELECT slug, sku FROM produtos');
+  const slugsExistentes = new Set(
+    produtosCadastrados
+      .map((produto) => String(produto.slug || '').trim())
+      .filter(Boolean)
   );
   const skusExistentes = new Set(
-    produtosCadastrados.map((produto) => String(produto.sku).trim())
+    produtosCadastrados
+      .map((produto) => String(produto.sku || '').trim())
+      .filter(Boolean)
   );
-  const categoriasCadastradas = await all("SELECT id, nome FROM categorias");
+
+  const categoriasCadastradas = await all('SELECT id, nome FROM categorias');
   const categoriasPorNome = new Map(
     categoriasCadastradas.map((categoria) => [categoria.nome.toLowerCase(), categoria])
   );
-
-  const timesExistentes = [
-    "Athletico Paranaense",
-    "Bahia",
-    "Botafogo",
-    "Grêmio",
-    "Internacional",
-    "Vitória",
-    "Volta Redonda",
-
-    "Alemanha",
-    "Argentina",
-    "Austrália",
-    "Áustria",
-    "Bélgica",
-    "Brasil",
-    "Kit",
-    "Noruega",
-    "Venezuela",
-
-    "Athletic Bilbao",
-    "Atlético de Madrid",
-    "Barcelona",
-    "Villarreal",
-
-    "AFC Richmond",
-    "Arsenal",
-    "Aston Villa",
-    "West Ham",
-
-    "Atalanta",
-    "Bologna",
-    "Venezia",
-
-    "Bayer Leverkusen",
-    "Bayern de Munique",
-    "Borussia Dortmund",
-    "Wolfsburg",
-
-    "Braga",
-    "Boca Juniors",
-    "Ajax",
-    "América",
-    "Atlanta United",
-
-    "Al Hilal",
-    "Al Nassr",
-    "Atlético Nacional",
-    "Besiktas",
-    "Zenit",
-
-    "Alaves",
-    "Borussia Monchengladbach",
-    "New York Red Bull",
-    "Watford",
-    "Wolves",
-    "Zaragoza"
-  ];
 
   console.log(`Verificando ${produtos.length} produtos...`);
 
   let criados = 0;
   let pulados = 0;
+  let skusReutilizados = 0;
 
-  for (const p of produtos) {
-    const nome = p.name;
-    const slug = p.slug;
-    const sku = String(p.sku || '').trim();
+  for (const produto of produtos) {
+    const nome = produto.name;
+    const slug = String(produto.slug || '').trim();
+    const sku = String(produto.sku || '').trim();
 
     if (!sku) {
       console.log(`Pulando sem SKU: ${nome}`);
@@ -95,22 +51,30 @@ async function importar() {
       continue;
     }
 
-    if (skusExistentes.has(sku)) {
-      console.log(`Já existe, pulando: ${nome}`);
+    // Slugs sao unicos no arquivo do fornecedor. Para registros sem slug,
+    // usamos o SKU como fallback para manter a importacao idempotente.
+    const jaExiste = slug
+      ? slugsExistentes.has(slug)
+      : skusExistentes.has(sku);
+
+    if (jaExiste) {
+      console.log(`Ja existe, pulando: ${nome}`);
       pulados++;
       continue;
     }
 
-    const precoOriginal = Number(p.prices?.price || 0) / 100;
-    const preco = +(precoOriginal * 2).toFixed(2);
+    if (skusExistentes.has(sku)) {
+      skusReutilizados++;
+    }
 
-    const imagem = p.images?.[0]?.src || null;
-    const categoriaNome = categoriaDoProduto(p);
+    const precoOriginal = Number(produto.prices?.price || 0) / 100;
+    const preco = +(precoOriginal * 2).toFixed(2);
+    const imagem = produto.images?.[0]?.src || null;
+    const categoriaNome = categoriaDoProduto(produto);
 
     let categoria = categoriasPorNome.get(categoriaNome.toLowerCase());
-
     if (!categoria) {
-      const resultado = await run("INSERT INTO categorias (nome) VALUES (?)", [categoriaNome]);
+      const resultado = await run('INSERT INTO categorias (nome) VALUES (?)', [categoriaNome]);
       categoria = { id: resultado.lastID, nome: categoriaNome };
       categoriasPorNome.set(categoriaNome.toLowerCase(), categoria);
     }
@@ -119,26 +83,23 @@ async function importar() {
       `INSERT INTO produtos
        (nome, slug, sku, preco, descricao, imagens, categoria_id, status, estoque)
        VALUES (?, ?, ?, ?, NULL, JSON_VALUE(?), ?, 'ativo', 999)`,
-      [
-        nome,
-        slug,
-        sku,
-        preco,
-        JSON.stringify([imagem]),
-        categoria.id,
-      ]
+      [nome, slug || null, sku, preco, JSON.stringify([imagem]), categoria.id]
     );
 
+    if (slug) slugsExistentes.add(slug);
     skusExistentes.add(sku);
     console.log(`Criado: ${nome} | Categoria: ${categoriaNome} | R$ ${preco}`);
     criados++;
   }
 
-  console.log(`Importação finalizada. Criados: ${criados}. Pulados: ${pulados}.`);
+  console.log(
+    `Importacao finalizada. Criados: ${criados}. Pulados: ${pulados}. ` +
+    `SKUs reutilizados: ${skusReutilizados}.`
+  );
   process.exit(0);
 }
 
 importar().catch((err) => {
-  console.error(err);
+  console.error('Falha na importacao:', err);
   process.exit(1);
 });

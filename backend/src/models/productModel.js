@@ -10,6 +10,15 @@ const ORDER_BY = {
   antigo:      'p.created_at ASC',
 };
 
+function searchSlug(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 // All new columns to select (includes backwards-compat fields)
 const FULL_SELECT = `
   p.id, p.nome, p.slug, p.sku, p.preco, p.preco_promocional, p.custo,
@@ -31,9 +40,9 @@ function buildFilters(query, adminMode = false) {
   }
 
   if (query.busca) {
-    filters.push("(LOWER(p.nome) LIKE LOWER(?) OR LOWER(COALESCE(p.sku,'')) LIKE LOWER(?) OR LOWER(COALESCE(p.time,'')) LIKE LOWER(?))");
+    filters.push("(LOWER(p.nome) LIKE LOWER(?) OR LOWER(COALESCE(p.sku,'')) LIKE LOWER(?) OR LOWER(COALESCE(p.time,'')) LIKE LOWER(?) OR LOWER(COALESCE(p.slug,'')) LIKE LOWER(?))");
     const term = `%${query.busca}%`;
-    params.push(term, term, term);
+    params.push(term, term, term, `%${searchSlug(query.busca)}%`);
   }
   if (query.categoria) {
     filters.push('p.categoria_id = ?');
