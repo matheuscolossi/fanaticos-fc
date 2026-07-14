@@ -19,8 +19,31 @@ function getContaUser() {
 
 // ── Render principal ──────────────────────────────────────────────────────
 
-function renderContaPage() {
-  contaUser = getContaUser();
+async function renderContaPage() {
+  const token = localStorage.getItem('fc_token');
+  contaUser = token ? getContaUser() : null;
+
+  // O perfil salvo no navegador é apenas um cache. Atualiza-o pelo servidor
+  // antes de exibir qualquer badge ou link administrativo.
+  if (token) {
+    try {
+      const serverUser = await api.get('/auth/perfil');
+      contaUser = serverUser;
+      localStorage.setItem('fc_user', JSON.stringify(serverUser));
+    } catch (e) {
+      const authFailure = ['AUTH_TOKEN_REQUIRED', 'AUTH_TOKEN_INVALID', 'AUTH_USER_NOT_FOUND', 'ACCESS_DISABLED']
+        .includes(e.code);
+      if (authFailure) {
+        localStorage.removeItem('fc_token');
+        localStorage.removeItem('fc_user');
+        contaUser = null;
+      } else if (contaUser) {
+        // Sem resposta do backend, não conceda privilégios visuais baseados no cache.
+        contaUser = { ...contaUser, perfil: 'cliente', cargo: null, permissoes: [] };
+      }
+    }
+  }
+
   const content = document.getElementById('contaContent');
   if (!content) return;
 

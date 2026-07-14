@@ -364,15 +364,30 @@ function renderLigaView(produtos) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function checkAdminAuth() {
+async function checkAdminAuth() {
   const token = localStorage.getItem('fc_token');
-  const user  = JSON.parse(localStorage.getItem('fc_user') || 'null');
-  if (!token || !user || user.perfil !== 'admin') {
+  if (!token) {
     document.getElementById('loginRequired').style.display = 'flex';
     return false;
   }
+
+  try {
+    // O localStorage é apenas um cache visual. A autorização real vem do backend.
+    const user = await api.get('/auth/perfil');
+    if (!user || user.perfil !== 'admin') {
+      localStorage.removeItem('fc_user');
+      document.getElementById('loginRequired').style.display = 'flex';
+      return false;
+    }
+
+    localStorage.setItem('fc_user', JSON.stringify(user));
+    document.getElementById('adminUserName').textContent = `${user.nome}`;
+  } catch (_) {
+    document.getElementById('loginRequired').style.display = 'flex';
+    return false;
+  }
+
   document.getElementById('loginRequired').style.display = 'none';
-  document.getElementById('adminUserName').textContent = `${user.nome}`;
   return true;
 }
 
@@ -2555,7 +2570,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  if (!checkAdminAuth()) return;
+  if (!await checkAdminAuth()) return;
 
   // Acorda o banco (Neon dorme após inatividade)
   api.get('/health').catch(() => {});

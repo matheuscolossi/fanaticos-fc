@@ -7,12 +7,19 @@ const logService = require('./logService');
 
 const CODE_TTL_MINUTES = 15;
 
+function parsePermissoes(value) {
+  if (Array.isArray(value)) return value;
+  try { return JSON.parse(value || '[]'); } catch { return []; }
+}
+
 function toPublicUser(user) {
   return {
     id: user.id,
     nome: user.nome,
     email: user.email,
     perfil: user.perfil,
+    cargo: user.cargo || null,
+    permissoes: parsePermissoes(user.permissoes),
   };
 }
 
@@ -112,7 +119,7 @@ async function loginUser({ email, senha }, jwtSecret) {
   if (!user || !bcrypt.compareSync(senha, user.senha)) {
     throw createHttpError(401, 'Invalid credentials.', 'INVALID_CREDENTIALS');
   }
-  if (user.perfil === 'admin' && user.status === 'inativo') {
+  if (user.status === 'inativo') {
     throw createHttpError(403, 'Seu acesso foi desativado. Fale com um administrador.', 'ACCESS_DISABLED');
   }
 
@@ -129,7 +136,7 @@ async function loginUser({ email, senha }, jwtSecret) {
 async function getProfile(userId) {
   const user = await userModel.findPublicById(userId);
   if (!user) throw createHttpError(404, 'User not found.', 'USER_NOT_FOUND');
-  return user;
+  return { ...user, permissoes: parsePermissoes(user.permissoes) };
 }
 
 async function updateProfile(userId, data) {

@@ -1,6 +1,6 @@
 const { all, get, run } = require('../config/database');
 
-const PUBLIC_USER_FIELDS = 'id, nome, email, perfil, cpf, telefone, endereco_rua, cidade, cep, email_verificado';
+const PUBLIC_USER_FIELDS = 'id, nome, email, perfil, cargo, permissoes, status, cpf, telefone, endereco_rua, cidade, cep, email_verificado';
 
 function findByEmail(email) {
   return get('SELECT * FROM usuarios WHERE email = ?', [email]);

@@ -1,4 +1,6 @@
-const DEFAULT_API_BASE = 'https://fanaticosmantos.com.br';
+// O domínio público serve o frontend; a API permanece hospedada no Render.
+// Pode ser substituída por FANATICOS_API_BASE em ambientes locais/staging.
+const DEFAULT_API_BASE = 'https://fanaticos-fc.onrender.com/api';
 const API_BASE = window.FANATICOS_API_BASE || DEFAULT_API_BASE;
 let STRIPE_PUBLISHABLE_KEY = window.FANATICOS_STRIPE_PUBLISHABLE || '';
 
@@ -8,7 +10,10 @@ async function apiFetch(path, options = {}) {
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (!res.ok) {
-    if (res.status === 401) {
+    const err = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
+    const sessionInvalid = res.status === 401
+      || (res.status === 403 && ['ACCESS_DISABLED', 'AUTH_USER_NOT_FOUND'].includes(err.code));
+    if (sessionInvalid) {
       localStorage.removeItem('fc_token');
       localStorage.removeItem('fc_user');
       // Na página admin: mostra o painel de login restrito
@@ -18,7 +23,6 @@ async function apiFetch(path, options = {}) {
         throw new Error('Sessão expirada. Faça login novamente.');
       }
     }
-    const err = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
     const error = new Error(err.error || `HTTP ${res.status}`);
     error.code = err.code;
     throw error;
