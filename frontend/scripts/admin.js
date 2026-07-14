@@ -686,6 +686,7 @@ function renderTabelaProdutos() {
           <th style="width:32px"><input type="checkbox" id="chkAll" ${allChecked ? 'checked' : ''} onchange="toggleAllSelection(this.checked)" title="Selecionar página"></th>
           <th style="width:48px">Foto</th>
           <th>Nome / SKU</th>
+          <th>Categoria</th>
           <th>Time</th>
           <th>Tipo</th>
           <th>Preço</th>
@@ -719,6 +720,7 @@ function renderTabelaProdutos() {
               <span class="td-nome" title="${p.nome}">${p.nome}</span>
               ${p.sku ? `<div class="td-sku">${p.sku}</div>` : ''}
             </td>
+            <td><span class="td-cat">${p.categoria_nome || '—'}</span></td>
             <td><span class="td-cat">${p.time || '—'}</span></td>
             <td><span class="td-cat">${p.tipo || '—'}</span></td>
             <td>
@@ -770,17 +772,57 @@ function renderTabelaProdutos() {
 async function loadCategoriasAdmin() {
   try {
     categoriasAdmin = await api.get('/categorias');
-    const sel = document.getElementById('pCategoria');
-    if (sel) {
-      sel.innerHTML = '<option value="">Selecione...</option>';
-      categoriasAdmin.forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c.id; opt.textContent = c.nome;
-        sel.appendChild(opt);
-      });
+    renderProdutoCategoriaSelect();
+
+    const filtro = document.getElementById('adminFiltroCategoria');
+    if (filtro) {
+      const valorAtual = filtro.value;
+      filtro.innerHTML = '<option value="">Categoria</option>';
+      categoriasAdmin
+        .slice()
+        .sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'))
+        .forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c.id;
+          opt.textContent = c.nome;
+          filtro.appendChild(opt);
+        });
+      filtro.value = valorAtual;
     }
     renderTabelaCategorias();
   } catch(e) {}
+}
+
+function renderProdutoCategoriaSelect(selectedId = null) {
+  const sel = document.getElementById('pCategoria');
+  if (!sel) return;
+
+  const valorAtual = selectedId ?? sel.value;
+  const termo = normalizeText(document.getElementById('pCategoriaBusca')?.value || '');
+  const categoriasVisiveis = categoriasAdmin
+    .slice()
+    .sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'))
+    .filter(c => !termo || normalizeText(c.nome).includes(termo));
+
+  sel.innerHTML = '<option value="">Selecione...</option>';
+  categoriasVisiveis.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.nome;
+    sel.appendChild(opt);
+  });
+
+  if (valorAtual && !categoriasVisiveis.some(c => String(c.id) === String(valorAtual))) {
+    const selecionada = categoriasAdmin.find(c => String(c.id) === String(valorAtual));
+    if (selecionada) {
+      const opt = document.createElement('option');
+      opt.value = selecionada.id;
+      opt.textContent = `${selecionada.nome} (selecionada)`;
+      sel.appendChild(opt);
+    }
+  }
+
+  sel.value = valorAtual || '';
 }
 
 // ── Category management ────────────────────────────────────────────────────
@@ -1008,7 +1050,7 @@ function _resetFormFields() {
   const chk = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val; };
   set('produtoId', ''); set('pNome', ''); set('pSku', ''); set('pSlug', '');
   set('pPreco', '149.90'); set('pPrecoPromo', ''); set('pCusto', '');
-  set('pCategoria', ''); set('pTime', ''); set('pPais', '');
+  set('pCategoriaBusca', ''); set('pCategoria', ''); set('pTime', ''); set('pPais', '');
   set('pCompeticao', ''); set('pTemporada', '');
   set('pTipo', 'torcedor'); set('pMarca', ''); set('pGenero', 'masculino');
   set('pEstoque', ''); set('pEstoqueMin', '');
@@ -1041,6 +1083,7 @@ function openEditModal(id) {
   set('produtoId', p.id);
   set('pNome', p.nome);          set('pSku', p.sku);        set('pSlug', p.slug);
   set('pPreco', p.preco);        set('pPrecoPromo', p.preco_promocional ?? ''); set('pCusto', p.custo ?? '');
+  set('pCategoriaBusca', ''); renderProdutoCategoriaSelect(p.categoria_id);
   set('pCategoria', p.categoria_id); set('pTime', p.time); set('pPais', p.pais);
   set('pCompeticao', p.competicao);  set('pTemporada', p.temporada);
   set('pTipo', p.tipo || 'torcedor'); set('pMarca', p.marca); set('pGenero', p.genero || 'masculino');
@@ -1601,6 +1644,7 @@ function applyAdminFilters() {
   const q = normalizeText(document.getElementById('adminBusca')?.value || '');
   const statusFilter = document.getElementById('adminFiltroStatus')?.value || '';
   const tipoFilter   = document.getElementById('adminFiltroTipo')?.value   || '';
+  const categoriaFilter = document.getElementById('adminFiltroCategoria')?.value || '';
   const ordem        = document.getElementById('adminOrdem')?.value         || 'nome';
 
   let list = [...allProdutosAdmin];
@@ -1611,6 +1655,7 @@ function applyAdminFilters() {
   );
   if (statusFilter) list = list.filter(p => (p.status || 'ativo') === statusFilter);
   if (tipoFilter)   list = list.filter(p => p.tipo === tipoFilter);
+  if (categoriaFilter) list = list.filter(p => String(p.categoria_id || '') === String(categoriaFilter));
 
   switch (ordem) {
     case 'preco_asc':  list.sort((a, b) => a.preco - b.preco); break;
@@ -2633,7 +2678,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('adminFiltroStatus')?.addEventListener('change', applyAdminFilters);
   document.getElementById('adminFiltroTipo')?.addEventListener('change', applyAdminFilters);
+  document.getElementById('adminFiltroCategoria')?.addEventListener('change', applyAdminFilters);
   document.getElementById('adminOrdem')?.addEventListener('change', applyAdminFilters);
+  document.getElementById('pCategoriaBusca')?.addEventListener('input', () => renderProdutoCategoriaSelect());
 
   // Export / Import
   document.getElementById('btnExportarCSV')?.addEventListener('click', exportarCSV);

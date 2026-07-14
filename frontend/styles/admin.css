@@ -356,6 +356,19 @@ td { padding: .85rem 1rem; color: var(--text); vertical-align: middle; }
 }
 .admin-filter-select:focus { color: var(--text); }
 .admin-filter-select:hover { color: var(--text); }
+.categoria-search-input {
+  width: 100%;
+  margin-bottom: .35rem;
+  padding: .42rem .6rem;
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+  font-size: .82rem;
+}
+.categoria-search-input::placeholder { color: var(--text-dim); }
+.categoria-search-input:focus { outline: 1px solid var(--green); border-color: var(--green); }
 
 /* ── Status badges ── */
 .td-status-ativo  { background: rgba(76,175,80,.12); color: #66bb6a; border: 1px solid rgba(76,175,80,.3); }
