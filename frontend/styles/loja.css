@@ -968,7 +968,7 @@
   border-radius: 99px; background: var(--bg-card); border: 1px solid var(--border);
   white-space: nowrap;
 }
-.status--success { color: var(--green); border-color: var(--green); background: rgba(37,99,235,0.08); }
+.status--success { color: var(--green); border-color: var(--green); background: rgba(96,165,250,0.10); }
 .status--warning { color: #ffd740; border-color: #ffd740; background: rgba(255,215,64,0.08); }
 .status--danger  { color: var(--danger); border-color: var(--danger); background: rgba(255,68,68,0.08); }
 .status--info    { color: #60a5fa; border-color: #60a5fa; background: rgba(96,165,250,0.08); }
@@ -1004,7 +1004,7 @@
 .pedido-conta-card__rastreio {
   display: flex; align-items: center; gap: .65rem; flex-wrap: wrap;
   padding: .75rem 1.25rem; font-size: .85rem;
-  background: rgba(37,99,235,0.04);
+  background: rgba(96,165,250,0.06);
 }
 .pedido-conta-card__rastreio span { color: var(--text-muted); }
 .pedido-conta-card__rastreio strong { font-family: monospace; color: var(--green); flex: 1; }

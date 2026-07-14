@@ -4,15 +4,15 @@
    ════════════════════════════════════════════════════════════ */
 
 :root {
-  --green:       #2563eb;
-  --green-dark:  #1d4ed8;
-  --green-glow:  rgba(37, 99, 235, 0.22);
-  --accent:      #38bdf8;
+  --green:       #60a5fa;
+  --green-dark:  #3b82f6;
+  --green-glow:  rgba(96, 165, 250, 0.24);
+  --accent:      #7dd3fc;
   --bg:          #0f1115;
   --bg-card:     #171a20;
   --bg-card2:    #20242c;
   --border:      rgba(255,255,255,0.10);
-  --border-green:rgba(37, 99, 235, 0.36);
+  --border-green:rgba(96, 165, 250, 0.42);
   --text:        #f3f4f6;
   --text-muted:  #a1a7b3;
   --text-dim:    #6c7280;
@@ -21,7 +21,7 @@
   --radius:      12px;
   --radius-sm:   8px;
   --shadow:      0 8px 32px rgba(0,0,0,0.6);
-  --shadow-green:0 0 24px rgba(37,99,235,0.18);
+  --shadow-green:0 0 24px rgba(96,165,250,0.20);
   --transition:  0.2s cubic-bezier(0.4, 0, 0.2, 1);
   --font-display:'Bebas Neue', sans-serif;
   --font-title:  'Oswald', sans-serif;
@@ -34,13 +34,13 @@
   --bg-card:     #ffffff;
   --bg-card2:    #e8e8e8;
   --border:      rgba(0,0,0,0.10);
-  --border-green:rgba(37, 99, 235, 0.45);
+  --border-green:rgba(96, 165, 250, 0.50);
   --text:        #1a1a1a;
   --text-muted:  #555555;
   --text-dim:    #999999;
   --white:       #111111;
   --shadow:      0 8px 32px rgba(0,0,0,0.10);
-  --shadow-green:0 0 24px rgba(37,99,235,0.16);
+  --shadow-green:0 0 24px rgba(96,165,250,0.18);
 }
 
 [data-theme="light"] body { background: var(--bg); color: var(--text); }
@@ -55,8 +55,8 @@
 }
 [data-theme="light"] .hero__bg {
   background:
-    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(37,99,235,0.08) 0%, transparent 70%),
-    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(29,78,216,0.05) 0%, transparent 60%),
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(96,165,250,0.10) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(59,130,246,0.07) 0%, transparent 60%),
     var(--bg);
 }
 [data-theme="light"] .destaques {
@@ -115,7 +115,7 @@ img {
 .btn--primary {
   background: var(--green); color: #000;
 }
-.btn--primary:hover { background: var(--green-dark); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(37,99,235,0.45); }
+.btn--primary:hover { background: var(--green-dark); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(96,165,250,0.48); }
 .btn--outline {
   background: transparent; color: var(--text); border: 1.5px solid var(--border);
 }
@@ -386,13 +386,13 @@ select option { background: var(--bg-card2); }
 .hero__title {
   font-family: var(--font-display); font-size: clamp(5rem, 14vw, 11rem);
   line-height: .9; color: #ffffff;
-  text-shadow: 0 0 80px rgba(37,99,235,0.12);
+  text-shadow: 0 0 80px rgba(96,165,250,0.14);
   margin-bottom: 1.5rem;
   padding-top: .35em;
 }
 .hero__title--accent { 
   color: var(--green);
-  text-shadow: 0 0 40px rgba(37,99,235,0.55);
+  text-shadow: 0 0 40px rgba(96,165,250,0.58);
 }
 .hero__sub { font-size: 1.1rem; color: rgba(255,255,255,.8); max-width: 480px; margin: 0 auto 2rem; }
 .hero__cta { font-size: 1.05rem; padding: 1rem 2.5rem; letter-spacing: .05em; }
@@ -607,7 +607,7 @@ select option { background: var(--bg-card2); }
 }
 .produto-card__btn:hover {
   background: var(--green-dark); transform: none;
-  box-shadow: 0 4px 12px rgba(37,99,235,0.4);
+  box-shadow: 0 4px 12px rgba(96,165,250,0.42);
 }
 
 /* ══════════ LOADING / EMPTY ══════════ */
@@ -949,14 +949,14 @@ select option { background: var(--bg-card2); }
 .gphoto-label {
   font-size: .72rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: .12em; color: var(--green);
-  background: rgba(37,99,235,0.14); padding: .2rem .6rem; border-radius: 4px;
+  background: rgba(96,165,250,0.16); padding: .2rem .6rem; border-radius: 4px;
 }
 
 /* Google Photos detail modal */
 .gphoto-detail {
   height: 300px; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 1rem;
-   background: radial-gradient(ellipse at center, rgba(37,99,235,0.10) 0%, transparent 70%);
+   background: radial-gradient(ellipse at center, rgba(96,165,250,0.12) 0%, transparent 70%);
 }
 .gphoto-detail__emoji { font-size: 5rem; line-height: 1; }
 .gphoto-detail__text { color: var(--text-muted); font-size: .9rem; }
