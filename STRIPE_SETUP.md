@@ -50,7 +50,7 @@ No backend, configure:
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_PUBLISHABLE_KEY=pk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
-FRONTEND_URL=https://fanaticosmantos.com.br
+FRONTEND_URL=https://www.fanaticosmantos.com.br
 ```
 
 Durante o desenvolvimento local, use as chaves de teste:
@@ -150,7 +150,7 @@ charge.refunded
 7. Confirme que `FRONTEND_URL` no Render está como:
 
 ```text
-https://fanaticosmantos.com.br
+https://www.fanaticosmantos.com.br
 ```
 
 Referências oficiais: [webhooks](https://docs.stripe.com/webhooks) e [processamento de pedidos após Checkout](https://docs.stripe.com/checkout/fulfillment).
