@@ -51,6 +51,31 @@ async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
     if (product.status && product.status !== 'ativo') {
       throw createHttpError(400, `O produto "${product.nome}" não está disponível.`, 'PRODUCT_UNAVAILABLE');
     }
+    const sizes = Array.isArray(product.tamanhos) ? product.tamanhos.map(String) : [];
+    const selectedSize = String(item.tamanho || '').trim() || null;
+    if (sizes.length > 0 && !selectedSize) {
+      throw createHttpError(400, `Selecione um tamanho para "${product.nome}".`, 'PRODUCT_VARIANT_REQUIRED');
+    }
+    if (selectedSize && !sizes.includes(selectedSize)) {
+      throw createHttpError(400, `Tamanho inválido para "${product.nome}".`, 'PRODUCT_VARIANT_INVALID');
+    }
+    const variants = Array.isArray(product.variantes) ? product.variantes : [];
+    const selectedVariant = selectedSize
+      ? variants.find((variant) => String(variant.tamanho) === selectedSize)
+      : null;
+    if (variants.length > 0 && !selectedVariant) {
+      throw createHttpError(400, `Variação indisponível para "${product.nome}".`, 'PRODUCT_VARIANT_INVALID');
+    }
+    const availableStock = Number(selectedVariant?.estoque ?? product.estoque);
+    if (!Number.isSafeInteger(availableStock) || qty > availableStock) {
+      throw createHttpError(
+        409,
+        selectedSize
+          ? `Estoque insuficiente para "${product.nome}" no tamanho ${selectedSize}. Disponível: ${Math.max(0, availableStock || 0)}.`
+          : `Estoque insuficiente para "${product.nome}". Disponível: ${Math.max(0, availableStock || 0)}.`,
+        selectedSize ? 'INSUFFICIENT_VARIANT_STOCK' : 'INSUFFICIENT_STOCK'
+      );
+    }
     const priceCents = moneyToCents(product.preco_exibicao ?? product.preco_promocional ?? product.preco);
     if (priceCents < 0) {
       throw createHttpError(500, 'Produto com preço inválido.', 'PRODUCT_PRICE_INVALID');
@@ -71,7 +96,7 @@ async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
       price,
       qty,
       image: product.imagens[0] || null,
-      tamanho: item.tamanho || null,
+      tamanho: selectedSize,
       personalizacao: item.personalizacao || null,
       promocaoAplicada: promocaoAplicada?.nome || product.promocao_nome || null,
       subtotalAposPromocao: centsToMoney(lineSubtotalCents),

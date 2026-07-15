@@ -1,5 +1,7 @@
 const database = require('../config/database');
 const { all, get, run } = database;
+const inventoryModel = require('./inventoryModel');
+const { createHttpError } = require('../utils/http');
 
 function create(order) {
   return run(
@@ -27,8 +29,8 @@ async function createPaidFromStripe(order, db = database) {
        usuario_id, itens, total, nome_cliente, email_cliente, telefone_cliente, endereco,
        metodo_pagamento, status, cupom_codigo, cupom_desconto,
        stripe_session_id, stripe_payment_intent_id, stripe_customer_id, stripe_event_id,
-       payment_status, currency, shipping_address, updated_at
-     ) VALUES (?, JSON_VALUE(?), ?, ?, ?, ?, ?, 'stripe', 'pago', ?, ?, ?, ?, ?, ?, 'paid', ?, JSON_VALUE(?), CURRENT_TIMESTAMP)`,
+       payment_status, currency, shipping_address, stock_status, updated_at
+     ) VALUES (?, JSON_VALUE(?), ?, ?, ?, ?, ?, 'stripe', 'pago', ?, ?, ?, ?, ?, ?, 'paid', ?, JSON_VALUE(?), 'committed', CURRENT_TIMESTAMP)`,
     [
       order.usuario_id || null,
       JSON.stringify(order.itens || []),
@@ -98,9 +100,56 @@ function updatePaymentStatusByPaymentIntent(paymentIntentId, paymentStatus, orde
   return db.run(
     `UPDATE pedidos
      SET payment_status = ?, status = COALESCE(?, status), updated_at = CURRENT_TIMESTAMP
-     WHERE stripe_payment_intent_id = ?`,
+     WHERE stripe_payment_intent_id = ? AND payment_status <> 'refunded'`,
     [paymentStatus, orderStatus || null, paymentIntentId]
   );
+}
+
+async function restoreStockForOrder(orderId, paymentStatus, orderStatus, db) {
+  const order = await db.get(
+    'SELECT id, itens, stock_status FROM pedidos WHERE id = ?',
+    [orderId]
+  );
+  if (!order) return null;
+
+  if (order.stock_status === 'committed') {
+    const claim = await db.run(
+      `UPDATE pedidos SET stock_status = 'restoring'
+       WHERE id = ? AND stock_status = 'committed'`,
+      [orderId]
+    );
+    if (Number(claim.changes) !== 1) {
+      throw createHttpError(409, 'Movimentação de estoque concorrente.', 'STOCK_TRANSITION_IN_PROGRESS');
+    }
+    await inventoryModel.restore(order.itens, db);
+    await db.run(
+      `UPDATE pedidos
+       SET stock_status = 'restored', payment_status = COALESCE(?, payment_status),
+           status = COALESCE(?, status), updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND stock_status = 'restoring'`,
+      [paymentStatus || null, orderStatus || null, orderId]
+    );
+    return { ...order, stock_status: 'restored' };
+  }
+
+  await db.run(
+    `UPDATE pedidos
+     SET payment_status = CASE
+           WHEN payment_status = 'refunded' THEN payment_status
+           ELSE COALESCE(?, payment_status)
+         END,
+         status = COALESCE(?, status),
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    [paymentStatus || null, orderStatus || null, orderId]
+  );
+  return order;
+}
+
+async function restoreStockByPaymentIntent(paymentIntentId, paymentStatus, orderStatus, db) {
+  const order = await findByStripePaymentIntent(paymentIntentId, db);
+  if (!order) return null;
+  return restoreStockForOrder(order.id, paymentStatus, orderStatus, db);
 }
 
 function list() {
@@ -127,19 +176,19 @@ function findTrackingForUser(orderId, user) {
   );
 }
 
-function exists(orderId) {
-  return get('SELECT id FROM pedidos WHERE id = ?', [orderId]);
+function exists(orderId, db = database) {
+  return db.get('SELECT id FROM pedidos WHERE id = ?', [orderId]);
 }
 
-function updateTracking(orderId, { status, codigo_rastreio }) {
-  return run(
+function updateTracking(orderId, { status, codigo_rastreio }, db = database) {
+  return db.run(
     'UPDATE pedidos SET status = COALESCE(?, status), codigo_rastreio = COALESCE(?, codigo_rastreio) WHERE id = ?',
     [status || null, codigo_rastreio !== undefined ? codigo_rastreio : null, orderId]
   );
 }
 
-function remove(orderId) {
-  return run('DELETE FROM pedidos WHERE id = ?', [orderId]);
+function remove(orderId, db = database) {
+  return db.run('DELETE FROM pedidos WHERE id = ?', [orderId]);
 }
 
 module.exports = {
@@ -153,6 +202,8 @@ module.exports = {
   list,
   listByUser,
   remove,
+  restoreStockByPaymentIntent,
+  restoreStockForOrder,
   updatePaymentStatusByPaymentIntent,
   updateTracking,
 };

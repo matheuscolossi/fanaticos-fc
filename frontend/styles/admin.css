@@ -234,6 +234,9 @@ td { padding: .85rem 1rem; color: var(--text); vertical-align: middle; }
 
 /* Size picker */
 .size-chips { display: flex; gap: .4rem; flex-wrap: wrap; }
+.variant-stock-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .65rem; margin-top: .8rem; }
+.variant-stock-field { display: grid; gap: .3rem; }
+.variant-stock-field label { font-size: .76rem; color: var(--text-muted); }
 .size-chip {
   display: inline-flex;
   align-items: center;

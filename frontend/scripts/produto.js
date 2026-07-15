@@ -1,7 +1,22 @@
 let produtoAtual = null;
 let imagemAtual = 0;
 
-const TAMANHOS = ['P', 'M', 'G', 'GG', 'XG', '2XG'];
+function productSizes(product) {
+  let sizes = product?.tamanhos;
+  if (typeof sizes === 'string') {
+    try { sizes = JSON.parse(sizes); } catch (_) { sizes = []; }
+  }
+  return Array.isArray(sizes)
+    ? sizes.map((size) => String(size || '').trim()).filter(Boolean)
+    : [];
+}
+
+function variantStock(product, size) {
+  const variants = Array.isArray(product?.variantes) ? product.variantes : [];
+  const variant = variants.find((item) => String(item.tamanho) === String(size));
+  if (variants.length > 0) return variant ? Number(variant.estoque) : 0;
+  return Number(product?.estoque || 0);
+}
 
 function produtoIdFromUrl() {
   const fromQuery = new URLSearchParams(window.location.search).get('id');
@@ -75,6 +90,7 @@ function renderProduto(p) {
   const isGPhotos = isGooglePhotosLink(mainImg);
   const placeholderLabel = getProductPlaceholderLabel();
   const content = document.getElementById('produtoContent');
+  const sizes = productSizes(p);
 
   document.title = `${p.nome} - Fanáticos FC`;
   content.innerHTML = `
@@ -107,15 +123,19 @@ function renderProduto(p) {
       ${p.em_promocao && p.promocao_fim ? `<div class="produto-page__countdown"></div>` : ''}
       <p class="produto-page__desc">${safeText(p.descricao || 'Camisa premium com acabamento de alta qualidade, ideal para jogo, treino ou coleção.')}</p>
 
-      <div class="produto-options">
+      ${sizes.length > 0 ? `<div class="produto-options">
         <div class="produto-options__header">
           <h2>Tamanho</h2>
           <span>Escolha antes de adicionar</span>
         </div>
         <div class="produto-size-grid" id="produtoSizeGrid">
-          ${TAMANHOS.map(t => `<button class="produto-size" data-size="${t}">${t}</button>`).join('')}
+          ${sizes.map((size) => {
+            const stock = variantStock(p, size);
+            return `<button class="produto-size" data-size="${safeAttr(size)}" ${stock <= 0 ? 'disabled' : ''}
+              aria-label="Tamanho ${safeAttr(size)}${stock <= 0 ? ' esgotado' : ''}">${safeText(size)}${stock <= 0 ? ' — Esgotado' : ''}</button>`;
+          }).join('')}
         </div>
-      </div>
+      </div>` : ''}
 
       <div class="produto-options">
         <div class="produto-options__header">
@@ -132,9 +152,9 @@ function renderProduto(p) {
         </div>
       </div>
 
-      ${p.estoque ? `<p class="product-detail__estoque">${p.estoque} em estoque</p>` : ''}
+      <p class="product-detail__estoque" id="produtoStockMessage">${p.estoque > 0 ? `${p.estoque} em estoque` : 'Produto esgotado'}</p>
       <div class="produto-page__actions">
-        <button class="btn btn--primary" id="btnAddProduto">Adicionar ao Carrinho</button>
+        <button class="btn btn--primary" id="btnAddProduto" ${p.estoque <= 0 ? 'disabled' : ''}>Adicionar ao Carrinho</button>
       </div>
     </div>
   `;
@@ -154,6 +174,8 @@ function renderProduto(p) {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.produto-size').forEach(item => item.classList.remove('active'));
       btn.classList.add('active');
+      const stockMessage = document.getElementById('produtoStockMessage');
+      if (stockMessage) stockMessage.textContent = `${variantStock(produtoAtual, btn.dataset.size)} em estoque neste tamanho`;
     });
   });
 
@@ -167,8 +189,9 @@ function renderProduto(p) {
 }
 
 function addProdutoSelecionado() {
+  const sizes = productSizes(produtoAtual);
   const tamanho = document.querySelector('.produto-size.active')?.dataset.size;
-  if (!tamanho) {
+  if (sizes.length > 0 && !tamanho) {
     showToast('Escolha um tamanho antes de adicionar.', 'error');
     return;
   }
@@ -183,7 +206,7 @@ function addProdutoSelecionado() {
   }
 
   addToCart(produtoAtual, {
-    tamanho,
+    tamanho: tamanho || null,
     personalizacao: personalizar ? { nome, numero } : null,
   });
 }

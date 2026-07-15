@@ -1,4 +1,5 @@
 const orderModel = require('../models/orderModel');
+const { transaction } = require('../config/database');
 const { createHttpError } = require('../utils/http');
 
 function parseOrderItems(order) {
@@ -93,18 +94,24 @@ async function getTrackingForUser(orderId, user) {
 }
 
 async function updateOrder(orderId, data) {
-  const existingOrder = await orderModel.exists(orderId);
-  if (!existingOrder) throw createHttpError(404, 'Order not found.', 'ORDER_NOT_FOUND');
-
-  await orderModel.updateTracking(orderId, data);
+  await transaction(async (db) => {
+    const existingOrder = await orderModel.exists(orderId, db);
+    if (!existingOrder) throw createHttpError(404, 'Order not found.', 'ORDER_NOT_FOUND');
+    if (data.status === 'cancelado') {
+      await orderModel.restoreStockForOrder(orderId, null, 'cancelado', db);
+    }
+    await orderModel.updateTracking(orderId, data, db);
+  });
   return { message: 'Order updated.' };
 }
 
 async function deleteOrder(orderId) {
-  const existingOrder = await orderModel.exists(orderId);
-  if (!existingOrder) throw createHttpError(404, 'Order not found.', 'ORDER_NOT_FOUND');
-
-  await orderModel.remove(orderId);
+  await transaction(async (db) => {
+    const existingOrder = await orderModel.exists(orderId, db);
+    if (!existingOrder) throw createHttpError(404, 'Order not found.', 'ORDER_NOT_FOUND');
+    await orderModel.restoreStockForOrder(orderId, null, 'cancelado', db);
+    await orderModel.remove(orderId, db);
+  });
   return { message: 'Order deleted.' };
 }
 

@@ -19,6 +19,7 @@ const DEFAULT_CATEGORIES = [
 let isPostgres = Boolean(process.env.DATABASE_URL);
 let sqliteDb = null;
 let pgPool = null;
+let sqliteTransactionQueue = Promise.resolve();
 
 function toPostgresSql(sql) {
   let index = 0;
@@ -174,16 +175,21 @@ async function transaction(work) {
     }
   }
 
-  await runSqlite('BEGIN TRANSACTION');
-  const tx = { run: runSqlite, get: getSqlite, all: allSqlite };
-  try {
-    const result = await work(tx);
-    await runSqlite('COMMIT');
-    return result;
-  } catch (error) {
-    await runSqlite('ROLLBACK').catch(() => {});
-    throw error;
-  }
+  const execute = async () => {
+    await runSqlite('BEGIN IMMEDIATE TRANSACTION');
+    const tx = { run: runSqlite, get: getSqlite, all: allSqlite };
+    try {
+      const result = await work(tx);
+      await runSqlite('COMMIT');
+      return result;
+    } catch (error) {
+      await runSqlite('ROLLBACK').catch(() => {});
+      throw error;
+    }
+  };
+  const queued = sqliteTransactionQueue.then(execute, execute);
+  sqliteTransactionQueue = queued.catch(() => {});
+  return queued;
 }
 
 async function close() {
@@ -221,6 +227,7 @@ async function createPostgresSchema() {
       descricao TEXT,
       imagens JSONB DEFAULT '[]'::jsonb,
       estoque INTEGER DEFAULT 0,
+      estoque_reservado INTEGER NOT NULL DEFAULT 0,
       destaque BOOLEAN DEFAULT false,
       created_at TIMESTAMPTZ DEFAULT now()
     )
@@ -265,8 +272,20 @@ async function createPostgresSchema() {
       payment_status TEXT DEFAULT 'unpaid',
       currency TEXT DEFAULT 'BRL',
       shipping_address JSONB,
+      stock_status TEXT NOT NULL DEFAULT 'none',
       updated_at TIMESTAMPTZ DEFAULT now(),
       created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS produto_variantes (
+      id SERIAL PRIMARY KEY,
+      produto_id INTEGER NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+      tamanho TEXT NOT NULL,
+      estoque INTEGER NOT NULL DEFAULT 0,
+      estoque_reservado INTEGER NOT NULL DEFAULT 0,
+      UNIQUE (produto_id, tamanho)
     )
   `);
 
@@ -302,6 +321,8 @@ async function createPostgresSchema() {
       cupom_codigo TEXT,
       status TEXT NOT NULL DEFAULT 'created',
       stripe_session_id TEXT,
+      stock_status TEXT NOT NULL DEFAULT 'none',
+      stock_expires_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT now(),
       updated_at TIMESTAMPTZ DEFAULT now()
     )
@@ -388,6 +409,7 @@ async function createSqliteSchema() {
     descricao TEXT,
     imagens TEXT DEFAULT '[]',
     estoque INTEGER DEFAULT 0,
+    estoque_reservado INTEGER NOT NULL DEFAULT 0,
     destaque INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (categoria_id) REFERENCES categorias(id)
@@ -429,8 +451,19 @@ async function createSqliteSchema() {
     payment_status TEXT DEFAULT 'unpaid',
     currency TEXT DEFAULT 'BRL',
     shipping_address TEXT,
+    stock_status TEXT NOT NULL DEFAULT 'none',
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  await run(`CREATE TABLE IF NOT EXISTS produto_variantes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    produto_id INTEGER NOT NULL,
+    tamanho TEXT NOT NULL,
+    estoque INTEGER NOT NULL DEFAULT 0,
+    estoque_reservado INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (produto_id, tamanho),
+    FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE CASCADE
   )`);
 
   await run(`CREATE TABLE IF NOT EXISTS pedido_itens (
@@ -463,6 +496,8 @@ async function createSqliteSchema() {
     cupom_codigo TEXT,
     status TEXT NOT NULL DEFAULT 'created',
     stripe_session_id TEXT,
+    stock_status TEXT NOT NULL DEFAULT 'none',
+    stock_expires_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
@@ -561,6 +596,16 @@ async function runMigrations() {
     await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco_promocional NUMERIC(10,2)');
     await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS custo NUMERIC(10,2)');
     await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque_minimo INTEGER DEFAULT 0');
+    await runOptionalMigration('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque_reservado INTEGER NOT NULL DEFAULT 0');
+    await runOptionalMigration(`CREATE TABLE IF NOT EXISTS produto_variantes (
+      id SERIAL PRIMARY KEY,
+      produto_id INTEGER NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+      tamanho TEXT NOT NULL,
+      estoque INTEGER NOT NULL DEFAULT 0,
+      estoque_reservado INTEGER NOT NULL DEFAULT 0,
+      UNIQUE (produto_id, tamanho)
+    )`);
+    await runOptionalMigration('CREATE INDEX IF NOT EXISTS produto_variantes_produto_idx ON produto_variantes(produto_id)');
     await runOptionalMigration("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS tamanhos JSONB DEFAULT '[]'::jsonb");
     await runOptionalMigration("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS cores JSONB DEFAULT '[]'::jsonb");
     await runOptionalMigration("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ativo'");
@@ -589,9 +634,13 @@ async function runMigrations() {
     await runOptionalMigration("ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'BRL'");
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS shipping_address JSONB');
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now()');
+    await runOptionalMigration("ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS stock_status TEXT NOT NULL DEFAULT 'none'");
+    await runOptionalMigration("ALTER TABLE checkout_drafts ADD COLUMN IF NOT EXISTS stock_status TEXT NOT NULL DEFAULT 'none'");
+    await runOptionalMigration('ALTER TABLE checkout_drafts ADD COLUMN IF NOT EXISTS stock_expires_at TIMESTAMPTZ');
     await runOptionalMigration('CREATE UNIQUE INDEX IF NOT EXISTS pedidos_stripe_session_idx ON pedidos(stripe_session_id)');
     await runOptionalMigration('CREATE INDEX IF NOT EXISTS pedidos_usuario_id_idx ON pedidos(usuario_id)');
     await runOptionalMigration('CREATE UNIQUE INDEX IF NOT EXISTS checkout_drafts_stripe_session_idx ON checkout_drafts(stripe_session_id)');
+    await runOptionalMigration('CREATE INDEX IF NOT EXISTS checkout_drafts_stock_expiry_idx ON checkout_drafts(stock_status, stock_expires_at)');
     // Funcionários/administradores: cargo, permissões granulares, acesso e auditoria
     await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS cargo TEXT');
     await runOptionalMigration("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permissoes JSONB DEFAULT '[]'::jsonb");
@@ -628,6 +677,17 @@ async function runMigrations() {
   await runOptionalMigration('ALTER TABLE produtos ADD COLUMN preco_promocional REAL');
   await runOptionalMigration('ALTER TABLE produtos ADD COLUMN custo REAL');
   await runOptionalMigration('ALTER TABLE produtos ADD COLUMN estoque_minimo INTEGER DEFAULT 0');
+  await runOptionalMigration('ALTER TABLE produtos ADD COLUMN estoque_reservado INTEGER NOT NULL DEFAULT 0');
+  await runOptionalMigration(`CREATE TABLE IF NOT EXISTS produto_variantes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    produto_id INTEGER NOT NULL,
+    tamanho TEXT NOT NULL,
+    estoque INTEGER NOT NULL DEFAULT 0,
+    estoque_reservado INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (produto_id, tamanho),
+    FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE CASCADE
+  )`);
+  await runOptionalMigration('CREATE INDEX IF NOT EXISTS produto_variantes_produto_idx ON produto_variantes(produto_id)');
   await runOptionalMigration("ALTER TABLE produtos ADD COLUMN tamanhos TEXT DEFAULT '[]'");
   await runOptionalMigration("ALTER TABLE produtos ADD COLUMN cores TEXT DEFAULT '[]'");
   await runOptionalMigration("ALTER TABLE produtos ADD COLUMN status TEXT DEFAULT 'ativo'");
@@ -656,9 +716,13 @@ async function runMigrations() {
   await runOptionalMigration("ALTER TABLE pedidos ADD COLUMN currency TEXT DEFAULT 'BRL'");
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN shipping_address TEXT');
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN updated_at DATETIME');
+  await runOptionalMigration("ALTER TABLE pedidos ADD COLUMN stock_status TEXT NOT NULL DEFAULT 'none'");
+  await runOptionalMigration("ALTER TABLE checkout_drafts ADD COLUMN stock_status TEXT NOT NULL DEFAULT 'none'");
+  await runOptionalMigration('ALTER TABLE checkout_drafts ADD COLUMN stock_expires_at DATETIME');
   await runOptionalMigration('CREATE UNIQUE INDEX IF NOT EXISTS pedidos_stripe_session_idx ON pedidos(stripe_session_id)');
   await runOptionalMigration('CREATE INDEX IF NOT EXISTS pedidos_usuario_id_idx ON pedidos(usuario_id)');
   await runOptionalMigration('CREATE UNIQUE INDEX IF NOT EXISTS checkout_drafts_stripe_session_idx ON checkout_drafts(stripe_session_id)');
+  await runOptionalMigration('CREATE INDEX IF NOT EXISTS checkout_drafts_stock_expiry_idx ON checkout_drafts(stock_status, stock_expires_at)');
   // Funcionários/administradores: cargo, permissões granulares, acesso e auditoria
   await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN cargo TEXT');
   await runOptionalMigration("ALTER TABLE usuarios ADD COLUMN permissoes TEXT DEFAULT '[]'");

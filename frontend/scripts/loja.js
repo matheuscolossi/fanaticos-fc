@@ -15,7 +15,15 @@ let currentPage = 1;
 let totalPages = 1;
 let isLoadingMore = false;
 
-const CACHE_KEY = 'fc_produtos_v1';
+function productRequiresVariant(product) {
+  let sizes = product?.tamanhos;
+  if (typeof sizes === 'string') {
+    try { sizes = JSON.parse(sizes); } catch (_) { sizes = []; }
+  }
+  return Array.isArray(sizes) && sizes.length > 0;
+}
+
+const CACHE_KEY = 'fc_produtos_v2';
 const CACHE_TTL = 10 * 60 * 1000; // 10 min
 
 function readCache() {
@@ -49,7 +57,7 @@ function produtoCard(p) {
         <div class="produto-card__footer">
           <span class="produto-card__preco">${formatBRL(p.preco)}</span>
           <button class="produto-card__btn">
-            + Carrinho
+            ${productRequiresVariant(p) ? 'Escolher tamanho' : '+ Carrinho'}
           </button>
         </div>
       </div>
@@ -118,7 +126,7 @@ function produtoCardSafe(p) {
       <div class="produto-card__nome">${safeText(p.nome)}</div>
       ${precoCardHtml(p)}
       ${p.em_promocao && p.promocao_fim ? `<div class="produto-card__countdown"></div>` : ''}
-      <button class="produto-card__btn">Adicionar ao Carrinho</button>
+      <button class="produto-card__btn">${productRequiresVariant(p) ? 'Escolher tamanho' : 'Adicionar ao Carrinho'}</button>
     </div>
   `;
 
@@ -150,6 +158,11 @@ function produtoCardSafe(p) {
   });
   card.querySelector('.produto-card__btn').addEventListener('click', (e) => {
     e.stopPropagation();
+    if (productRequiresVariant(p)) {
+      try { sessionStorage.setItem('fc_produto_cache', JSON.stringify(p)); } catch (_) {}
+      window.location.href = produtoUrl(p);
+      return;
+    }
     addToCart(p);
   });
   return card;
@@ -321,8 +334,13 @@ async function openProdutoModal(id) {
     }
 
     document.getElementById('btnAddModal')?.addEventListener('click', () => {
-      addToCart(p);
-      closeModal();
+      if (productRequiresVariant(p)) {
+        try { sessionStorage.setItem('fc_produto_cache', JSON.stringify(p)); } catch (_) {}
+        window.location.href = produtoUrl(p);
+      } else {
+        addToCart(p);
+        closeModal();
+      }
     });
   } catch(e) {
     content.innerHTML = `<p style="padding:2rem;color:var(--danger)">Erro ao carregar produto.</p>`;

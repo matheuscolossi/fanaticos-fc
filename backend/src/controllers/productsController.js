@@ -17,6 +17,9 @@ const logService = require('../services/logService');
 
 async function index(req, res) {
   if (req.query.admin === 'true') {
+    if (req.user?.perfil !== 'admin') {
+      throw createHttpError(403, 'Acesso administrativo obrigatório.', 'ADMIN_ACCESS_REQUIRED');
+    }
     return res.json(await listProducts(req.query));
   }
   res.json(await listProductsPaginated(req.query));

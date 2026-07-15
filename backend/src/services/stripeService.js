@@ -10,6 +10,10 @@ const { createHttpError } = require('../utils/http');
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 const stripe = stripeSecret ? new Stripe(stripeSecret) : null;
+const CHECKOUT_RESERVATION_MINUTES = Math.min(
+  Math.max(Number(process.env.CHECKOUT_RESERVATION_MINUTES) || 30, 30),
+  24 * 60
+);
 
 if (!stripeSecret) {
   console.warn('[stripeService] STRIPE_SECRET_KEY não configurado.');
@@ -31,7 +35,7 @@ function normalizeCartItems(items) {
   return items.map((item) => ({
     productId: Number(item?.productId ?? item?.id),
     qty: Number(item?.qty),
-    tamanho: cleanText(item?.tamanho, 20) || null,
+    tamanho: cleanText(item?.tamanho, 50) || null,
     personalizacao: normalizePersonalization(item?.personalizacao),
   }));
 }
@@ -118,6 +122,47 @@ function buildCheckoutPricing(summary) {
   return { lineItems, totalCents, totalDiscountCents };
 }
 
+async function createStripeSession(sessionParams, pricing, summary, cupomCodigo, checkoutId) {
+  if (pricing.totalDiscountCents > 0) {
+    const hasPromotionDiscount = Number(summary.promocoesDesconto) > 0;
+    const hasCouponDiscount = Number(summary.discount) > 0;
+    const discountName = hasPromotionDiscount && hasCouponDiscount
+      ? `Promoções + cupom ${cleanText(cupomCodigo, 40)}`
+      : hasCouponDiscount
+        ? `Cupom ${cleanText(cupomCodigo, 40)}`
+        : 'Descontos promocionais';
+    const stripeCoupon = await stripe.coupons.create({
+      amount_off: pricing.totalDiscountCents,
+      currency: 'brl',
+      duration: 'once',
+      name: discountName,
+    }, { idempotencyKey: `checkout-coupon:${checkoutId}` });
+    sessionParams.discounts = [{ coupon: stripeCoupon.id }];
+  }
+
+  return stripe.checkout.sessions.create(sessionParams, {
+    idempotencyKey: `checkout-session:${checkoutId}`,
+  });
+}
+
+async function releaseCheckoutAfterStripeFailure(checkoutId, session) {
+  let canRelease = !session?.id;
+  if (session?.id) {
+    try {
+      await stripe.checkout.sessions.expire(session.id);
+      canRelease = true;
+    } catch (error) {
+      console.error('[stripe] Sessão criada não pôde ser expirada; reserva mantida.', {
+        checkoutId,
+        sessionId: session.id,
+      });
+    }
+  }
+  if (canRelease) {
+    await paymentModel.releaseDraftStock(checkoutId, 'checkout_failed');
+  }
+}
+
 async function createCheckoutSession({ items, customer, cupomCodigo, uf, userId }) {
   if (!stripe) throw createHttpError(500, 'Stripe não está configurado.', 'STRIPE_NOT_CONFIGURED');
   if (!Number.isInteger(Number(userId)) || Number(userId) < 1) {
@@ -145,7 +190,8 @@ async function createCheckoutSession({ items, customer, cupomCodigo, uf, userId 
   const pricing = buildCheckoutPricing(summary);
 
   const checkoutId = crypto.randomUUID();
-  await paymentModel.createCheckoutDraft({
+  const expiresAtUnix = Math.floor(Date.now() / 1000) + CHECKOUT_RESERVATION_MINUTES * 60;
+  await paymentModel.createReservedCheckoutDraft({
     id: checkoutId,
     usuario_id: Number(userId),
     itens: summary.items,
@@ -160,7 +206,7 @@ async function createCheckoutSession({ items, customer, cupomCodigo, uf, userId 
     endereco: cleanText(customer?.address, 300),
     uf: cleanText(uf, 2).toUpperCase(),
     cupom_codigo: cleanText(cupomCodigo, 50),
-  });
+  }, new Date(expiresAtUnix * 1000).toISOString());
 
   const sessionParams = {
     mode: 'payment',
@@ -176,34 +222,24 @@ async function createCheckoutSession({ items, customer, cupomCodigo, uf, userId 
     shipping_address_collection: { allowed_countries: ['BR'] },
     phone_number_collection: { enabled: true },
     billing_address_collection: 'required',
+    expires_at: expiresAtUnix,
     metadata: {
       checkout_id: checkoutId,
       user_id: String(userId),
     },
   };
 
-  if (pricing.totalDiscountCents > 0) {
-    const hasPromotionDiscount = Number(summary.promocoesDesconto) > 0;
-    const hasCouponDiscount = Number(summary.discount) > 0;
-    const discountName = hasPromotionDiscount && hasCouponDiscount
-      ? `Promoções + cupom ${cleanText(cupomCodigo, 40)}`
-      : hasCouponDiscount
-        ? `Cupom ${cleanText(cupomCodigo, 40)}`
-        : 'Descontos promocionais';
-    const stripeCoupon = await stripe.coupons.create({
-      amount_off: pricing.totalDiscountCents,
-      currency: 'brl',
-      duration: 'once',
-      name: discountName,
-    }, { idempotencyKey: `checkout-coupon:${checkoutId}` });
-    sessionParams.discounts = [{ coupon: stripeCoupon.id }];
+  let session;
+  try {
+    session = await createStripeSession(sessionParams, pricing, summary, cupomCodigo, checkoutId);
+    await paymentModel.attachStripeSession(checkoutId, session.id);
+    return session;
+  } catch (error) {
+    await releaseCheckoutAfterStripeFailure(checkoutId, session).catch((releaseError) => {
+      console.error('[stripe] Falha ao liberar reserva após erro no Checkout.', { checkoutId });
+    });
+    throw error;
   }
-
-  const session = await stripe.checkout.sessions.create(sessionParams, {
-    idempotencyKey: `checkout-session:${checkoutId}`,
-  });
-  await paymentModel.attachStripeSession(checkoutId, session.id);
-  return session;
 }
 
 async function fulfillCheckoutSession(session, eventId, db) {
@@ -226,6 +262,8 @@ async function fulfillCheckoutSession(session, eventId, db) {
   if (!Number.isSafeInteger(stripeTotalCents) || stripeTotalCents !== draftTotalCents) {
     throw createHttpError(400, 'O total confirmado pelo Stripe não corresponde ao checkout.', 'STRIPE_TOTAL_MISMATCH');
   }
+
+  await paymentModel.commitDraftStock(draft.id, db);
 
   const shippingAddress = getShippingSnapshot(session);
   const order = await orderService.createPaidOrderFromStripe({
@@ -261,16 +299,27 @@ async function processWebhookEvent(event) {
         break;
       case 'checkout.session.async_payment_failed': {
         const checkoutId = object.metadata?.checkout_id || object.client_reference_id;
-        if (checkoutId) await paymentModel.updateDraftStatus(checkoutId, 'payment_failed', db);
+        if (checkoutId) await paymentModel.releaseDraftStock(checkoutId, 'payment_failed', db);
+        break;
+      }
+      case 'checkout.session.expired': {
+        const checkoutId = object.metadata?.checkout_id || object.client_reference_id;
+        if (checkoutId) await paymentModel.releaseDraftStock(checkoutId, 'expired', db);
         break;
       }
       case 'payment_intent.payment_failed':
-        await orderModel.updatePaymentStatusByPaymentIntent(object.id, 'failed', 'cancelado', db);
+        await orderModel.restoreStockByPaymentIntent(object.id, 'failed', 'cancelado', db);
         break;
       case 'charge.refunded': {
-        const paymentIntentId = typeof object.payment_intent === 'string' ? object.payment_intent : null;
+        const paymentIntentId = typeof object.payment_intent === 'string'
+          ? object.payment_intent
+          : object.payment_intent?.id || null;
         if (paymentIntentId) {
-          await orderModel.updatePaymentStatusByPaymentIntent(paymentIntentId, 'refunded', 'cancelado', db);
+          if (object.refunded === true) {
+            await orderModel.restoreStockByPaymentIntent(paymentIntentId, 'refunded', 'cancelado', db);
+          } else {
+            await orderModel.updatePaymentStatusByPaymentIntent(paymentIntentId, 'partially_refunded', null, db);
+          }
         }
         break;
       }

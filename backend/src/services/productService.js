@@ -1,4 +1,5 @@
 const productModel = require('../models/productModel');
+const { transaction } = require('../config/database');
 const { normalizeProductImages } = require('./imageService');
 const promocaoService = require('./promocaoService');
 const { createHttpError } = require('../utils/http');
@@ -14,6 +15,57 @@ function slugify(s) {
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
+}
+
+function normalizeSizes(value) {
+  const sizes = parseJson(value, []);
+  if (!Array.isArray(sizes)) return [];
+  return [...new Set(sizes.map((size) => String(size || '').trim()).filter(Boolean))].slice(0, 30);
+}
+
+function normalizeVariants(value, sizes) {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value)) {
+    throw createHttpError(400, 'Variações devem ser enviadas como uma lista.', 'VARIANTS_INVALID');
+  }
+  const variants = value.map((variant) => ({
+    tamanho: String(variant?.tamanho || '').trim(),
+    estoque: Number(variant?.estoque),
+  }));
+  const uniqueSizes = new Set(variants.map((variant) => variant.tamanho));
+  if (
+    variants.some((variant) => !variant.tamanho || !Number.isSafeInteger(variant.estoque) || variant.estoque < 0) ||
+    uniqueSizes.size !== variants.length ||
+    variants.length !== sizes.length ||
+    sizes.some((size) => !uniqueSizes.has(size))
+  ) {
+    throw createHttpError(
+      400,
+      'Informe um estoque inteiro e não negativo para cada tamanho cadastrado.',
+      'VARIANT_STOCK_INVALID'
+    );
+  }
+  return variants;
+}
+
+async function attachVariants(products, { publicView }) {
+  const variants = await productModel.listVariants(products.map((product) => product.id));
+  const grouped = new Map();
+  for (const variant of variants) {
+    const list = grouped.get(String(variant.produto_id)) || [];
+    const physical = Number(variant.estoque);
+    const reserved = Number(variant.estoque_reservado || 0);
+    list.push(publicView
+      ? { tamanho: variant.tamanho, estoque: Math.max(0, physical - reserved) }
+      : { tamanho: variant.tamanho, estoque: physical, estoque_reservado: reserved });
+    grouped.set(String(variant.produto_id), list);
+  }
+  return products.map((product) => {
+    const sizes = normalizeSizes(product.tamanhos);
+    const variantsForProduct = grouped.get(String(product.id)) || [];
+    variantsForProduct.sort((a, b) => sizes.indexOf(a.tamanho) - sizes.indexOf(b.tamanho));
+    return { ...product, variantes: variantsForProduct };
+  });
 }
 
 function serializeProduct(product) {
@@ -36,15 +88,21 @@ async function normalizeProductPayload(body) {
     categoria_id, descricao, descricao_curta,
     imagens, estoque, estoque_minimo, destaque,
     time, pais, competicao, temporada, tipo, marca, genero,
-    tamanhos, cores, status,
+    tamanhos, variantes, cores, status,
     produto_novo, produto_promocional,
     peso, dimensoes, info_lavagem,
     keywords, meta_titulo, meta_descricao,
   } = body;
 
   const numericPrice = Number(preco);
+  const numericStock = Number(estoque ?? 0);
+  const normalizedSizes = normalizeSizes(tamanhos);
+  const normalizedVariants = normalizeVariants(variantes, normalizedSizes);
   if (!nome || Number.isNaN(numericPrice)) {
     throw createHttpError(400, 'Nome e preço são obrigatórios.', 'VALIDATION_ERROR');
+  }
+  if (!Number.isSafeInteger(numericStock) || numericStock < 0) {
+    throw createHttpError(400, 'Estoque deve ser um número inteiro maior ou igual a zero.', 'STOCK_INVALID');
   }
 
   const imageList = parseJson(imagens, []);
@@ -60,7 +118,9 @@ async function normalizeProductPayload(body) {
     descricao:          descricao || '',
     descricao_curta:    descricao_curta || '',
     imagens:            JSON.stringify(await normalizeProductImages(imageList)),
-    estoque:            Number(estoque) || 0,
+    estoque:            normalizedVariants?.length
+      ? normalizedVariants.reduce((sum, variant) => sum + variant.estoque, 0)
+      : numericStock,
     estoque_minimo:     Number(estoque_minimo) || 0,
     destaque:           Boolean(destaque),
     time:               time || null,
@@ -70,7 +130,8 @@ async function normalizeProductPayload(body) {
     tipo:               tipo || 'torcedor',
     marca:              marca || null,
     genero:             genero || 'masculino',
-    tamanhos:           JSON.stringify(parseJson(tamanhos, [])),
+    tamanhos:           JSON.stringify(normalizedSizes),
+    variantes:          normalizedVariants,
     cores:              JSON.stringify(parseJson(cores, [])),
     status:             status || 'ativo',
     produto_novo:       Boolean(produto_novo),
@@ -91,12 +152,61 @@ async function ensureProductExists(productId) {
 
 async function listProducts(query) {
   const products = await productModel.list(query, true); // admin mode — all statuses
-  return products.map(serializeProduct);
+  return (await attachVariants(products, { publicView: false })).map(serializeProduct);
 }
 
-function serializeProductForList(product) {
-  const imgs = parseJson(product.imagens, []);
-  return { ...product, imagens: imgs.slice(0, 1), destaque: Boolean(product.destaque) };
+function serializePublicProduct(product, { detail = false, imageLimit = null } = {}) {
+  const images = parseJson(product.imagens, []);
+  const availableStock = Math.max(0, Number(product.estoque) - Number(product.estoque_reservado || 0));
+  const publicProduct = {
+    id: product.id,
+    nome: product.nome,
+    slug: product.slug,
+    preco: Number(product.preco),
+    preco_promocional: product.preco_promocional == null ? null : Number(product.preco_promocional),
+    preco_exibicao: Number(product.preco_exibicao ?? product.preco),
+    em_promocao: Boolean(product.em_promocao),
+    promocao_destaque: Boolean(product.promocao_destaque),
+    promocao_nome: product.promocao_nome || null,
+    promocao_fim: product.promocao_fim || null,
+    categoria_id: product.categoria_id,
+    categoria_nome: product.categoria_nome || null,
+    imagens: imageLimit == null ? images : images.slice(0, imageLimit),
+    estoque: availableStock,
+    tamanhos: parseJson(product.tamanhos, []),
+    variantes: Array.isArray(product.variantes)
+      ? product.variantes.map((variant) => ({
+        tamanho: variant.tamanho,
+        estoque: Math.max(0, Number(variant.estoque)),
+      }))
+      : [],
+    destaque: Boolean(product.destaque),
+    time: product.time || null,
+    pais: product.pais || null,
+    competicao: product.competicao || null,
+    temporada: product.temporada || null,
+    tipo: product.tipo || null,
+    marca: product.marca || null,
+    genero: product.genero || null,
+    produto_novo: Boolean(product.produto_novo),
+    produto_promocional: Boolean(product.produto_promocional),
+  };
+
+  if (detail) {
+    Object.assign(publicProduct, {
+      descricao: product.descricao || '',
+      descricao_curta: product.descricao_curta || '',
+      cores: parseJson(product.cores, []),
+      peso: product.peso == null ? null : Number(product.peso),
+      dimensoes: parseJson(product.dimensoes, {}),
+      info_lavagem: product.info_lavagem || null,
+      keywords: product.keywords || null,
+      meta_titulo: product.meta_titulo || null,
+      meta_descricao: product.meta_descricao || null,
+    });
+  }
+
+  return publicProduct;
 }
 
 // Anexa o melhor preço promocional vigente (preço promocional manual ou promoção
@@ -117,27 +227,57 @@ function aplicarInfoPromocional(produto, promocoesAtivas) {
 async function listProductsPaginated(query) {
   const { produtos, total, page, totalPages } = await productModel.listPaginated(query);
   const promocoesAtivas = await promocaoService.getPromocoesAtivas();
-  const comPromocao = produtos.map(p => aplicarInfoPromocional(p, promocoesAtivas));
-  return { produtos: comPromocao.map(serializeProductForList), total, page, totalPages };
+  const withVariants = await attachVariants(produtos, { publicView: true });
+  const comPromocao = withVariants.map(p => aplicarInfoPromocional(p, promocoesAtivas));
+  return {
+    produtos: comPromocao.map((product) => serializePublicProduct(product, { imageLimit: 1 })),
+    total,
+    page,
+    totalPages,
+  };
 }
 
 async function getProduct(productId) {
-  const product = await productModel.findById(productId);
+  const product = await productModel.findPublicById(productId);
   if (!product) throw createHttpError(404, 'Produto não encontrado.', 'PRODUCT_NOT_FOUND');
   const promocoesAtivas = await promocaoService.getPromocoesAtivas();
-  return serializeProduct(aplicarInfoPromocional(product, promocoesAtivas));
+  const [withVariants] = await attachVariants([product], { publicView: true });
+  return serializePublicProduct(
+    aplicarInfoPromocional(withVariants, promocoesAtivas),
+    { detail: true }
+  );
 }
 
 async function createProduct(data) {
   const product = await normalizeProductPayload(data);
-  const result = await productModel.create(product);
+  const result = await transaction(async (db) => {
+    const created = await productModel.create(product, db);
+    if (product.variantes !== null) {
+      await productModel.syncVariants(created.lastID, product.variantes, db);
+    }
+    return created;
+  });
   return { message: 'Produto criado.', id: result.lastID };
 }
 
 async function updateProduct(productId, data) {
   await ensureProductExists(productId);
   const product = await normalizeProductPayload(data);
-  await productModel.update(productId, product);
+  await transaction(async (db) => {
+    if (product.variantes === null) {
+      const existingVariants = await productModel.listVariants([productId], db);
+      if (existingVariants.length > 0) {
+        throw createHttpError(400, 'Informe o estoque de todas as variações existentes.', 'VARIANT_STOCK_REQUIRED');
+      }
+    }
+    if (product.variantes !== null) {
+      await productModel.syncVariants(productId, product.variantes, db);
+    }
+    const result = await productModel.update(productId, product, db);
+    if (Number(result.changes) !== 1) {
+      throw createHttpError(409, 'O estoque físico não pode ficar abaixo das unidades reservadas.', 'STOCK_BELOW_RESERVED');
+    }
+  });
   return { message: 'Produto atualizado.' };
 }
 
@@ -167,7 +307,10 @@ async function setProductDestaque(productId, destaque) {
 
 async function deleteProduct(productId) {
   await ensureProductExists(productId);
-  await productModel.remove(productId);
+  const result = await productModel.remove(productId);
+  if (Number(result.changes) !== 1) {
+    throw createHttpError(409, 'Produto com estoque reservado não pode ser excluído.', 'PRODUCT_HAS_STOCK_RESERVATION');
+  }
   return { message: 'Produto excluído.' };
 }
 

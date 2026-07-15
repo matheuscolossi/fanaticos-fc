@@ -46,8 +46,30 @@ function saveCart() { localStorage.setItem(CART_KEY, JSON.stringify(cartItems));
 function getCart()  { return cartItems; }
 
 function addToCart(produto, options = {}) {
+  let productSizeData = produto?.tamanhos;
+  if (typeof productSizeData === 'string') {
+    try { productSizeData = JSON.parse(productSizeData); } catch (_) { productSizeData = []; }
+  }
+  const sizes = Array.isArray(productSizeData) ? productSizeData.map((size) => String(size)) : [];
+  const selectedSize = String(options.tamanho || '').trim() || null;
+  if (sizes.length > 0 && (!selectedSize || !sizes.includes(selectedSize))) {
+    showToast('Escolha uma variação válida antes de adicionar.', 'error');
+    return false;
+  }
   const key = makeCartKey(produto, options);
   const existing = cartItems.find(i => getItemKey(i) === key);
+  const variant = Array.isArray(produto?.variantes)
+    ? produto.variantes.find((item) => String(item.tamanho) === selectedSize)
+    : null;
+  if (Array.isArray(produto?.variantes) && produto.variantes.length > 0 && !variant) {
+    showToast('A variação selecionada não está disponível.', 'error');
+    return false;
+  }
+  const availableStock = Number(variant?.estoque ?? produto.estoque);
+  if (Number.isFinite(availableStock) && (existing?.qty || 0) + 1 > availableStock) {
+    showToast('Não há mais estoque disponível para esta variação.', 'error');
+    return false;
+  }
   if (existing) {
     existing.qty++;
   } else {
@@ -65,6 +87,7 @@ function addToCart(produto, options = {}) {
   saveCart(); renderCart(); updateBadge();
   showToast(`"${produto.nome}" foi adicionado ao carrinho.`);
   openCart();
+  return true;
 }
 
 function removeFromCart(idOrKey) {

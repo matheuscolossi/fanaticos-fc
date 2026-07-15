@@ -1,11 +1,14 @@
 const database = require('../config/database');
+const inventoryModel = require('./inventoryModel');
+const { createHttpError } = require('../utils/http');
 
 function createCheckoutDraft(draft, db = database) {
   return db.run(
     `INSERT INTO checkout_drafts (
        id, usuario_id, itens, subtotal, frete, desconto, total, currency,
-       nome_cliente, email_cliente, telefone_cliente, endereco, uf, cupom_codigo, status
-     ) VALUES (?, ?, JSON_VALUE(?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       nome_cliente, email_cliente, telefone_cliente, endereco, uf, cupom_codigo, status,
+       stock_status, stock_expires_at
+     ) VALUES (?, ?, JSON_VALUE(?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       draft.id,
       draft.usuario_id,
@@ -22,8 +25,94 @@ function createCheckoutDraft(draft, db = database) {
       draft.uf || null,
       draft.cupom_codigo || null,
       draft.status || 'created',
+      draft.stock_status || 'none',
+      draft.stock_expires_at || null,
     ]
   );
+}
+
+async function releaseDraftStock(checkoutId, status, db) {
+  if (!db) {
+    return database.transaction((tx) => releaseDraftStock(checkoutId, status, tx));
+  }
+
+  const draft = await db.get(
+    'SELECT id, itens, stock_status FROM checkout_drafts WHERE id = ?',
+    [checkoutId]
+  );
+  if (!draft) return null;
+  if (draft.stock_status === 'released' || draft.stock_status === 'committed') return draft;
+
+  if (draft.stock_status === 'reserved') {
+    const claim = await db.run(
+      `UPDATE checkout_drafts SET stock_status = 'releasing'
+       WHERE id = ? AND stock_status = 'reserved'`,
+      [checkoutId]
+    );
+    if (Number(claim.changes) !== 1) return findDraftById(checkoutId, db);
+    await inventoryModel.release(draft.itens, db);
+  }
+
+  await db.run(
+    `UPDATE checkout_drafts
+     SET stock_status = 'released', status = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND stock_status IN ('none', 'releasing')`,
+    [status, checkoutId]
+  );
+  return findDraftById(checkoutId, db);
+}
+
+async function releaseExpiredReservations(db, now = new Date()) {
+  const expired = await db.all(
+    `SELECT id FROM checkout_drafts
+     WHERE stock_status = 'reserved' AND stock_expires_at IS NOT NULL AND stock_expires_at <= ?`,
+    [now.toISOString()]
+  );
+  for (const draft of expired) {
+    await releaseDraftStock(draft.id, 'expired', db);
+  }
+}
+
+function createReservedCheckoutDraft(draft, expiresAt) {
+  return database.transaction(async (db) => {
+    await releaseExpiredReservations(db);
+    await inventoryModel.reserve(draft.itens, db);
+    return createCheckoutDraft({
+      ...draft,
+      stock_status: 'reserved',
+      stock_expires_at: expiresAt,
+    }, db);
+  });
+}
+
+async function commitDraftStock(checkoutId, db) {
+  const draft = await db.get(
+    'SELECT id, itens, stock_status FROM checkout_drafts WHERE id = ?',
+    [checkoutId]
+  );
+  if (!draft) throw createHttpError(404, 'Checkout interno não encontrado.', 'CHECKOUT_DRAFT_NOT_FOUND');
+  if (draft.stock_status === 'committed') return draft;
+  if (!['reserved', 'none', 'released'].includes(draft.stock_status)) {
+    throw createHttpError(409, 'Movimentação de estoque já está em andamento.', 'STOCK_TRANSITION_IN_PROGRESS');
+  }
+
+  const sourceStatus = draft.stock_status;
+  const claim = await db.run(
+    `UPDATE checkout_drafts SET stock_status = 'committing'
+     WHERE id = ? AND stock_status = ?`,
+    [checkoutId, sourceStatus]
+  );
+  if (Number(claim.changes) !== 1) {
+    throw createHttpError(409, 'Movimentação de estoque concorrente.', 'STOCK_TRANSITION_IN_PROGRESS');
+  }
+
+  await inventoryModel.commit(draft.itens, db, { reserved: sourceStatus === 'reserved' });
+  await db.run(
+    `UPDATE checkout_drafts SET stock_status = 'committed', updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND stock_status = 'committing'`,
+    [checkoutId]
+  );
+  return { ...draft, stock_status: 'committed' };
 }
 
 function attachStripeSession(draftId, sessionId, db = database) {
@@ -70,11 +159,14 @@ function createWebhookEvent(id, type, db = database) {
 
 module.exports = {
   attachStripeSession,
+  commitDraftStock,
   createCheckoutDraft,
+  createReservedCheckoutDraft,
   createWebhookEvent,
   findDraftById,
   findDraftBySession,
   findDraftBySessionForUser,
   findWebhookEvent,
+  releaseDraftStock,
   updateDraftStatus,
 };

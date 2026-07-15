@@ -4,13 +4,19 @@ const { asyncHandler } = require('../utils/http');
 
 module.exports = ({ perm }) => {
   const router = express.Router();
+  const canViewAdminProducts = perm('produtos.visualizar');
+
+  function protectAdminList(req, res, next) {
+    if (req.query.admin !== 'true') return next();
+    return canViewAdminProducts(req, res, next);
+  }
 
   // Admin-only bulk / special routes BEFORE /:id to avoid conflicts
   router.post('/bulk-price',     perm('estoque.gerenciar'), asyncHandler(controller.bulkPrice));
   router.get('/export',          perm('estoque.gerenciar'), asyncHandler(controller.exportCsv));
   router.post('/import',         perm('estoque.gerenciar'), asyncHandler(controller.importCsv));
 
-  router.get('/',    asyncHandler(controller.index));
+  router.get('/',    protectAdminList, asyncHandler(controller.index));
   router.get('/:id', asyncHandler(controller.show));
   router.post('/',   perm('produtos.cadastrar'), asyncHandler(controller.store));
   router.put('/:id', perm('produtos.editar'), asyncHandler(controller.update));

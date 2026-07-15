@@ -9,6 +9,7 @@ let pedidosPage = 1;
 let deleteTargetId = null;
 let categoriasAdmin = [];
 let editingImages = [];
+let editingVariantStock = {};
 let viewMode = 'ligas'; // 'ligas' | 'lista'
 
 // ── Dashboard state ────────────────────────────────────────────────────────
@@ -1039,6 +1040,49 @@ async function doDeleteCategoria() {
   }
 }
 
+function selectedProductSizes() {
+  return [...document.querySelectorAll('#sizePicker input:checked')].map((input) => input.value);
+}
+
+function updateVariantStockTotal() {
+  const sizes = selectedProductSizes();
+  if (sizes.length === 0) return;
+  const values = sizes.map((size) => editingVariantStock[size]);
+  const totalInput = document.getElementById('pEstoque');
+  if (totalInput) {
+    totalInput.value = values.every((value) => Number.isSafeInteger(value) && value >= 0)
+      ? values.reduce((sum, value) => sum + value, 0)
+      : '';
+  }
+}
+
+function renderVariantStockFields() {
+  const container = document.getElementById('variantStockFields');
+  const totalInput = document.getElementById('pEstoque');
+  if (!container || !totalInput) return;
+  const sizes = selectedProductSizes();
+  totalInput.readOnly = sizes.length > 0;
+  if (sizes.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+  container.innerHTML = sizes.map((size) => `
+    <div class="variant-stock-field">
+      <label for="variantStock_${safeAttr(size)}">Estoque ${safeText(size)}</label>
+      <input type="number" min="0" step="1" required data-variant-size="${safeAttr(size)}"
+        id="variantStock_${safeAttr(size)}" value="${editingVariantStock[size] ?? ''}" />
+    </div>
+  `).join('');
+  container.querySelectorAll('[data-variant-size]').forEach((input) => {
+    input.addEventListener('input', () => {
+      const value = input.value === '' ? null : Number(input.value);
+      editingVariantStock[input.dataset.variantSize] = Number.isSafeInteger(value) && value >= 0 ? value : null;
+      updateVariantStockTotal();
+    });
+  });
+  updateVariantStockTotal();
+}
+
 function _resetFormFields() {
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
   const chk = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val; };
@@ -1054,6 +1098,8 @@ function _resetFormFields() {
   set('pKeywords', ''); set('pMetaTitulo', ''); set('pMetaDescricao', '');
   chk('pDestaque', false); chk('pProdutoNovo', false); chk('pProdutoPromo', false);
   document.querySelectorAll('#sizePicker input').forEach(cb => { cb.checked = false; });
+  editingVariantStock = {};
+  renderVariantStockFields();
   const prev = document.getElementById('imagePreview'); if (prev) prev.innerHTML = '';
 }
 
@@ -1092,6 +1138,10 @@ function openEditModal(id) {
 
   const tamanhos = parseAdminJson(p.tamanhos, []);
   document.querySelectorAll('#sizePicker input').forEach(cb => { cb.checked = tamanhos.includes(cb.value); });
+  editingVariantStock = Object.fromEntries(
+    (Array.isArray(p.variantes) ? p.variantes : []).map((variant) => [variant.tamanho, Number(variant.estoque)])
+  );
+  renderVariantStockFields();
 
   const cores = parseAdminJson(p.cores, []);
   set('pCores', Array.isArray(cores) ? cores.join(', ') : '');
@@ -1140,6 +1190,15 @@ function removePreviewImg(index) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('#sizePicker input').forEach((input) => {
+    input.addEventListener('change', () => {
+      if (input.checked && !Object.prototype.hasOwnProperty.call(editingVariantStock, input.value)) {
+        editingVariantStock[input.value] = 0;
+      }
+      if (!input.checked) delete editingVariantStock[input.value];
+      renderVariantStockFields();
+    });
+  });
   document.getElementById('btnAddUrl')?.addEventListener('click', addImageUrl);
   document.getElementById('pImagemUrl')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); addImageUrl(); }
@@ -1206,7 +1265,12 @@ async function saveProduto(e) {
   const v = id => document.getElementById(id)?.value?.trim() ?? '';
   const n = id => { const val = document.getElementById(id)?.value; return val !== '' && val != null ? Number(val) : null; };
 
-  const tamanhos = [...document.querySelectorAll('#sizePicker input:checked')].map(c => c.value);
+  const tamanhos = selectedProductSizes();
+  const variantes = tamanhos.map((tamanho) => ({ tamanho, estoque: editingVariantStock[tamanho] }));
+  if (variantes.some((variant) => !Number.isSafeInteger(variant.estoque) || variant.estoque < 0)) {
+    showToast('Informe o estoque de cada tamanho selecionado.', 'error');
+    return;
+  }
   const coresText = v('pCores');
   const cores = coresText ? coresText.split(',').map(s => s.trim()).filter(Boolean) : [];
   const dimensoes = { comprimento: n('pDimComp'), largura: n('pDimLarg'), altura: n('pDimAlt') };
@@ -1232,6 +1296,7 @@ async function saveProduto(e) {
     estoque:            n('pEstoque') ?? 0,
     estoque_minimo:     n('pEstoqueMin') ?? 0,
     tamanhos,
+    variantes,
     cores,
     status:             v('pStatus') || 'ativo',
     destaque:           !!document.getElementById('pDestaque')?.checked,
