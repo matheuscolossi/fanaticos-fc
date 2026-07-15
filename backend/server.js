@@ -3,6 +3,7 @@ const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const openapiSpec = require('./src/docs/openapi');
 const { init } = require('./src/config/database');
+const { buildCommercialOpenapiSpec, loadAcademicApiConfig } = require('./src/config/academicApi');
 const {
   buildAdminMiddleware,
   buildAuthMiddleware,
@@ -31,9 +32,13 @@ const specRoutes = require('./src/routes/specRoutes');
 const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
+let academicApiConfig;
 let securityConfig;
 try {
-  securityConfig = loadSecurityConfig(process.env);
+  academicApiConfig = loadAcademicApiConfig(process.env);
+  securityConfig = loadSecurityConfig(process.env, {
+    requireBasicAuth: academicApiConfig.enabled,
+  });
 } catch (error) {
   console.error(`[api:config:error] ${error.message}`);
   process.exit(1);
@@ -45,10 +50,10 @@ const verifiedEmailMiddleware = buildVerifiedEmailMiddleware(authMiddleware);
 const rateLimiters = buildSecurityRateLimiters(process.env.RATE_LIMIT_SECRET || JWT_SECRET);
 const adminMiddleware = buildAdminMiddleware(authMiddleware);
 const perm = (key) => buildPermissionMiddleware(authMiddleware, key);
-const basicAuthMiddleware = buildBasicAuthMiddleware(
-  securityConfig.basicAuthUser,
-  securityConfig.basicAuthPass
-);
+const basicAuthMiddleware = academicApiConfig.enabled
+  ? buildBasicAuthMiddleware(securityConfig.basicAuthUser, securityConfig.basicAuthPass)
+  : null;
+const commercialOpenapiSpec = buildCommercialOpenapiSpec(openapiSpec);
 
 const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:5500,http://127.0.0.1:5500')
   .split(',').map(o => o.trim());
@@ -97,7 +102,7 @@ app.use((req, res, next) => {
 });
 
 // Documentação mínima da API (Swagger/OpenAPI), exigida pelo PDF do trabalho
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(openapiSpec));
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(commercialOpenapiSpec));
 
 // Sempre disponível — usada pelo keep-alive e pelo Render para health check
 app.get('/api/health', (req, res) => {
@@ -141,7 +146,11 @@ app.use('/api/admin/logs', logRoutes(perm('administradores.gerenciar')));
 // Rotas no formato exigido pelo PDF do trabalho (sem prefixo /api) — usadas pelo
 // professor no Postman. O site continua usando as rotas /api/produtos acima.
 app.use('/', specRoutes({
-  basicAuthMiddleware,
+  academicApi: {
+    ...academicApiConfig,
+    basicAuthMiddleware,
+    rateLimit: rateLimiters.academicMutation,
+  },
   cartRateLimit: rateLimiters.cart,
   isDbReady: () => dbReady,
   optionalAuthMiddleware,

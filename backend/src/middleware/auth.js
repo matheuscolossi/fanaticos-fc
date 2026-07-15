@@ -123,7 +123,7 @@ function buildPermissionMiddleware(authMiddleware, permissionKey) {
   };
 }
 
-// HTTP Basic Auth - exigido pelo PDF do trabalho para POST /products e DELETE /product/:id
+// HTTP Basic Auth exclusivo das mutações acadêmicas isoladas por feature flag/host.
 function buildBasicAuthMiddleware(expectedUser, expectedPass) {
   return function basicAuthMiddleware(req, res, next) {
     const header = req.headers.authorization || '';

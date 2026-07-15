@@ -3,11 +3,25 @@ const controller = require('../controllers/productsController');
 const cartController = require('../controllers/cartController');
 const { asyncHandler } = require('../utils/http');
 
-// Rotas espelho exigidas literalmente pelo PDF do trabalho (URI - Programação Web).
-// Reaproveitam a mesma lógica de /api/produtos, apenas com o nome/forma de rota
-// que o professor testa no Postman: POST /products, DELETE /product/:id,
-// GET /product/:id, GET /search?query=&cat=&page=&limit=, GET /health.
-module.exports = ({ basicAuthMiddleware, cartRateLimit, isDbReady, optionalAuthMiddleware }) => {
+function academicHostOnly(expectedHost) {
+  return function academicHostMiddleware(req, res, next) {
+    const requestHost = String(req.get('host') || '').trim().toLowerCase().replace(/\.$/, '');
+    if (requestHost !== expectedHost) {
+      return res.status(404).json({ error: 'Rota não encontrada.', code: 'ROUTE_NOT_FOUND' });
+    }
+    next();
+  };
+}
+
+function identifyAcademicActor(req, res, next) {
+  req.staffUser = { id: null, nome: 'API acadêmica isolada' };
+  next();
+}
+
+// As consultas acadêmicas compatíveis com a loja permanecem públicas. As
+// mutações só são registradas quando a feature está explicitamente habilitada
+// e nunca respondem no host comercial.
+module.exports = ({ academicApi, cartRateLimit, isDbReady, optionalAuthMiddleware }) => {
   const router = express.Router();
 
   router.get('/health', (req, res) => {
@@ -19,11 +33,22 @@ module.exports = ({ basicAuthMiddleware, cartRateLimit, isDbReady, optionalAuthM
     next();
   });
 
-  router.post('/products', basicAuthMiddleware, asyncHandler(controller.store));
-  router.delete('/product/:id', basicAuthMiddleware, asyncHandler(controller.destroy));
+  if (academicApi.enabled) {
+    const hostOnly = academicHostOnly(academicApi.host);
+    const mutationMiddleware = [
+      hostOnly,
+      academicApi.rateLimit,
+      academicApi.basicAuthMiddleware,
+      identifyAcademicActor,
+    ];
+    router.post('/products', ...mutationMiddleware, asyncHandler(controller.store));
+    router.delete('/product/:id', ...mutationMiddleware, asyncHandler(controller.destroy));
+  }
   router.get('/product/:id', asyncHandler(controller.show));
   router.get('/search', asyncHandler(controller.search));
   router.post('/cart', optionalAuthMiddleware, cartRateLimit, asyncHandler(cartController.summary));
 
   return router;
 };
+
+module.exports.academicHostOnly = academicHostOnly;

@@ -139,6 +139,11 @@ function buildSecurityRateLimiters(secret) {
         userPolicy(configuredLimit('RATE_LIMIT_CHECKOUT_ACCOUNT', 10), 15 * MINUTE_MS),
       ],
     }),
+    academicMutation: createRateLimiter({
+      secret,
+      scope: 'academic-product-mutation',
+      policies: [ipPolicy(configuredLimit('RATE_LIMIT_ACADEMIC_IP', 30), 15 * MINUTE_MS)],
+    }),
   };
 }
 

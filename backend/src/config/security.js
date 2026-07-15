@@ -44,23 +44,25 @@ function validateJwtSecret(value) {
   }
 }
 
-function loadSecurityConfig(env = process.env) {
+function loadSecurityConfig(env = process.env, { requireBasicAuth = true } = {}) {
   const jwtSecret = required(env, 'JWT_SECRET');
   const adminEmail = required(env, 'DEFAULT_ADMIN_EMAIL');
   const adminPassword = required(env, 'DEFAULT_ADMIN_PASSWORD');
-  const basicAuthUser = required(env, 'BASIC_AUTH_USER');
-  const basicAuthPass = required(env, 'BASIC_AUTH_PASS');
+  const basicAuthUser = requireBasicAuth ? required(env, 'BASIC_AUTH_USER') : null;
+  const basicAuthPass = requireBasicAuth ? required(env, 'BASIC_AUTH_PASS') : null;
 
   validateJwtSecret(jwtSecret);
   validateEmail(adminEmail, 'DEFAULT_ADMIN_EMAIL');
   validateCredential(adminPassword, 'DEFAULT_ADMIN_PASSWORD');
-  if (basicAuthUser !== basicAuthUser.trim() || basicAuthUser.length < 6 || basicAuthUser.length > 254) {
-    throw configurationError('A variável BASIC_AUTH_USER deve ter entre 6 e 254 caracteres, sem espaços externos.');
-  }
-  validateCredential(basicAuthPass, 'BASIC_AUTH_PASS');
+  if (requireBasicAuth) {
+    if (basicAuthUser !== basicAuthUser.trim() || basicAuthUser.length < 6 || basicAuthUser.length > 254) {
+      throw configurationError('A variável BASIC_AUTH_USER deve ter entre 6 e 254 caracteres, sem espaços externos.');
+    }
+    validateCredential(basicAuthPass, 'BASIC_AUTH_PASS');
 
-  if (basicAuthUser.toLowerCase() === adminEmail.toLowerCase() || basicAuthPass === adminPassword) {
-    throw configurationError('As credenciais de administrador e HTTP Basic Auth devem ser diferentes.');
+    if (basicAuthUser.toLowerCase() === adminEmail.toLowerCase() || basicAuthPass === adminPassword) {
+      throw configurationError('As credenciais de administrador e HTTP Basic Auth devem ser diferentes.');
+    }
   }
 
   return { adminEmail, adminPassword, basicAuthPass, basicAuthUser, jwtSecret };

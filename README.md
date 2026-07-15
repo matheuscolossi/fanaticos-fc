@@ -165,7 +165,7 @@ http://localhost:3001
 ```
 
 - Rotas internas do site: `http://localhost:3001/api/...`
-- Rotas "limpas" exigidas pelo trabalho (Postman): `http://localhost:3001/health`, `/products`, `/product/:id`, `/search`, `/cart`
+- Rotas públicas compatíveis com o trabalho: `http://localhost:3001/health`, `GET /product/:id`, `/search` e `/cart`. As mutações acadêmicas ficam desabilitadas por padrão.
 - Documentação Swagger: `http://localhost:3001/docs`
 
 Abra o frontend diretamente no navegador ou use um servidor estático:
@@ -194,7 +194,9 @@ Definidas em `backend/.env` (modelo em `backend/.env.example`):
 | `JWT_SECRET` | Chave usada para assinar/validar os tokens JWT. Obrigatória. |
 | `CORS_ORIGIN` | Lista de origens permitidas, separadas por vírgula. |
 | `DEFAULT_ADMIN_EMAIL` / `DEFAULT_ADMIN_PASSWORD` | Credenciais obrigatórias para provisionar o primeiro administrador quando o banco está vazio. Não possuem fallback. |
-| `BASIC_AUTH_USER` / `BASIC_AUTH_PASS` | Credenciais obrigatórias e exclusivas do HTTP Basic Auth em `POST /products` e `DELETE /product/:id`. Devem ser diferentes das credenciais administrativas. |
+| `ENABLE_ACADEMIC_API` | Feature flag das mutações acadêmicas. O padrão seguro é `false`; nesse estado as rotas não são registradas. |
+| `ACADEMIC_API_HOST` / `COMMERCIAL_API_HOST` | Hosts obrigatoriamente distintos quando a API acadêmica é habilitada em produção. Requisições de mutação no host comercial recebem `404`. |
+| `BASIC_AUTH_USER` / `BASIC_AUTH_PASS` | Credenciais exclusivas exigidas somente quando `ENABLE_ACADEMIC_API=true`. |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Credenciais do Cloudinary para upload/armazenamento de imagens de produto. |
 | `RESEND_API_KEY` / `RESEND_FROM` | Credenciais do serviço de e-mail (verificação de cadastro). |
 | `EMAIL_CODE_TTL_MINUTES` / `EMAIL_CODE_MAX_ATTEMPTS` | Validade do código e máximo de tentativas antes da invalidação. |
@@ -204,14 +206,14 @@ Definidas em `backend/.env` (modelo em `backend/.env.example`):
 
 ## Documentação da API (Swagger/OpenAPI)
 
-A especificação OpenAPI 3.0 das rotas exigidas pelo trabalho (`/health`, `/products`, `/product/:id`, `/search`, `/cart`) está em [`backend/src/docs/openapi.js`](backend/src/docs/openapi.js) e é servida via Swagger UI:
+A especificação OpenAPI 3.0 está em [`backend/src/docs/openapi.js`](backend/src/docs/openapi.js). No domínio comercial, o Swagger remove `POST /products` e `DELETE /product/:id`, publicando somente as operações sem mutação acadêmica:
 
 - Produção: **https://fanaticos-fc.onrender.com/docs**
 - Local: **http://localhost:3001/docs**
 
 ## Rotas no formato do trabalho (Postman)
 
-Estas são as rotas REST **exigidas literalmente pelo PDF do trabalho**, montadas na raiz do servidor (sem prefixo `/api`) para facilitar os testes no Postman. Implementadas em [`backend/src/routes/specRoutes.js`](backend/src/routes/specRoutes.js).
+As consultas REST compatíveis com o trabalho permanecem na raiz do servidor. `POST /products` e `DELETE /product/:id` só existem quando `ENABLE_ACADEMIC_API=true` e devem ser expostas por um serviço/host acadêmico separado. Elas nunca devem apontar para o domínio comercial. Implementação em [`backend/src/routes/specRoutes.js`](backend/src/routes/specRoutes.js).
 
 **Base URL (produção/Render):** `https://fanaticos-fc.onrender.com`
 **Base URL (local):** `http://localhost:3001`
@@ -237,7 +239,7 @@ Cadastra um produto, incluindo atributos (cor, tamanho, peso, descrição).
 No Postman: aba **Authorization** → tipo `Basic Auth` → informe os valores secretos configurados em `BASIC_AUTH_USER` e `BASIC_AUTH_PASS`.
 
 ```bash
-curl -X POST https://fanaticos-fc.onrender.com/products \
+curl -X POST "$ACADEMIC_API_ORIGIN/products" \
   -u "$BASIC_AUTH_USER:$BASIC_AUTH_PASS" \
   -H "Content-Type: application/json" \
   -d '{
@@ -266,7 +268,7 @@ curl -X POST https://fanaticos-fc.onrender.com/products \
 Remove um produto específico pelo ID.
 
 ```bash
-curl -X DELETE https://fanaticos-fc.onrender.com/product/246 \
+curl -X DELETE "$ACADEMIC_API_ORIGIN/product/246" \
   -u "$BASIC_AUTH_USER:$BASIC_AUTH_PASS"
 ```
 
@@ -472,7 +474,7 @@ git commit -m "feat: reorganiza backend em MVC"
 
 ## Provisionamento seguro
 
-A API não possui credenciais padrão. Antes da primeira inicialização, configure `JWT_SECRET`, `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD`, `BASIC_AUTH_USER` e `BASIC_AUTH_PASS` no gerenciador de segredos do ambiente. A inicialização falha se algum valor estiver ausente, fraco ou se o administrador e o HTTP Basic Auth compartilharem usuário ou senha.
+A API não possui credenciais padrão. Antes da primeira inicialização, configure `JWT_SECRET`, `DEFAULT_ADMIN_EMAIL` e `DEFAULT_ADMIN_PASSWORD` no gerenciador de segredos do ambiente. `BASIC_AUTH_USER` e `BASIC_AUTH_PASS` são exigidos apenas no serviço acadêmico com a feature habilitada. A inicialização falha quando uma credencial necessária está ausente ou fraca.
 
 Quando o banco está vazio, `DEFAULT_ADMIN_EMAIL` e `DEFAULT_ADMIN_PASSWORD` provisionam o primeiro administrador. Em bancos existentes, altere a senha administrativa pela área de conta; a variável de bootstrap não substitui automaticamente a senha armazenada.
 

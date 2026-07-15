@@ -149,7 +149,7 @@ test('todas as rotas sensíveis aplicam o middleware correspondente', () => {
 
   const cartRateLimit = function cartRate(req, res, next) { next(); };
   const specRouter = buildSpecRoutes({
-    basicAuthMiddleware: pass,
+    academicApi: { enabled: false },
     cartRateLimit,
     isDbReady: () => true,
     optionalAuthMiddleware: pass,

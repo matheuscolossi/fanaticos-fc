@@ -70,3 +70,11 @@ test('aceita apenas a configuração completa, forte e separada', () => {
   assert.notEqual(config.adminPassword, config.basicAuthPass);
 });
 
+test('não exige Basic Auth quando a API acadêmica está desabilitada', () => {
+  const env = validEnvironment();
+  delete env.BASIC_AUTH_USER;
+  delete env.BASIC_AUTH_PASS;
+  const config = loadSecurityConfig(env, { requireBasicAuth: false });
+  assert.equal(config.basicAuthUser, null);
+  assert.equal(config.basicAuthPass, null);
+});
