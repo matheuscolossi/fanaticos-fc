@@ -6,6 +6,10 @@ function parseJson(value, fallback) {
   try { return JSON.parse(value || JSON.stringify(fallback)); } catch { return fallback; }
 }
 
+function moneyToCents(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 100);
+}
+
 function serializeCoupon(c) {
   return {
     ...c,
@@ -123,7 +127,7 @@ async function validateCoupon(codigo, { subtotal, itens, usuarioId }) {
     throw createHttpError(400, 'Este cupom está expirado.', 'COUPON_EXPIRED');
   }
 
-  if (cupom.valor_minimo_compra && subtotal < Number(cupom.valor_minimo_compra)) {
+  if (cupom.valor_minimo_compra && moneyToCents(subtotal) < moneyToCents(cupom.valor_minimo_compra)) {
     throw createHttpError(
       400,
       `Compra mínima de R$ ${Number(cupom.valor_minimo_compra).toFixed(2)} para usar este cupom.`,
@@ -163,14 +167,18 @@ async function validateCoupon(codigo, { subtotal, itens, usuarioId }) {
     }
   }
 
-  const subtotalElegivel = elegiveis.reduce((s, i) => s + i.preco * i.qty, 0);
-  let desconto = cupom.tipo_desconto === 'fixo'
-    ? Number(cupom.valor)
-    : subtotalElegivel * (Number(cupom.valor) / 100);
+  const subtotalElegivelCents = elegiveis.reduce((sum, item) => {
+    const subtotalItem = Number(item.subtotalAposPromocao);
+    const value = Number.isFinite(subtotalItem) ? subtotalItem : Number(item.preco) * Number(item.qty);
+    return sum + moneyToCents(value);
+  }, 0);
+  let descontoCents = cupom.tipo_desconto === 'fixo'
+    ? moneyToCents(cupom.valor)
+    : Math.round(subtotalElegivelCents * (Number(cupom.valor) / 100));
 
-  if (cupom.desconto_maximo) desconto = Math.min(desconto, Number(cupom.desconto_maximo));
-  desconto = Math.min(desconto, subtotalElegivel);
-  desconto = Math.round(desconto * 100) / 100;
+  if (cupom.desconto_maximo) descontoCents = Math.min(descontoCents, moneyToCents(cupom.desconto_maximo));
+  descontoCents = Math.min(descontoCents, subtotalElegivelCents, moneyToCents(subtotal));
+  const desconto = descontoCents / 100;
 
   return { cupom, desconto, freteGratis: Boolean(cupom.frete_gratis) };
 }

@@ -5,8 +5,11 @@ const { asyncHandler } = require('../utils/http');
 module.exports = ({ perm }) => {
   const router = express.Router();
 
-  router.get('/', perm('clientes.gerenciar'), asyncHandler(controller.index));
-  router.delete('/:id', perm('clientes.gerenciar'), asyncHandler(controller.destroy));
+  // Este router administra exclusivamente clientes. Contas administrativas
+  // pertencem a /api/admin/funcionarios e exigem administradores.gerenciar.
+  router.use(perm('clientes.gerenciar'));
+  router.get('/', asyncHandler(controller.index));
+  router.delete('/:id', asyncHandler(controller.destroy));
 
   return router;
 };

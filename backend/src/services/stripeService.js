@@ -78,10 +78,44 @@ function buildLineItem(item) {
         name: cleanText(item.name, 250),
         ...(details ? { description: details } : {}),
       },
-      unit_amount: Math.round(Number(item.price) * 100),
+      unit_amount: cartService.moneyToCents(item.price),
     },
     quantity: item.qty,
   };
+}
+
+function buildCheckoutPricing(summary) {
+  const lineItems = summary.items.map(buildLineItem);
+  const itemsTotalCents = lineItems.reduce(
+    (sum, item) => sum + item.price_data.unit_amount * item.quantity,
+    0
+  );
+  const freightCents = cartService.moneyToCents(summary.freight || 0);
+  const promotionDiscountCents = cartService.moneyToCents(summary.promocoesDesconto || 0);
+  const couponDiscountCents = cartService.moneyToCents(summary.discount || 0);
+  const totalDiscountCents = promotionDiscountCents + couponDiscountCents;
+  const totalCents = itemsTotalCents + freightCents - totalDiscountCents;
+
+  if (totalDiscountCents < 0 || totalCents !== cartService.moneyToCents(summary.total)) {
+    throw createHttpError(
+      500,
+      'O detalhamento do checkout não corresponde ao total calculado.',
+      'CHECKOUT_TOTAL_INCONSISTENT'
+    );
+  }
+
+  if (freightCents > 0) {
+    lineItems.push({
+      price_data: {
+        currency: 'brl',
+        product_data: { name: 'Frete' },
+        unit_amount: freightCents,
+      },
+      quantity: 1,
+    });
+  }
+
+  return { lineItems, totalCents, totalDiscountCents };
 }
 
 async function createCheckoutSession({ items, customer, cupomCodigo, uf, userId }) {
@@ -108,6 +142,8 @@ async function createCheckoutSession({ items, customer, cupomCodigo, uf, userId 
     throw createHttpError(400, 'O valor do pedido deve ser maior que zero.', 'INVALID_ORDER_TOTAL');
   }
 
+  const pricing = buildCheckoutPricing(summary);
+
   const checkoutId = crypto.randomUUID();
   await paymentModel.createCheckoutDraft({
     id: checkoutId,
@@ -126,21 +162,9 @@ async function createCheckoutSession({ items, customer, cupomCodigo, uf, userId 
     cupom_codigo: cleanText(cupomCodigo, 50),
   });
 
-  const lineItems = summary.items.map(buildLineItem);
-  if (summary.freight > 0) {
-    lineItems.push({
-      price_data: {
-        currency: 'brl',
-        product_data: { name: 'Frete' },
-        unit_amount: Math.round(summary.freight * 100),
-      },
-      quantity: 1,
-    });
-  }
-
   const sessionParams = {
     mode: 'payment',
-    line_items: lineItems,
+    line_items: pricing.lineItems,
     success_url: `${getFrontendBaseUrl()}/pages/pagamento-sucesso.html?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${getFrontendBaseUrl()}/pages/pagamento-cancelado.html?session_id={CHECKOUT_SESSION_ID}`,
     client_reference_id: checkoutId,
@@ -158,12 +182,19 @@ async function createCheckoutSession({ items, customer, cupomCodigo, uf, userId 
     },
   };
 
-  if (cupomCodigo && summary.discount > 0) {
+  if (pricing.totalDiscountCents > 0) {
+    const hasPromotionDiscount = Number(summary.promocoesDesconto) > 0;
+    const hasCouponDiscount = Number(summary.discount) > 0;
+    const discountName = hasPromotionDiscount && hasCouponDiscount
+      ? `Promoções + cupom ${cleanText(cupomCodigo, 40)}`
+      : hasCouponDiscount
+        ? `Cupom ${cleanText(cupomCodigo, 40)}`
+        : 'Descontos promocionais';
     const stripeCoupon = await stripe.coupons.create({
-      amount_off: Math.round(summary.discount * 100),
+      amount_off: pricing.totalDiscountCents,
       currency: 'brl',
       duration: 'once',
-      name: `Cupom ${cleanText(cupomCodigo, 40)}`,
+      name: discountName,
     }, { idempotencyKey: `checkout-coupon:${checkoutId}` });
     sessionParams.discounts = [{ coupon: stripeCoupon.id }];
   }
@@ -190,8 +221,9 @@ async function fulfillCheckoutSession(session, eventId, db) {
     return existingOrder;
   }
 
-  const stripeTotal = Number(session.amount_total || 0) / 100;
-  if (Math.abs(stripeTotal - Number(draft.total)) > 0.01) {
+  const stripeTotalCents = Number(session.amount_total);
+  const draftTotalCents = cartService.moneyToCents(draft.total);
+  if (!Number.isSafeInteger(stripeTotalCents) || stripeTotalCents !== draftTotalCents) {
     throw createHttpError(400, 'O total confirmado pelo Stripe não corresponde ao checkout.', 'STRIPE_TOTAL_MISMATCH');
   }
 
@@ -294,6 +326,7 @@ async function getCheckoutStatus(sessionId, userId) {
 }
 
 module.exports = {
+  buildCheckoutPricing,
   createCheckoutSession,
   getCheckoutStatus,
   handleWebhook,

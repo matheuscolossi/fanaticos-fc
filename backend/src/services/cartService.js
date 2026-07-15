@@ -14,14 +14,22 @@ const FRETE_POR_UF = {
   TO: 35, PA: 35, AP: 35, AM: 35, RR: 35, RO: 35, AC: 35, // Norte/Nordeste
 };
 
-function calculateFreight(subtotal, uf) {
-  if (subtotal >= 200) return 0;
-  if (!uf) return FRETE_PADRAO;
-  return FRETE_POR_UF[String(uf).toUpperCase()] ?? FRETE_PADRAO;
+function moneyToCents(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) {
+    throw createHttpError(500, 'Valor monetário inválido no carrinho.', 'CART_MONEY_INVALID');
+  }
+  return Math.round((amount + Number.EPSILON) * 100);
 }
 
-function round2(value) {
-  return Math.round(value * 100) / 100;
+function centsToMoney(value) {
+  return Number(value) / 100;
+}
+
+function calculateFreightCents(subtotalCents, uf) {
+  if (subtotalCents >= 20000) return 0;
+  if (!uf) return FRETE_PADRAO * 100;
+  return (FRETE_POR_UF[String(uf).toUpperCase()] ?? FRETE_PADRAO) * 100;
 }
 
 async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
@@ -32,7 +40,7 @@ async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
   const promocoesAtivas = await promocaoService.getPromocoesAtivas();
 
   const resolvedItems = [];
-  let promocoesDesconto = 0;
+  let promocoesDescontoCents = 0;
   for (const item of items) {
     const qty = Number(item?.qty);
     if (!item?.productId || !Number.isInteger(qty) || qty < 1 || qty > 99) {
@@ -43,10 +51,17 @@ async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
     if (product.status && product.status !== 'ativo') {
       throw createHttpError(400, `O produto "${product.nome}" não está disponível.`, 'PRODUCT_UNAVAILABLE');
     }
-    const price = Number(product.preco_exibicao ?? product.preco_promocional ?? product.preco);
+    const priceCents = moneyToCents(product.preco_exibicao ?? product.preco_promocional ?? product.preco);
+    if (priceCents < 0) {
+      throw createHttpError(500, 'Produto com preço inválido.', 'PRODUCT_PRICE_INVALID');
+    }
+    const price = centsToMoney(priceCents);
 
     const { desconto, promocaoAplicada } = promocaoService.calcularDescontoQuantidade(product, qty, price, promocoesAtivas);
-    promocoesDesconto += desconto;
+    const lineGrossCents = priceCents * qty;
+    const linePromotionDiscountCents = Math.min(moneyToCents(desconto), lineGrossCents);
+    const lineSubtotalCents = lineGrossCents - linePromotionDiscountCents;
+    promocoesDescontoCents += linePromotionDiscountCents;
 
     resolvedItems.push({
       productId: product.id,
@@ -59,34 +74,42 @@ async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
       tamanho: item.tamanho || null,
       personalizacao: item.personalizacao || null,
       promocaoAplicada: promocaoAplicada?.nome || product.promocao_nome || null,
+      subtotalAposPromocao: centsToMoney(lineSubtotalCents),
     });
   }
 
-  const subtotalBruto = round2(resolvedItems.reduce((sum, item) => sum + item.price * item.qty, 0));
-  promocoesDesconto = round2(Math.min(promocoesDesconto, subtotalBruto));
-  const subtotal = round2(subtotalBruto - promocoesDesconto);
+  const subtotalBrutoCents = resolvedItems.reduce((sum, item) => sum + moneyToCents(item.price) * item.qty, 0);
+  promocoesDescontoCents = Math.min(promocoesDescontoCents, subtotalBrutoCents);
+  const subtotalCents = subtotalBrutoCents - promocoesDescontoCents;
 
-  let freight = calculateFreight(subtotal, uf);
-  let discount = 0;
+  let freightCents = calculateFreightCents(subtotalCents, uf);
+  let discountCents = 0;
   let cupomErro = null;
 
   if (cupomCode) {
     try {
-      const resultado = await couponService.validateCoupon(cupomCode, { subtotal, itens: resolvedItems, usuarioId });
-      discount = resultado.desconto;
-      if (resultado.freteGratis) freight = 0;
+      const resultado = await couponService.validateCoupon(cupomCode, {
+        subtotal: centsToMoney(subtotalCents),
+        itens: resolvedItems,
+        usuarioId,
+      });
+      discountCents = Math.min(moneyToCents(resultado.desconto), subtotalCents);
+      if (resultado.freteGratis) freightCents = 0;
     } catch (e) {
       cupomErro = e.message || 'Cupom inválido.';
     }
   }
 
-  const total = round2(subtotal + freight - discount);
+  const totalCents = subtotalCents + freightCents - discountCents;
 
   const resposta = {
     items: resolvedItems.map(({ productId, name, price, qty, image, tamanho, personalizacao, promocaoAplicada }) =>
       ({ productId, name, price, qty, image, tamanho, personalizacao, promocaoAplicada })),
-    subtotal, freight, discount, total,
-    promocoesDesconto,
+    subtotal: centsToMoney(subtotalCents),
+    freight: centsToMoney(freightCents),
+    discount: centsToMoney(discountCents),
+    total: centsToMoney(totalCents),
+    promocoesDesconto: centsToMoney(promocoesDescontoCents),
   };
   if (cupomErro) resposta.cupomErro = cupomErro;
   return resposta;
@@ -94,4 +117,6 @@ async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
 
 module.exports = {
   buildCartSummary,
+  centsToMoney,
+  moneyToCents,
 };

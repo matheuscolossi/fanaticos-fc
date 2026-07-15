@@ -1,4 +1,5 @@
-const { all, get, run } = require('../config/database');
+const database = require('../config/database');
+const { all, get, run } = database;
 
 const PUBLIC_USER_FIELDS = 'id, nome, email, perfil, cargo, permissoes, status, cpf, telefone, endereco_rua, cidade, cep, email_verificado';
 
@@ -14,17 +15,35 @@ function findPublicById(userId) {
   return get(`SELECT ${PUBLIC_USER_FIELDS} FROM usuarios WHERE id = ?`, [userId]);
 }
 
-function listAdminsView() {
+function listClientsView() {
   return all(`
-    SELECT u.id, u.nome, u.email, u.perfil, u.created_at,
+    SELECT u.id, u.nome, u.email, u.created_at,
       (SELECT COUNT(*) FROM pedidos p WHERE p.usuario_id = u.id) AS pedidos_count
     FROM usuarios u
+    WHERE u.perfil = 'cliente'
     ORDER BY u.created_at DESC
   `);
 }
 
-function countAdmins() {
-  return get("SELECT COUNT(*) as c FROM usuarios WHERE perfil = 'admin'");
+function removeClientWithRelations(userId) {
+  return database.transaction(async (db) => {
+    const client = await db.get(
+      "SELECT id FROM usuarios WHERE id = ? AND perfil = 'cliente'",
+      [userId]
+    );
+    if (!client) return null;
+
+    await db.run('UPDATE pedidos SET usuario_id = NULL WHERE usuario_id = ?', [userId]);
+    await db.run('UPDATE logs_acoes SET usuario_id = NULL WHERE usuario_id = ?', [userId]);
+    const result = await db.run(
+      "DELETE FROM usuarios WHERE id = ? AND perfil = 'cliente'",
+      [userId]
+    );
+    if (Number(result.changes) !== 1) {
+      throw new Error('A conta deixou de ser cliente durante a exclusão.');
+    }
+    return client;
+  });
 }
 
 function countAdminsAtivos() {
@@ -33,18 +52,6 @@ function countAdminsAtivos() {
 
 function countPedidos(userId) {
   return get('SELECT COUNT(*) as c FROM pedidos WHERE usuario_id = ?', [userId]);
-}
-
-function unlinkPedidos(userId) {
-  return run('UPDATE pedidos SET usuario_id = NULL WHERE usuario_id = ?', [userId]);
-}
-
-function unlinkLogs(userId) {
-  return run('UPDATE logs_acoes SET usuario_id = NULL WHERE usuario_id = ?', [userId]);
-}
-
-function remove(userId) {
-  return run('DELETE FROM usuarios WHERE id = ?', [userId]);
 }
 
 function create({ nome, email, senha, cpf, telefone }) {
@@ -122,7 +129,6 @@ function setFuncionarioStatus(userId, status) {
 }
 
 module.exports = {
-  countAdmins,
   countAdminsAtivos,
   countPedidos,
   create,
@@ -130,14 +136,12 @@ module.exports = {
   findByEmail,
   findById,
   findPublicById,
-  listAdminsView,
+  listClientsView,
   listFuncionarios,
   markEmailVerified,
-  remove,
+  removeClientWithRelations,
   setFuncionarioStatus,
   setVerificationCode,
-  unlinkLogs,
-  unlinkPedidos,
   updateAddress,
   updateFuncionario,
   updateFuncionarioSenha,

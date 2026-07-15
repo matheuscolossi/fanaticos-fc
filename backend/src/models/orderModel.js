@@ -114,10 +114,16 @@ function listByUser(user) {
   ]);
 }
 
-function findTrackingById(orderId) {
+function findTrackingForUser(orderId, user) {
   return get(
-    'SELECT id, status, codigo_rastreio, metodo_pagamento, total, nome_cliente, created_at FROM pedidos WHERE id = ?',
-    [orderId]
+    `SELECT id, status, codigo_rastreio, created_at
+     FROM pedidos
+     WHERE id = ?
+       AND (
+         usuario_id = ?
+         OR (usuario_id IS NULL AND LOWER(email_cliente) = LOWER(?))
+       )`,
+    [orderId, user.id, user.email]
   );
 }
 
@@ -143,7 +149,7 @@ module.exports = {
   findByStripePaymentIntent,
   findByStripeSession,
   findPaymentStatusForUser,
-  findTrackingById,
+  findTrackingForUser,
   list,
   listByUser,
   remove,

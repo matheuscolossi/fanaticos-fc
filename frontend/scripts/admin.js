@@ -1563,35 +1563,30 @@ async function loadUsuarios() {
   try {
     const users = await api.get('/admin/usuarios');
     usuariosCache = users;
-    const currentUser = JSON.parse(localStorage.getItem('fc_user') || 'null');
 
     wrap.innerHTML = `
       <div class="admin-stats">
         <div class="admin-stat">
-          <div class="admin-stat__label">Total Usuários</div>
+          <div class="admin-stat__label">Total Clientes</div>
           <div class="admin-stat__val">${users.length}</div>
         </div>
         <div class="admin-stat">
-          <div class="admin-stat__label">Admins</div>
-          <div class="admin-stat__val admin-stat__val--green">${users.filter(u => u.perfil === 'admin').length}</div>
+          <div class="admin-stat__label">Com pedidos</div>
+          <div class="admin-stat__val admin-stat__val--green">${users.filter(u => Number(u.pedidos_count) > 0).length}</div>
         </div>
       </div>
       <table>
-        <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Pedidos</th><th>Cadastro</th><th>Ações</th></tr></thead>
+        <thead><tr><th>Nome</th><th>E-mail</th><th>Pedidos</th><th>Cadastro</th><th>Ações</th></tr></thead>
         <tbody>
           ${users.map(u => {
-            const isSelf = currentUser && String(currentUser.id) === String(u.id);
             return `
             <tr>
-              <td style="font-weight:600">${safeText(u.nome)}${isSelf ? ' <span style="color:var(--text-dim);font-size:.75rem">(você)</span>' : ''}</td>
+              <td style="font-weight:600">${safeText(u.nome)}</td>
               <td style="color:var(--text-muted)">${safeText(u.email)}</td>
-              <td><span class="td-badge ${u.perfil === 'admin' ? '' : 'td-badge--off'}">${safeText(u.perfil)}</span></td>
               <td>${u.pedidos_count ?? 0}</td>
               <td style="color:var(--text-muted);font-size:.82rem">${new Date(u.created_at).toLocaleString('pt-BR')}</td>
               <td>
-                ${isSelf
-                  ? '<span style="color:var(--text-dim);font-size:.78rem">—</span>'
-                  : `<button class="btn btn--danger btn--sm" onclick="confirmDeleteUsuario(${u.id})">Excluir</button>`}
+                <button class="btn btn--danger btn--sm" onclick="confirmDeleteUsuario(${u.id})">Excluir</button>
               </td>
             </tr>
           `;}).join('')}
@@ -1610,7 +1605,7 @@ function confirmDeleteUsuario(id) {
   const body = document.getElementById('usuarioDeleteBody');
   const pedidos = Number(u.pedidos_count || 0);
   body.innerHTML = `
-    <p>Tem certeza que deseja excluir o usuário <strong>${safeText(u.nome)}</strong> (${safeText(u.email)})?</p>
+    <p>Tem certeza que deseja excluir o cliente <strong>${safeText(u.nome)}</strong> (${safeText(u.email)})?</p>
     ${pedidos > 0 ? `<p style="color:var(--text-muted);font-size:.85rem;margin-top:.5rem">Este usuário possui ${pedidos} pedido(s) — eles serão mantidos no histórico, apenas desvinculados da conta.</p>` : ''}
     <p style="color:var(--danger);font-size:.85rem;margin-top:.5rem">Esta ação não pode ser desfeita.</p>
   `;
@@ -1623,7 +1618,7 @@ async function doDeleteUsuario() {
   if (btn) { btn.disabled = true; btn.textContent = 'Excluindo...'; }
   try {
     await api.delete(`/admin/usuarios/${usuarioDeleteTargetId}`);
-    showToast('Usuário excluído.');
+    showToast('Cliente excluído.');
     document.getElementById('usuarioDeleteOverlay').style.display = 'none';
     usuarioDeleteTargetId = null;
     await loadUsuarios();

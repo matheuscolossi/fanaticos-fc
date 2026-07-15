@@ -9,7 +9,10 @@ const assert = require('node:assert/strict');
 const { after, before, test } = require('node:test');
 const database = require('../src/config/database');
 const cartService = require('../src/services/cartService');
+const couponModel = require('../src/models/couponModel');
+const couponService = require('../src/services/couponService');
 const paymentModel = require('../src/models/paymentModel');
+const promocaoService = require('../src/services/promocaoService');
 const stripeService = require('../src/services/stripeService');
 const orderService = require('../src/services/orderService');
 
@@ -57,6 +60,134 @@ test('recalcula o preço pelo banco e ignora preço adulterado no navegador', as
     items: [{ productId, qty: 2, price: 0 }],
   });
   assert.equal(summary.subtotal, 200);
+});
+
+test('representa promoções percentual, fixa e preço fixo no preço unitário do Stripe', () => {
+  const product = { id: productId, categoria_id: 1, preco: 100, preco_promocional: null };
+  const cases = [
+    [{ nome: '10%', tipo: 'percentual', valor: 10, produtos_ids: [], categorias_ids: [] }, 90],
+    [{ nome: 'R$ 15', tipo: 'fixo', valor: 15, produtos_ids: [], categorias_ids: [] }, 85],
+    [{ nome: 'Preço final', tipo: 'preco_fixo', valor: 79.99, produtos_ids: [], categorias_ids: [] }, 79.99],
+  ];
+
+  for (const [promotion, expectedPrice] of cases) {
+    const { precoFinal } = promocaoService.calcularPrecoComPromocao(product, [promotion]);
+    const pricing = stripeService.buildCheckoutPricing({
+      items: [{ name: 'Produto', price: precoFinal, qty: 2 }],
+      freight: 0,
+      promocoesDesconto: 0,
+      discount: 0,
+      total: expectedPrice * 2,
+    });
+    assert.equal(pricing.lineItems[0].price_data.unit_amount, cartService.moneyToCents(expectedPrice));
+    assert.equal(pricing.totalCents, cartService.moneyToCents(expectedPrice * 2));
+  }
+});
+
+test('representa compre X leve Y como desconto fixo em centavos no Stripe', async (t) => {
+  t.mock.method(promocaoService, 'getPromocoesAtivas', async () => [{
+    nome: 'Compre 2 leve 3', tipo: 'compre_x_leve_y', compre_qtd: 2, leve_qtd: 3,
+    produtos_ids: [productId], categorias_ids: [],
+  }]);
+
+  const summary = await cartService.buildCartSummary({ items: [{ productId, qty: 3 }] });
+  const pricing = stripeService.buildCheckoutPricing(summary);
+
+  assert.equal(summary.subtotal, 200);
+  assert.equal(summary.promocoesDesconto, 100);
+  assert.equal(pricing.lineItems[0].price_data.unit_amount, 10000);
+  assert.equal(pricing.totalDiscountCents, 10000);
+  assert.equal(pricing.totalCents, 20000);
+});
+
+test('representa desconto progressivo como desconto fixo em centavos no Stripe', async (t) => {
+  t.mock.method(promocaoService, 'getPromocoesAtivas', async () => [{
+    nome: 'Progressivo 15%', tipo: 'progressivo',
+    regras_progressivas: [{ qtd_minima: 3, desconto_pct: 15 }],
+    produtos_ids: [productId], categorias_ids: [],
+  }]);
+
+  const summary = await cartService.buildCartSummary({ items: [{ productId, qty: 3 }] });
+  const pricing = stripeService.buildCheckoutPricing(summary);
+
+  assert.equal(summary.subtotal, 255);
+  assert.equal(summary.promocoesDesconto, 45);
+  assert.equal(pricing.totalDiscountCents, 4500);
+  assert.equal(pricing.totalCents, 25500);
+});
+
+test('calcula cupons percentual e fixo sobre o subtotal após promoções', async (t) => {
+  t.mock.method(couponModel, 'findByCodigo', async (code) => ({
+    codigo: code,
+    status: 'ativo',
+    tipo_desconto: code === 'PERCENTUAL' ? 'percentual' : 'fixo',
+    valor: code === 'PERCENTUAL' ? 10 : 250,
+    produtos_ids: [], categorias_ids: [], clientes_ids: [],
+    frete_gratis: 0,
+  }));
+  const context = {
+    subtotal: 200,
+    itens: [{ productId, categoria_id: 1, preco: 100, qty: 3, subtotalAposPromocao: 200 }],
+    usuarioId: 1,
+  };
+
+  const percentage = await couponService.validateCoupon('PERCENTUAL', context);
+  const fixed = await couponService.validateCoupon('FIXO', context);
+
+  assert.equal(percentage.desconto, 20);
+  assert.equal(fixed.desconto, 200);
+});
+
+test('calcula frete regional, padrão, grátis por faixa e grátis por cupom', async (t) => {
+  t.mock.method(promocaoService, 'getPromocoesAtivas', async () => []);
+  const regional = await cartService.buildCartSummary({ items: [{ productId, qty: 1 }], uf: 'RS' });
+  const standard = await cartService.buildCartSummary({ items: [{ productId, qty: 1 }] });
+  const threshold = await cartService.buildCartSummary({ items: [{ productId, qty: 2 }], uf: 'RS' });
+
+  t.mock.method(couponService, 'validateCoupon', async () => ({ desconto: 0, freteGratis: true }));
+  const coupon = await cartService.buildCartSummary({
+    items: [{ productId, qty: 1 }], uf: 'RS', cupomCode: 'FRETEGRATIS',
+  });
+
+  assert.equal(regional.freight, 15);
+  assert.equal(standard.freight, 25);
+  assert.equal(threshold.freight, 0);
+  assert.equal(coupon.freight, 0);
+});
+
+test('mantém promoção, cupom, frete e total iguais após arredondamento em centavos', () => {
+  const summary = {
+    items: [{ name: 'Produto decimal', price: 19.99, qty: 3 }],
+    freight: 15,
+    promocoesDesconto: 7.5,
+    discount: 5.25,
+    total: 62.22,
+  };
+  const pricing = stripeService.buildCheckoutPricing(summary);
+  const roundedPromotion = promocaoService.calcularPrecoComPromocao(
+    { id: productId, categoria_id: 1, preco: 2.03, preco_promocional: null },
+    [{ tipo: 'percentual', valor: 50, produtos_ids: [], categorias_ids: [] }]
+  );
+
+  assert.equal(cartService.moneyToCents(1.005), 101);
+  assert.equal(roundedPromotion.precoFinal, 1.02);
+  assert.equal(pricing.lineItems[0].price_data.unit_amount, 1999);
+  assert.equal(pricing.lineItems[1].price_data.unit_amount, 1500);
+  assert.equal(pricing.totalDiscountCents, 1275);
+  assert.equal(pricing.totalCents, 6222);
+});
+
+test('recusa criar preços Stripe quando o detalhamento diverge por um centavo', () => {
+  assert.throws(
+    () => stripeService.buildCheckoutPricing({
+      items: [{ name: 'Produto', price: 10, qty: 1 }],
+      freight: 0,
+      promocoesDesconto: 0,
+      discount: 0,
+      total: 9.99,
+    }),
+    (error) => error.code === 'CHECKOUT_TOTAL_INCONSISTENT'
+  );
 });
 
 test('recusa quantidade inválida', async () => {

@@ -590,6 +590,7 @@ async function runMigrations() {
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS shipping_address JSONB');
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now()');
     await runOptionalMigration('CREATE UNIQUE INDEX IF NOT EXISTS pedidos_stripe_session_idx ON pedidos(stripe_session_id)');
+    await runOptionalMigration('CREATE INDEX IF NOT EXISTS pedidos_usuario_id_idx ON pedidos(usuario_id)');
     await runOptionalMigration('CREATE UNIQUE INDEX IF NOT EXISTS checkout_drafts_stripe_session_idx ON checkout_drafts(stripe_session_id)');
     // Funcionários/administradores: cargo, permissões granulares, acesso e auditoria
     await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS cargo TEXT');
@@ -656,6 +657,7 @@ async function runMigrations() {
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN shipping_address TEXT');
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN updated_at DATETIME');
   await runOptionalMigration('CREATE UNIQUE INDEX IF NOT EXISTS pedidos_stripe_session_idx ON pedidos(stripe_session_id)');
+  await runOptionalMigration('CREATE INDEX IF NOT EXISTS pedidos_usuario_id_idx ON pedidos(usuario_id)');
   await runOptionalMigration('CREATE UNIQUE INDEX IF NOT EXISTS checkout_drafts_stripe_session_idx ON checkout_drafts(stripe_session_id)');
   // Funcionários/administradores: cargo, permissões granulares, acesso e auditoria
   await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN cargo TEXT');

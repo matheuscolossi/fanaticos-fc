@@ -581,7 +581,24 @@ function fecharPixOverlay() {
 
 // ── RASTREAR PEDIDO ───────────────────────────────────────────────────────────
 
-function openTrackingModal() {
+function redirectToAccountLogin() {
+  if (typeof openAuthModal === 'function') {
+    openAuthModal('login');
+    return;
+  }
+  const inPages = window.location.pathname.includes('/pages/');
+  window.location.href = inPages ? 'conta.html' : 'pages/conta.html';
+}
+
+async function openTrackingModal() {
+  try {
+    await api.get('/auth/perfil');
+  } catch (_) {
+    showToast('Entre na sua conta para rastrear um pedido.', 'error');
+    redirectToAccountLogin();
+    return;
+  }
+
   const overlay = document.getElementById('trackingOverlay');
   if (!overlay) return;
 
@@ -636,7 +653,7 @@ async function buscarRastreio() {
           <span>${info.icon}</span>
           <div>
             <strong>${safeText(info.label)}</strong>
-            <small>Pedido #${pedido.id} · ${formatBRL(pedido.total)}</small>
+            <small>Pedido #${pedido.id}</small>
           </div>
         </div>
         <div class="tracking-steps">
@@ -661,8 +678,18 @@ async function buscarRastreio() {
     document.getElementById('btnCopyTrack')?.addEventListener('click', () => {
       navigator.clipboard.writeText(pedido.codigo_rastreio).then(() => showToast('Código copiado.'));
     });
-  } catch(_) {
-    result.innerHTML = `<p style="color:var(--danger);text-align:center;padding:1rem">Pedido #${id} não encontrado.</p>`;
+  } catch (error) {
+    if (['AUTH_TOKEN_REQUIRED', 'AUTH_TOKEN_INVALID', 'AUTH_USER_NOT_FOUND', 'ACCESS_DISABLED'].includes(error.code)) {
+      document.getElementById('trackingOverlay').style.display = 'none';
+      showToast('Sua sessão expirou. Entre novamente para rastrear o pedido.', 'error');
+      redirectToAccountLogin();
+      return;
+    }
+    result.replaceChildren();
+    const message = document.createElement('p');
+    message.style.cssText = 'color:var(--danger);text-align:center;padding:1rem';
+    message.textContent = 'Pedido não encontrado para esta conta.';
+    result.appendChild(message);
   }
 }
 

@@ -44,7 +44,9 @@ async function createPaidOrderFromStripe(data, db) {
     telefone_cliente: session.customer_details?.phone || draft.telefone_cliente,
     endereco: shippingAddress?.formatted || draft.endereco,
     cupom_codigo: draft.cupom_codigo,
-    cupom_desconto: Number(session.total_details?.amount_discount || 0) / 100,
+    // O desconto exibido pelo Stripe também inclui promoções por quantidade.
+    // No pedido, cupom_desconto deve registrar somente a parcela do cupom.
+    cupom_desconto: Number(draft.desconto || 0),
     stripe_session_id: session.id,
     metodo_pagamento: 'stripe',
     status: 'pago',
@@ -71,10 +73,23 @@ async function listOrdersByUser(user) {
   return orders.map(parseOrderItems);
 }
 
-async function getTrackingById(orderId) {
-  const order = await orderModel.findTrackingById(orderId);
-  if (!order) throw createHttpError(404, 'Order not found.', 'ORDER_NOT_FOUND');
-  return order;
+async function getTrackingForUser(orderId, user) {
+  const normalizedId = Number(orderId);
+  if (!Number.isSafeInteger(normalizedId) || normalizedId <= 0 || String(normalizedId) !== String(orderId)) {
+    throw createHttpError(404, 'Pedido não encontrado para esta conta.', 'ORDER_TRACKING_NOT_FOUND');
+  }
+
+  const order = await orderModel.findTrackingForUser(normalizedId, user);
+  if (!order) {
+    // A mesma resposta é usada para pedido inexistente e pedido de terceiro.
+    throw createHttpError(404, 'Pedido não encontrado para esta conta.', 'ORDER_TRACKING_NOT_FOUND');
+  }
+  return {
+    id: order.id,
+    status: order.status,
+    codigo_rastreio: order.codigo_rastreio || null,
+    created_at: order.created_at,
+  };
 }
 
 async function updateOrder(orderId, data) {
@@ -97,7 +112,7 @@ module.exports = {
   createOrder,
   createPaidOrderFromStripe,
   deleteOrder,
-  getTrackingById,
+  getTrackingForUser,
   listOrders,
   listOrdersByUser,
   updateOrder,

@@ -3,7 +3,7 @@ const logService = require('../services/logService');
 const {
   createOrder,
   deleteOrder,
-  getTrackingById,
+  getTrackingForUser,
   listOrders,
   listOrdersByUser,
   updateOrder,
@@ -22,7 +22,20 @@ async function myOrders(req, res) {
 }
 
 async function tracking(req, res) {
-  res.json(await getTrackingById(req.params.id));
+  try {
+    res.json(await getTrackingForUser(req.params.id, req.user));
+  } catch (error) {
+    if (error.code === 'ORDER_TRACKING_NOT_FOUND') {
+      const requestedId = /^\d{1,18}$/.test(String(req.params.id)) ? req.params.id : 'formato-inválido';
+      const ip = String(req.ip || req.socket?.remoteAddress || 'desconhecido').slice(0, 80);
+      await logService.registrar(
+        req.user,
+        'Tentativa de rastreamento negada',
+        `Pedido solicitado: ${requestedId} · IP: ${ip}`
+      );
+    }
+    throw error;
+  }
 }
 
 async function update(req, res) {

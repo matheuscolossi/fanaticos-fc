@@ -8,7 +8,7 @@ module.exports = ({ authMiddleware, perm }) => {
   router.post('/', authMiddleware, asyncHandler(controller.store));
   router.get('/', perm('pedidos.visualizar'), asyncHandler(controller.index));
   router.get('/meus', authMiddleware, asyncHandler(controller.myOrders));
-  router.get('/:id/rastreio', asyncHandler(controller.tracking));
+  router.get('/:id/rastreio', authMiddleware, asyncHandler(controller.tracking));
   router.put('/:id', perm('pedidos.alterar'), asyncHandler(controller.update));
   router.delete('/:id', perm('pedidos.alterar'), asyncHandler(controller.destroy));
 
