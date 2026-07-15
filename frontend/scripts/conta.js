@@ -20,27 +20,25 @@ function getContaUser() {
 // ── Render principal ──────────────────────────────────────────────────────
 
 async function renderContaPage() {
-  const token = localStorage.getItem('fc_token');
-  contaUser = token ? getContaUser() : null;
+  contaUser = getContaUser();
 
   // O perfil salvo no navegador é apenas um cache. Atualiza-o pelo servidor
   // antes de exibir qualquer badge ou link administrativo.
-  if (token) {
-    try {
-      const serverUser = await api.get('/auth/perfil');
-      contaUser = serverUser;
-      localStorage.setItem('fc_user', JSON.stringify(serverUser));
-    } catch (e) {
-      const authFailure = ['AUTH_TOKEN_REQUIRED', 'AUTH_TOKEN_INVALID', 'AUTH_USER_NOT_FOUND', 'ACCESS_DISABLED']
-        .includes(e.code);
-      if (authFailure) {
-        localStorage.removeItem('fc_token');
-        localStorage.removeItem('fc_user');
-        contaUser = null;
-      } else if (contaUser) {
-        // Sem resposta do backend, não conceda privilégios visuais baseados no cache.
-        contaUser = { ...contaUser, perfil: 'cliente', cargo: null, permissoes: [] };
-      }
+  try {
+    const serverUser = await api.get('/auth/perfil');
+    contaUser = serverUser;
+    localStorage.removeItem('fc_token');
+    localStorage.setItem('fc_user', JSON.stringify(serverUser));
+  } catch (e) {
+    const authFailure = ['AUTH_TOKEN_REQUIRED', 'AUTH_TOKEN_INVALID', 'AUTH_USER_NOT_FOUND', 'ACCESS_DISABLED']
+      .includes(e.code);
+    if (authFailure) {
+      localStorage.removeItem('fc_token');
+      localStorage.removeItem('fc_user');
+      contaUser = null;
+    } else if (contaUser) {
+      // Sem resposta do backend, não conceda privilégios visuais baseados no cache.
+      contaUser = { ...contaUser, perfil: 'cliente', cargo: null, permissoes: [] };
     }
   }
 
@@ -64,10 +62,10 @@ async function renderContaPage() {
   content.innerHTML = `
     <div class="conta-header">
       <div class="conta-header__info">
-        <div class="conta-avatar">${contaUser.nome.charAt(0).toUpperCase()}</div>
+        <div class="conta-avatar">${safeText(contaUser.nome.charAt(0).toUpperCase())}</div>
         <div>
-          <h1 class="conta-header__nome">${contaUser.nome}</h1>
-          <p class="conta-header__email">${contaUser.email}</p>
+          <h1 class="conta-header__nome">${safeText(contaUser.nome)}</h1>
+          <p class="conta-header__email">${safeText(contaUser.email)}</p>
           ${contaUser.perfil === 'admin' ? '<span class="conta-badge-admin">Admin</span>' : ''}
         </div>
       </div>
@@ -91,8 +89,9 @@ async function renderContaPage() {
     <div id="contaTabContent"></div>
   `;
 
-  document.getElementById('btnContaLogout').addEventListener('click', () => {
+  document.getElementById('btnContaLogout').addEventListener('click', async () => {
     if (confirm('Deseja sair da sua conta?')) {
+      try { await api.post('/auth/logout', {}); } catch (_) {}
       localStorage.removeItem('fc_token');
       localStorage.removeItem('fc_user');
       renderContaPage();
@@ -154,13 +153,13 @@ async function renderPedidosTab() {
                   <span class="pedido-conta-card__date">${data}</span>
                 </div>
                 <div class="pedido-conta-card__status status--${info.cor}">
-                  ${info.icon} ${info.label}
+                  ${safeText(info.icon)} ${safeText(info.label)}
                 </div>
               </div>
 
               <div class="pedido-conta-card__meta">
                 <span>${pedido.stripe_session_id || pedido.metodo_pagamento === 'stripe' ? 'Stripe (cartão ou PIX)' : 'Pagamento legado'}</span>
-                ${pedido.endereco ? `<span>${pedido.endereco}</span>` : ''}
+                ${pedido.endereco ? `<span>${safeText(pedido.endereco)}</span>` : ''}
                 <strong class="pedido-conta-card__total">${formatBRL(pedido.total)}</strong>
               </div>
 
@@ -169,10 +168,10 @@ async function renderPedidosTab() {
                   ${pedido.itens.map(i => `
                     <div class="pedido-conta-card__item">
                       ${i.imagem
-                        ? `<img src="${i.imagem}" alt="${i.nome}" />`
+                        ? `<img src="${safeUrl(i.imagem)}" alt="${safeAttr(i.nome)}" />`
                         : `<div class="pedido-item-placeholder"></div>`}
                       <div>
-                        <div class="pedido-item-nome">${i.nome}</div>
+                        <div class="pedido-item-nome">${safeText(i.nome)}</div>
                         <div class="pedido-item-qty">x${i.qty} · ${formatBRL(i.preco * i.qty)}</div>
                       </div>
                     </div>
@@ -184,7 +183,7 @@ async function renderPedidosTab() {
                 <div class="pedido-conta-card__rastreio">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                   <span>Código de rastreio:</span>
-                  <strong id="trackCode_${pedido.id}">${pedido.codigo_rastreio}</strong>
+                  <strong id="trackCode_${pedido.id}">${safeText(pedido.codigo_rastreio)}</strong>
                   <button class="btn btn--outline btn--sm" data-copy="${pedido.id}">Copiar</button>
                 </div>
               ` : ''}
@@ -206,10 +205,11 @@ async function renderPedidosTab() {
   } catch (e) {
     content.innerHTML = `
       <div class="empty-state" style="padding:3rem 1rem">
-        <p style="color:var(--danger)">${e.message}</p>
-        <button class="btn btn--outline" onclick="renderPedidosTab()">Tentar novamente</button>
+        <p style="color:var(--danger)">${safeText(e.message)}</p>
+        <button class="btn btn--outline" id="btnRetryPedidos">Tentar novamente</button>
       </div>
     `;
+    document.getElementById('btnRetryPedidos')?.addEventListener('click', renderPedidosTab);
   }
 }
 
@@ -232,11 +232,11 @@ async function renderPerfilTab() {
         <div class="co-form-row">
           <div class="co-form-group">
             <label>Nome completo</label>
-            <input type="text" id="perfilNome" value="${perfil.nome}" />
+            <input type="text" id="perfilNome" value="${safeAttr(perfil.nome)}" />
           </div>
           <div class="co-form-group">
             <label>E-mail (não editável)</label>
-            <input type="email" value="${perfil.email}" disabled />
+            <input type="email" value="${safeAttr(perfil.email)}" disabled />
           </div>
         </div>
         <p id="perfilNomeMsg" class="perfil-msg" style="display:none"></p>
@@ -252,24 +252,24 @@ async function renderPerfilTab() {
           <div class="co-form-group" style="flex:2">
             <label>Rua, Número e Bairro *</label>
             <input type="text" id="endRua" placeholder="Rua das Flores, 123, Centro"
-              value="${perfil.endereco_rua || ''}" />
+              value="${safeAttr(perfil.endereco_rua || '')}" />
           </div>
           <div class="co-form-group">
             <label>CEP *</label>
             <input type="text" id="endCep" placeholder="00000-000" maxlength="9"
-              value="${perfil.cep || ''}" />
+              value="${safeAttr(perfil.cep || '')}" />
           </div>
         </div>
         <div class="co-form-row">
           <div class="co-form-group">
             <label>Cidade / Estado *</label>
             <input type="text" id="endCidade" placeholder="Porto Alegre / RS"
-              value="${perfil.cidade || ''}" />
+              value="${safeAttr(perfil.cidade || '')}" />
           </div>
           <div class="co-form-group">
             <label>Telefone</label>
             <input type="tel" id="endTelefone" placeholder="(54) 99999-9999"
-              value="${perfil.telefone || ''}" />
+              value="${safeAttr(perfil.telefone || '')}" />
           </div>
         </div>
         <p id="endMsg" class="perfil-msg" style="display:none"></p>
@@ -464,7 +464,7 @@ async function doLogin() {
   btn.disabled = true; btn.textContent = 'Entrando...';
   try {
     const data = await api.post('/auth/login', { email, senha });
-    localStorage.setItem('fc_token', data.token);
+    localStorage.removeItem('fc_token');
     localStorage.setItem('fc_user', JSON.stringify(data.user));
     showToast(`Bem-vindo, ${data.user.nome.split(' ')[0]}! `);
     contaTab = 'pedidos';
@@ -502,10 +502,10 @@ async function doRegister() {
   btn.disabled = true; btn.textContent = 'Criando...';
   try {
     const res = await api.post('/auth/register', { nome, email, senha, cpf, telefone });
-    if (res.requiresVerification === false && res.token) {
+    if (res.requiresVerification === false && res.user) {
       // Não foi possível enviar o código (ex.: domínio ainda não verificado
       // na Resend) — entra direto, sem travar o cadastro.
-      localStorage.setItem('fc_token', res.token);
+      localStorage.removeItem('fc_token');
       localStorage.setItem('fc_user', JSON.stringify(res.user));
       showToast(`Conta criada! Bem-vindo, ${res.user.nome.split(' ')[0]}!`);
       contaTab = 'pedidos';
@@ -531,7 +531,7 @@ function renderContaVerification(email) {
         </div>
         <div class="auth-form" style="display:flex">
           <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:.5rem">
-            Enviamos um código de 6 dígitos para <strong>${email}</strong>. Confira sua caixa de entrada (e o spam).
+            Enviamos um código de 6 dígitos para <strong id="contaVerifEmail"></strong>. Confira sua caixa de entrada (e o spam).
           </p>
           <label>Código de verificação</label>
           <input type="text" id="verifCodigo" placeholder="000000" maxlength="6" inputmode="numeric" style="letter-spacing:6px;font-size:1.2rem;text-align:center" />
@@ -542,6 +542,8 @@ function renderContaVerification(email) {
       </div>
     </div>
   `;
+
+  document.getElementById('contaVerifEmail').textContent = email;
 
   document.getElementById('verifCodigo')?.addEventListener('input', (e) => {
     e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
@@ -560,7 +562,7 @@ function renderContaVerification(email) {
     }
     try {
       const data = await api.post('/auth/verificar-email', { email, codigo });
-      localStorage.setItem('fc_token', data.token);
+      localStorage.removeItem('fc_token');
       localStorage.setItem('fc_user', JSON.stringify(data.user));
       showToast(`E-mail confirmado! Bem-vindo, ${data.user.nome.split(' ')[0]}!`);
       contaTab = 'pedidos';

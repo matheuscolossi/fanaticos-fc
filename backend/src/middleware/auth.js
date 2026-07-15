@@ -21,7 +21,18 @@ function buildCurrentUser(user) {
 
 function buildAuthMiddleware(jwtSecret) {
   return function authMiddleware(req, res, next) {
-    const token = req.headers.authorization?.split(' ')[1];
+    const authorization = req.headers.authorization || '';
+    const bearerToken = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+    const cookieToken = String(req.headers.cookie || '')
+      .split(';')
+      .map((part) => part.trim())
+      .find((part) => part.startsWith('fc_session='))
+      ?.slice('fc_session='.length);
+    let token = bearerToken;
+    if (cookieToken) {
+      try { token = decodeURIComponent(cookieToken); }
+      catch { return next(createHttpError(401, 'Invalid authentication token.', 'AUTH_TOKEN_INVALID')); }
+    }
     if (!token) return next(createHttpError(401, 'Authentication token is required.', 'AUTH_TOKEN_REQUIRED'));
 
     let tokenUser;

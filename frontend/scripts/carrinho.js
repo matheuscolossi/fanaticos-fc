@@ -32,31 +32,29 @@ function renderCartPage() {
           <span>Subtotal</span>
           <span></span>
         </div>
-        ${items.map(item => {
-          const itemKey = getItemKey(item);
+        ${items.map((item, index) => {
           const details = cartItemDetails(item);
-          const jsKey = JSON.stringify(itemKey);
           return `
           <div class="cart-page__item">
             <div class="cart-page__item-product">
               <div class="cart-page__item-img">
                 ${item.imagem
-                  ? `<img src="${item.imagem}" alt="${item.nome}" loading="lazy" decoding="async" />`
+                  ? `<img src="${safeUrl(item.imagem)}" alt="${safeAttr(item.nome)}" loading="lazy" decoding="async" />`
                   : `<div class="cart-page__item-placeholder"></div>`}
               </div>
               <div class="cart-page__item-info">
-                <div class="cart-page__item-nome">${item.nome}</div>
-                ${details ? `<div class="cart-page__item-details">${details}</div>` : ''}
+                <div class="cart-page__item-nome">${safeText(item.nome)}</div>
+                ${details ? `<div class="cart-page__item-details">${safeText(details)}</div>` : ''}
                 <div class="cart-page__item-preco">${formatBRL(item.preco)} / un.</div>
               </div>
             </div>
             <div class="cart-page__item-controls">
-              <button class="qty-btn" onclick='changeQty(${jsKey}, -1); renderCartPage()'>−</button>
+              <button class="qty-btn" data-page-action="decrease" data-item-index="${index}">−</button>
               <span class="cart-item__qty">${item.qty}</span>
-              <button class="qty-btn" onclick='changeQty(${jsKey}, +1); renderCartPage()'>+</button>
+              <button class="qty-btn" data-page-action="increase" data-item-index="${index}">+</button>
             </div>
             <div class="cart-page__item-subtotal">${formatBRL(item.preco * item.qty)}</div>
-            <button class="cart-page__item-remove" onclick='removeFromCart(${jsKey}); renderCartPage()' title="Remover item">
+            <button class="cart-page__item-remove" data-page-action="remove" data-item-index="${index}" title="Remover item">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="3 6 5 6 21 6"/>
                 <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
@@ -68,7 +66,7 @@ function renderCartPage() {
         `;
         }).join('')}
         <div class="cart-page__items-footer">
-          <button class="btn btn--ghost btn--sm" onclick="cartPageClearAll()"> Limpar carrinho</button>
+          <button class="btn btn--ghost btn--sm" id="btnLimparCarrinho"> Limpar carrinho</button>
         </div>
       </div>
 
@@ -88,13 +86,13 @@ function renderCartPage() {
         </div>
 
         <div class="cart-page__cupom">
-          <input type="text" id="inputCepFrete" placeholder="CEP para calcular o frete" maxlength="9" value="${getCepFrete()}" />
+          <input type="text" id="inputCepFrete" placeholder="CEP para calcular o frete" maxlength="9" value="${safeAttr(getCepFrete())}" />
           <button class="btn btn--outline btn--sm" id="btnCalcularFrete">Calcular</button>
         </div>
         <p class="cart-summary__cupom-msg" id="cepMsg"></p>
 
         <div class="cart-page__cupom">
-          <input type="text" id="inputCupom" placeholder="Código do cupom (ex: URI10)" value="${getCupomAplicado()}" />
+          <input type="text" id="inputCupom" placeholder="Código do cupom (ex: URI10)" value="${safeAttr(getCupomAplicado())}" />
           <button class="btn btn--outline btn--sm" id="btnAplicarCupom">Aplicar</button>
         </div>
         <p class="cart-summary__cupom-msg" id="cupomMsg"></p>
@@ -111,6 +109,17 @@ function renderCartPage() {
     </div>
   `;
 
+  layout.querySelectorAll('[data-page-action]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const item = items[Number(button.dataset.itemIndex)];
+      if (!item) return;
+      const key = getItemKey(item);
+      if (button.dataset.pageAction === 'remove') removeFromCart(key);
+      else changeQty(key, button.dataset.pageAction === 'increase' ? 1 : -1);
+      renderCartPage();
+    });
+  });
+  document.getElementById('btnLimparCarrinho').addEventListener('click', cartPageClearAll);
   document.getElementById('btnCartCheckout').addEventListener('click', checkout);
   document.getElementById('btnAplicarCupom').addEventListener('click', () => {
     setCupomAplicado(document.getElementById('inputCupom').value.trim());

@@ -103,31 +103,39 @@ function renderCart() {
     return;
   }
 
-  body.innerHTML = cartItems.map(item => {
-    const itemKey = getItemKey(item);
+  body.innerHTML = cartItems.map((item, index) => {
     const details = cartItemDetails(item);
-    const jsKey = JSON.stringify(itemKey);
     return `
     <div class="cart-item">
       <div class="cart-item__img">
         ${item.imagem
-          ? `<img src="${item.imagem}" alt="${item.nome}" loading="lazy" decoding="async" />`
+          ? `<img src="${safeUrl(item.imagem)}" alt="${safeAttr(item.nome)}" loading="lazy" decoding="async" />`
           : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:.72rem;color:var(--text-dim);text-align:center;">Sem imagem</div>`}
       </div>
       <div class="cart-item__info">
-        <div class="cart-item__nome">${item.nome}</div>
-        ${details ? `<div class="cart-item__details">${details}</div>` : ''}
+        <div class="cart-item__nome">${safeText(item.nome)}</div>
+        ${details ? `<div class="cart-item__details">${safeText(details)}</div>` : ''}
         <div class="cart-item__preco">${formatBRL(item.preco)}</div>
         <div class="cart-item__controls">
-          <button class="qty-btn" onclick='changeQty(${jsKey}, -1)'>−</button>
+          <button class="qty-btn" data-cart-action="decrease" data-cart-index="${index}">−</button>
           <span class="cart-item__qty">${item.qty}</span>
-          <button class="qty-btn" onclick='changeQty(${jsKey}, +1)'>+</button>
-          <span class="cart-item__remove" onclick='removeFromCart(${jsKey})'>Remover</span>
+          <button class="qty-btn" data-cart-action="increase" data-cart-index="${index}">+</button>
+          <button type="button" class="cart-item__remove" data-cart-action="remove" data-cart-index="${index}">Remover</button>
         </div>
       </div>
     </div>
   `;
   }).join('');
+
+  body.querySelectorAll('[data-cart-action]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const item = cartItems[Number(button.dataset.cartIndex)];
+      if (!item) return;
+      const key = getItemKey(item);
+      if (button.dataset.cartAction === 'remove') removeFromCart(key);
+      else changeQty(key, button.dataset.cartAction === 'increase' ? 1 : -1);
+    });
+  });
 
   if (footer) {
     footer.style.display = 'block';
@@ -153,7 +161,9 @@ function goToCartPage() {
 
 async function checkout() {
   if (cartItems.length === 0) return;
-  if (!localStorage.getItem('fc_token')) {
+  try {
+    await api.get('/auth/perfil');
+  } catch (_) {
     closeCart();
     showToast('Faça login para finalizar o pedido.', 'error');
     openAuthModal('login');
@@ -172,7 +182,7 @@ function closeCheckoutModal() {
 async function renderCheckoutStep1() {
   const content = document.getElementById('checkoutContent');
   const linhasResumo = cartItems.map(i =>
-    `<div class="co-resumo-item"><span>${i.nome} <em>x${i.qty}</em></span><span>${formatBRL(i.preco * i.qty)}</span></div>`
+    `<div class="co-resumo-item"><span>${safeText(i.nome)} <em>x${Number(i.qty) || 0}</em></span><span>${formatBRL(i.preco * i.qty)}</span></div>`
   ).join('');
 
   // Reaproveita o resumo já calculado na página de carrinho (com frete e
@@ -412,7 +422,7 @@ function renderCheckoutVerification(email, dadosForm) {
     </div>
     <div class="co-form">
       <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:.5rem">
-        Para sua segurança, confirme o código de 6 dígitos enviado para <strong>${email}</strong> antes de finalizar a compra.
+        Para sua segurança, confirme o código de 6 dígitos enviado para <strong id="checkoutVerifEmail"></strong> antes de finalizar a compra.
       </p>
       <label>Código de verificação</label>
       <input type="text" id="verifCodigoCheckout" placeholder="000000" maxlength="6" inputmode="numeric" style="letter-spacing:6px;font-size:1.2rem;text-align:center" />
@@ -421,6 +431,8 @@ function renderCheckoutVerification(email, dadosForm) {
       <button class="btn btn--outline" id="btnVerifReenviarCheckout" style="margin-top:.5rem">Reenviar código</button>
     </div>
   `;
+
+  document.getElementById('checkoutVerifEmail').textContent = email;
 
   document.getElementById('btnFecharCheckout').addEventListener('click', closeCheckoutModal);
   document.getElementById('verifCodigoCheckout')?.addEventListener('input', (e) => {
@@ -623,7 +635,7 @@ async function buscarRastreio() {
         <div class="tracking-status-badge">
           <span>${info.icon}</span>
           <div>
-            <strong>${info.label}</strong>
+            <strong>${safeText(info.label)}</strong>
             <small>Pedido #${pedido.id} · ${formatBRL(pedido.total)}</small>
           </div>
         </div>
@@ -638,7 +650,7 @@ async function buscarRastreio() {
         ${pedido.codigo_rastreio ? `
           <div class="tracking-code-box">
             <span>Código de Rastreio</span>
-            <strong id="trackCode">${pedido.codigo_rastreio}</strong>
+            <strong id="trackCode">${safeText(pedido.codigo_rastreio)}</strong>
             <button class="btn btn--outline btn--sm" id="btnCopyTrack">Copiar</button>
           </div>
         ` : ''}

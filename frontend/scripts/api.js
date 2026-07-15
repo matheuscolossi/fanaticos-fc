@@ -1,20 +1,30 @@
-// O domínio público serve o frontend; a API permanece hospedada no Render.
-// Pode ser substituída por FANATICOS_API_BASE em ambientes locais/staging.
-const DEFAULT_API_BASE = 'https://fanaticos-fc.onrender.com/api';
+// Em produção, /api é encaminhado pelo Vercel ao Render para manter a sessão
+// HttpOnly no mesmo site. FANATICOS_API_BASE pode substituir isso em staging.
+const IS_LOCAL_FRONTEND = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+const DEFAULT_API_BASE = IS_LOCAL_FRONTEND
+  ? 'http://localhost:3001/api'
+  : (window.location.protocol === 'file:' ? 'https://fanaticos-fc.onrender.com/api' : '/api');
 const API_BASE = window.FANATICOS_API_BASE || DEFAULT_API_BASE;
 let STRIPE_PUBLISHABLE_KEY = window.FANATICOS_STRIPE_PUBLISHABLE || '';
 
+// Remove tokens legados assim que qualquer página carrega. Sessões antigas
+// precisarão autenticar uma vez para receber o novo cookie HttpOnly.
+localStorage.removeItem('fc_token');
+
 async function apiFetch(path, options = {}) {
-  const token = localStorage.getItem('fc_token');
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const method = String(options.method || 'GET').toUpperCase();
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) headers['X-CSRF-Protection'] = '1';
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+    credentials: 'include',
+  });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
     const sessionInvalid = res.status === 401
       || (res.status === 403 && ['ACCESS_DISABLED', 'AUTH_USER_NOT_FOUND'].includes(err.code));
     if (sessionInvalid) {
-      localStorage.removeItem('fc_token');
       localStorage.removeItem('fc_user');
       // Na página admin: mostra o painel de login restrito
       const loginRequired = document.getElementById('loginRequired');
@@ -27,7 +37,33 @@ async function apiFetch(path, options = {}) {
     error.code = err.code;
     throw error;
   }
+  if (res.status === 204) return null;
   return res.json();
+}
+
+// Dados externos nunca devem ser interpolados crus em innerHTML. Use safeText
+// para conteúdo, safeAttr para atributos e safeUrl para src/href.
+function safeText(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function safeAttr(value) {
+  return safeText(value).replace(/`/g, '&#96;');
+}
+
+function safeUrl(value) {
+  try {
+    const url = new URL(String(value || ''), window.location.origin);
+    if (!['http:', 'https:', 'blob:'].includes(url.protocol)) return '';
+    return safeAttr(url.href);
+  } catch {
+    return '';
+  }
 }
 
 const api = {
@@ -45,6 +81,7 @@ async function fetchCartSummary(items, cupomCode, uf) {
   const res = await fetch(`${CART_ROOT_BASE}/cart`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ items, cupomCode, uf }),
   });
   if (!res.ok) {

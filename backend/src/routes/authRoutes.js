@@ -8,6 +8,7 @@ module.exports = ({ authMiddleware, jwtSecret }) => {
 
   router.post('/register', asyncHandler(controller.register));
   router.post('/login', asyncHandler(controller.login));
+  router.post('/logout', controller.logout);
   router.post('/verificar-email', asyncHandler(controller.verificarEmail));
   router.post('/reenviar-codigo', asyncHandler(controller.reenviarCodigo));
   router.get('/perfil', authMiddleware, asyncHandler(controller.profile));

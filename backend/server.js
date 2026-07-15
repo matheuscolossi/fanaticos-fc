@@ -20,6 +20,7 @@ const logRoutes = require('./src/routes/logRoutes');
 const specRoutes = require('./src/routes/specRoutes');
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) { console.error('[api] JWT_SECRET não definido'); process.exit(1); }
@@ -41,6 +42,22 @@ app.use(cors({
   credentials: true,
 }));
 
+// Cabeçalhos de defesa em profundidade para a API. A CSP principal do frontend
+// é enviada pelo Vercel (frontend/vercel.json).
+app.use((req, res, next) => {
+  if (req.path.startsWith('/docs')) {
+    res.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'");
+    return next();
+  }
+  res.set({
+    'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+  });
+  next();
+});
+
 // O Stripe exige o corpo exatamente como recebido para validar a assinatura.
 // Este parser precisa ficar antes do express.json() global.
 app.use('/api/pagamentos/stripe/webhook', express.raw({ type: 'application/json' }));
@@ -48,6 +65,18 @@ app.use('/api/pagamentos/webhook', express.raw({ type: 'application/json' }));
 app.use('/api/payments/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '10mb' }));
+
+// Sessões em cookie SameSite=None precisam de proteção explícita contra CSRF.
+// Requisições mutáveis do site enviam este cabeçalho e só origens permitidas passam.
+app.use((req, res, next) => {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
+  if (!String(req.headers.cookie || '').includes('fc_session=')) return next();
+  const origin = req.headers.origin;
+  if (!origin || !allowedOrigins.includes(origin) || req.get('X-CSRF-Protection') !== '1') {
+    return res.status(403).json({ error: 'Requisição bloqueada pela proteção CSRF.', code: 'CSRF_BLOCKED' });
+  }
+  next();
+});
 
 // Documentação mínima da API (Swagger/OpenAPI), exigida pelo PDF do trabalho
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(openapiSpec));

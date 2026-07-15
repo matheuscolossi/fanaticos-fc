@@ -282,8 +282,8 @@ function renderLigaView(produtos) {
             <div class="time-header" onclick="toggleAccordion('${timeId}_body','${timeId}_arrow')">
               <div class="time-header__left">
                 <span class="time-arrow" id="${timeId}_arrow">${timeOpen ? '▼' : '▶'}</span>
-                <span class="time-nome">${time}</span>
-                <span class="time-liga">${liga}</span>
+                <span class="time-nome">${safeText(time)}</span>
+                <span class="time-liga">${safeText(liga)}</span>
               </div>
               <span class="time-count">${prods.length} produto${prods.length !== 1 ? 's' : ''}</span>
             </div>
@@ -312,13 +312,13 @@ function renderLigaView(produtos) {
                     <td>
                       <div class="td-img">
                         ${img
-                          ? `<img src="${img}" alt="${p.nome}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="td-img-placeholder" style="display:none"></div>`
+                          ? `<img src="${safeUrl(img)}" alt="${safeAttr(p.nome)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="td-img-placeholder" style="display:none"></div>`
                           : `<div class="td-img-placeholder"></div>`}
                       </div>
                     </td>
                     <td>
-                      <span class="td-nome" title="${p.nome}">${p.nome}</span>
-                      ${p.sku ? `<div class="td-sku">${p.sku}</div>` : ''}
+                      <span class="td-nome" title="${safeAttr(p.nome)}">${safeText(p.nome)}</span>
+                      ${p.sku ? `<div class="td-sku">${safeText(p.sku)}</div>` : ''}
                     </td>
                     <td>
                       ${hasPromo
@@ -333,7 +333,7 @@ function renderLigaView(produtos) {
                         <div class="action-dropdown__menu">
                           <div class="action-dropdown__item" onclick="closeAllDropdowns();openEditModal(${p.id})">Editar</div>
                           <div class="action-dropdown__item" onclick="closeAllDropdowns();duplicateProduto(${p.id})">Duplicar</div>
-                          <div class="action-dropdown__item" onclick="closeAllDropdowns();toggleStatus(${p.id},'${p.status||'ativo'}')">
+                          <div class="action-dropdown__item" onclick="closeAllDropdowns();toggleStatus(${p.id},'${isAtivo ? 'ativo' : 'inativo'}')">
                             ${isAtivo ? 'Desativar' : 'Ativar'}
                           </div>
                           <div class="action-dropdown__item" onclick="closeAllDropdowns();toggleDestaque(${p.id},${!!p.destaque})">
@@ -365,14 +365,8 @@ function renderLigaView(produtos) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function checkAdminAuth() {
-  const token = localStorage.getItem('fc_token');
-  if (!token) {
-    document.getElementById('loginRequired').style.display = 'flex';
-    return false;
-  }
-
   try {
-    // O localStorage é apenas um cache visual. A autorização real vem do backend.
+    // A autorização e a sessão HttpOnly são sempre validadas pelo backend.
     const user = await api.get('/auth/perfil');
     if (!user || user.perfil !== 'admin') {
       localStorage.removeItem('fc_user');
@@ -493,7 +487,7 @@ function renderDashboard(data) {
           ${data.top_produtos.map((p, i) => `
             <tr>
               <td class="dash-rank">${i + 1}</td>
-              <td title="${p.nome}" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.nome}</td>
+              <td title="${safeAttr(p.nome)}" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${safeText(p.nome)}</td>
               <td><strong>${p.vendido}</strong></td>
               <td class="td-preco">${formatBRL(p.receita)}</td>
             </tr>
@@ -516,7 +510,7 @@ function renderDashboard(data) {
             return `
             <tr>
               <td><strong>#${p.id}</strong></td>
-              <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.nome_cliente || '—'}</td>
+              <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${safeText(p.nome_cliente || '—')}</td>
               <td class="td-preco">${formatBRL(p.total)}</td>
               <td><span style="color:${st.color};font-size:.76rem;font-weight:600">${st.label}</span></td>
             </tr>`;
@@ -712,17 +706,17 @@ function renderTabelaProdutos() {
             <td>
               <div class="td-img">
                 ${img
-                  ? `<img src="${img}" alt="${p.nome}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="td-img-placeholder" style="display:none"></div>`
+                  ? `<img src="${safeUrl(img)}" alt="${safeAttr(p.nome)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="td-img-placeholder" style="display:none"></div>`
                   : `<div class="td-img-placeholder"></div>`}
               </div>
             </td>
             <td>
-              <span class="td-nome" title="${p.nome}">${p.nome}</span>
-              ${p.sku ? `<div class="td-sku">${p.sku}</div>` : ''}
+              <span class="td-nome" title="${safeAttr(p.nome)}">${safeText(p.nome)}</span>
+              ${p.sku ? `<div class="td-sku">${safeText(p.sku)}</div>` : ''}
             </td>
-            <td><span class="td-cat">${p.categoria_nome || '—'}</span></td>
-            <td><span class="td-cat">${p.time || '—'}</span></td>
-            <td><span class="td-cat">${p.tipo || '—'}</span></td>
+            <td><span class="td-cat">${safeText(p.categoria_nome || '—')}</span></td>
+            <td><span class="td-cat">${safeText(p.time || '—')}</span></td>
+            <td><span class="td-cat">${safeText(p.tipo || '—')}</span></td>
             <td>
               ${hasPromo
                 ? `<div class="td-preco td-preco--riscado">${formatBRL(p.preco)}</div><div class="td-preco td-preco--promo">${formatBRL(p.preco_promocional)}</div>`
@@ -737,7 +731,7 @@ function renderTabelaProdutos() {
                 <div class="action-dropdown__menu">
                   <div class="action-dropdown__item" onclick="closeAllDropdowns();openEditModal(${p.id})">Editar</div>
                   <div class="action-dropdown__item" onclick="closeAllDropdowns();duplicateProduto(${p.id})">Duplicar</div>
-                  <div class="action-dropdown__item" onclick="closeAllDropdowns();toggleStatus(${p.id},'${p.status||'ativo'}')">
+                  <div class="action-dropdown__item" onclick="closeAllDropdowns();toggleStatus(${p.id},'${isAtivo ? 'ativo' : 'inativo'}')">
                     ${isAtivo ? 'Desativar' : 'Ativar'}
                   </div>
                   <div class="action-dropdown__item" onclick="closeAllDropdowns();toggleDestaque(${p.id},${!!p.destaque})">
@@ -861,19 +855,19 @@ function renderTabelaCategorias() {
             <td>
               <div class="td-img">
                 ${c.imagem
-                  ? `<img src="${c.imagem}" alt="${c.nome}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="td-img-placeholder" style="display:none"></div>`
+                  ? `<img src="${safeUrl(c.imagem)}" alt="${safeAttr(c.nome)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="td-img-placeholder" style="display:none"></div>`
                   : `<div class="td-img-placeholder"></div>`}
               </div>
             </td>
-            <td><span class="td-nome">${c.nome}</span></td>
-            <td><span class="td-cat">${c.categoria_pai_nome || '—'}</span></td>
+            <td><span class="td-nome">${safeText(c.nome)}</span></td>
+            <td><span class="td-cat">${safeText(c.categoria_pai_nome || '—')}</span></td>
             <td>${c.ordem ?? 0}</td>
             <td><span class="td-badge ${prodCount > 0 ? '' : 'td-badge--off'}">${prodCount}</span></td>
             <td><span class="td-status ${isAtivo ? 'td-status-ativo' : 'td-status-inativo'}">${isAtivo ? 'Ativo' : 'Inativo'}</span></td>
             <td>
               <div class="td-actions">
                 <button class="btn btn--outline btn--sm" onclick="openEditCategoriaModal(${c.id})">Editar</button>
-                <button class="btn btn--outline btn--sm" onclick="toggleCategoriaStatus(${c.id},'${c.status || 'ativo'}')">${isAtivo ? 'Desativar' : 'Ativar'}</button>
+                <button class="btn btn--outline btn--sm" onclick="toggleCategoriaStatus(${c.id},'${isAtivo ? 'ativo' : 'inativo'}')">${isAtivo ? 'Desativar' : 'Ativar'}</button>
                 <button class="btn btn--danger btn--sm" onclick="confirmDeleteCategoria(${c.id})">Excluir</button>
               </div>
             </td>
@@ -901,7 +895,7 @@ function renderCatImagePreview() {
   const preview = document.getElementById('catImagePreview');
   if (!preview) return;
   preview.innerHTML = editingCategoriaImagem
-    ? `<div class="preview-img"><img src="${editingCategoriaImagem}" alt="Categoria" onerror="this.style.display='none'" /><div class="preview-img__remove" onclick="removeCatImage()"></div></div>`
+    ? `<div class="preview-img"><img src="${safeUrl(editingCategoriaImagem)}" alt="Categoria" onerror="this.style.display='none'" /><div class="preview-img__remove" onclick="removeCatImage()"></div></div>`
     : '';
 }
 
@@ -1013,12 +1007,12 @@ function confirmDeleteCategoria(id) {
     body.innerHTML = `
       <p>Esta categoria possui <strong>${prodcount} produto(s)</strong> vinculado(s). Escolha uma categoria de destino para transferi-los antes de excluir:</p>
       <select id="catTransferirPara" class="admin-filter-select" style="width:100%;margin-top:.5rem">
-        ${outras.map(o => `<option value="${o.id}">${o.nome}</option>`).join('')}
+        ${outras.map(o => `<option value="${Number(o.id)}">${safeText(o.nome)}</option>`).join('')}
       </select>
     `;
     btnConfirm.style.display = '';
   } else {
-    body.innerHTML = `<p>Tem certeza que deseja excluir a categoria <strong>${c.nome}</strong>? Esta ação não pode ser desfeita.</p>`;
+    body.innerHTML = `<p>Tem certeza que deseja excluir a categoria <strong>${safeText(c.nome)}</strong>? Esta ação não pode ser desfeita.</p>`;
     btnConfirm.style.display = '';
   }
 
@@ -1119,8 +1113,8 @@ function renderImagePreview() {
   preview.innerHTML = editingImages.map((img, i) => {
     const isUrl = img && img.startsWith('http') && !img.startsWith('data:');
     return `
-    <div class="preview-img" title="${isUrl ? img : 'Upload local'}">
-      <img src="${img}" alt="Foto ${i+1}" onerror="this.style.display='none'" />
+    <div class="preview-img" title="${safeAttr(isUrl ? img : 'Upload local')}">
+      <img src="${safeUrl(img)}" alt="Foto ${i+1}" onerror="this.style.display='none'" />
       <div class="preview-img__err" style="display:none;position:absolute;inset:0;background:var(--bg-card2);align-items:center;justify-content:center;font-size:.65rem;color:var(--text-muted);text-align:center;padding:.2rem">Erro</div>
       <div class="preview-img__remove" onclick="removePreviewImg(${i})"></div>
       <div class="preview-img__move">
@@ -1335,7 +1329,7 @@ function verDetalhesPedido(id) {
     : 'Pagamento legado';
   const itensHtml = p.itens.map(i =>
     `<div style="display:flex;justify-content:space-between;padding:.35rem 0;border-bottom:1px solid var(--border)">
-      <span>${i.nome} <em style="color:var(--text-muted)">x${i.qty}</em></span>
+      <span>${safeText(i.nome)} <em style="color:var(--text-muted)">x${Number(i.qty) || 0}</em></span>
       <span>${formatBRL(i.preco * i.qty)}</span>
     </div>`
   ).join('');
@@ -1353,7 +1347,7 @@ function verDetalhesPedido(id) {
       <div style="padding:0 1.25rem 1.25rem">
         <!-- Status -->
         <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:1.25rem">
-          <span style="background:${st.color}22;color:${st.color};padding:.3rem .75rem;border-radius:20px;font-size:.82rem;font-weight:600">${st.label}</span>
+          <span style="background:${st.color}22;color:${st.color};padding:.3rem .75rem;border-radius:20px;font-size:.82rem;font-weight:600">${safeText(st.label)}</span>
           <span style="color:var(--text-muted);font-size:.8rem">${new Date(p.created_at).toLocaleString('pt-BR')}</span>
         </div>
 
@@ -1361,7 +1355,7 @@ function verDetalhesPedido(id) {
         <div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:1rem">
           <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:.5rem">Endereço de Entrega</div>
           ${p.endereco
-            ? `<div style="font-size:.95rem;font-weight:500;line-height:1.6">${p.endereco.replace(/ — /g, '<br>')}</div>`
+            ? `<div style="font-size:.95rem;font-weight:500;line-height:1.6">${safeText(p.endereco).replace(/ — /g, '<br>')}</div>`
             : '<div style="color:var(--text-muted);font-size:.85rem">Não informado</div>'}
         </div>
 
@@ -1369,9 +1363,9 @@ function verDetalhesPedido(id) {
         <div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:1rem">
           <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:.5rem">Dados do Cliente</div>
           <div style="display:grid;gap:.35rem;font-size:.88rem">
-            ${p.nome_cliente ? `<div><span style="color:var(--text-muted)">Nome:</span> <strong>${p.nome_cliente}</strong></div>` : ''}
-            ${p.telefone_cliente ? `<div><span style="color:var(--text-muted)">Telefone:</span> ${p.telefone_cliente}</div>` : ''}
-            ${p.email_cliente ? `<div><span style="color:var(--text-muted)">E-mail:</span> ${p.email_cliente}</div>` : ''}
+            ${p.nome_cliente ? `<div><span style="color:var(--text-muted)">Nome:</span> <strong>${safeText(p.nome_cliente)}</strong></div>` : ''}
+            ${p.telefone_cliente ? `<div><span style="color:var(--text-muted)">Telefone:</span> ${safeText(p.telefone_cliente)}</div>` : ''}
+            ${p.email_cliente ? `<div><span style="color:var(--text-muted)">E-mail:</span> ${safeText(p.email_cliente)}</div>` : ''}
           </div>
         </div>
 
@@ -1387,13 +1381,13 @@ function verDetalhesPedido(id) {
         <!-- Pagamento -->
         <div style="display:flex;gap:.75rem;font-size:.85rem;color:var(--text-muted)">
           <span>Pagamento: <strong style="color:var(--text)">${metodo}</strong></span>
-          ${p.payment_status ? `<span>| Status financeiro: <strong style="color:var(--text)">${p.payment_status}</strong></span>` : ''}
-          ${p.codigo_rastreio ? `<span>| Rastreio: <strong style="color:var(--text)">${p.codigo_rastreio}</strong></span>` : ''}
+          ${p.payment_status ? `<span>| Status financeiro: <strong style="color:var(--text)">${safeText(p.payment_status)}</strong></span>` : ''}
+          ${p.codigo_rastreio ? `<span>| Rastreio: <strong style="color:var(--text)">${safeText(p.codigo_rastreio)}</strong></span>` : ''}
         </div>
         ${p.stripe_session_id ? `
         <div style="margin-top:.75rem;font-size:.74rem;color:var(--text-dim);word-break:break-all">
-          <div>Stripe Session: ${p.stripe_session_id}</div>
-          ${p.stripe_payment_intent_id ? `<div>Payment Intent: ${p.stripe_payment_intent_id}</div>` : ''}
+          <div>Stripe Session: ${safeText(p.stripe_session_id)}</div>
+          ${p.stripe_payment_intent_id ? `<div>Payment Intent: ${safeText(p.stripe_payment_intent_id)}</div>` : ''}
         </div>` : ''}
 
         <!-- Ações -->
@@ -1479,18 +1473,18 @@ function renderPedidos() {
             <tr id="pedido-row-${p.id}">
               <td><strong>#${p.id}</strong></td>
               <td>
-                ${p.nome_cliente ? `<div style="font-weight:600">${p.nome_cliente}</div>` : '<span style="color:var(--text-muted)">—</span>'}
-                ${p.telefone_cliente ? `<div style="font-size:.78rem;color:var(--text-muted)">${p.telefone_cliente}</div>` : ''}
-                ${p.email_cliente ? `<div style="font-size:.78rem;color:var(--text-muted)">${p.email_cliente}</div>` : ''}
-                ${p.endereco ? `<div style="font-size:.75rem;color:var(--text-dim);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${p.endereco}">${p.endereco}</div>` : ''}
+                ${p.nome_cliente ? `<div style="font-weight:600">${safeText(p.nome_cliente)}</div>` : '<span style="color:var(--text-muted)">—</span>'}
+                ${p.telefone_cliente ? `<div style="font-size:.78rem;color:var(--text-muted)">${safeText(p.telefone_cliente)}</div>` : ''}
+                ${p.email_cliente ? `<div style="font-size:.78rem;color:var(--text-muted)">${safeText(p.email_cliente)}</div>` : ''}
+                ${p.endereco ? `<div style="font-size:.75rem;color:var(--text-dim);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${safeAttr(p.endereco)}">${safeText(p.endereco)}</div>` : ''}
               </td>
               <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                ${p.itens.map(i => `${i.nome} (x${i.qty})`).join(', ')}
+                ${p.itens.map(i => `${safeText(i.nome)} (x${Number(i.qty) || 0})`).join(', ')}
               </td>
               <td><span class="td-preco">${formatBRL(p.total)}</span></td>
               <td><span style="font-size:.82rem">${metodoIcon}</span></td>
               <td>
-                <div style="margin-bottom:4px;font-size:.75rem;font-weight:600;color:${st.color}">${st.label}</div>
+                <div style="margin-bottom:4px;font-size:.75rem;font-weight:600;color:${st.color}">${safeText(st.label)}</div>
                 <select class="pedido-status-select" data-id="${p.id}" onchange="salvarStatusPedido(${p.id})">
                   ${Object.entries(STATUS_PEDIDO).map(([val, info]) =>
                     `<option value="${val}" ${p.status === val ? 'selected' : ''}>${info.label}</option>`
@@ -1500,7 +1494,7 @@ function renderPedidos() {
               <td>
                 <div style="display:flex;gap:4px;align-items:center">
                   <input type="text" class="pedido-rastreio-input" data-id="${p.id}"
-                    value="${p.codigo_rastreio || ''}" placeholder="Cód. rastreio"
+                    value="${safeAttr(p.codigo_rastreio || '')}" placeholder="Cód. rastreio"
                     style="width:120px;font-size:.8rem;padding:4px 8px;background:var(--bg-card2);border:1px solid var(--border);color:var(--text);border-radius:6px" />
                   <button class="btn btn--outline btn--sm" onclick="salvarRastreioPedido(${p.id})" title="Salvar rastreio">Salvar</button>
                 </div>
@@ -1589,9 +1583,9 @@ async function loadUsuarios() {
             const isSelf = currentUser && String(currentUser.id) === String(u.id);
             return `
             <tr>
-              <td style="font-weight:600">${u.nome}${isSelf ? ' <span style="color:var(--text-dim);font-size:.75rem">(você)</span>' : ''}</td>
-              <td style="color:var(--text-muted)">${u.email}</td>
-              <td><span class="td-badge ${u.perfil === 'admin' ? '' : 'td-badge--off'}">${u.perfil}</span></td>
+              <td style="font-weight:600">${safeText(u.nome)}${isSelf ? ' <span style="color:var(--text-dim);font-size:.75rem">(você)</span>' : ''}</td>
+              <td style="color:var(--text-muted)">${safeText(u.email)}</td>
+              <td><span class="td-badge ${u.perfil === 'admin' ? '' : 'td-badge--off'}">${safeText(u.perfil)}</span></td>
               <td>${u.pedidos_count ?? 0}</td>
               <td style="color:var(--text-muted);font-size:.82rem">${new Date(u.created_at).toLocaleString('pt-BR')}</td>
               <td>
@@ -1616,7 +1610,7 @@ function confirmDeleteUsuario(id) {
   const body = document.getElementById('usuarioDeleteBody');
   const pedidos = Number(u.pedidos_count || 0);
   body.innerHTML = `
-    <p>Tem certeza que deseja excluir o usuário <strong>${u.nome}</strong> (${u.email})?</p>
+    <p>Tem certeza que deseja excluir o usuário <strong>${safeText(u.nome)}</strong> (${safeText(u.email)})?</p>
     ${pedidos > 0 ? `<p style="color:var(--text-muted);font-size:.85rem;margin-top:.5rem">Este usuário possui ${pedidos} pedido(s) — eles serão mantidos no histórico, apenas desvinculados da conta.</p>` : ''}
     <p style="color:var(--danger);font-size:.85rem;margin-top:.5rem">Esta ação não pode ser desfeita.</p>
   `;
@@ -1751,9 +1745,8 @@ function clearSelection() {
 
 async function exportarCSV() {
   try {
-    const token = localStorage.getItem('fc_token');
     const res = await fetch(`${API_BASE}/produtos/export`, {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
     });
     if (!res.ok) throw new Error('Erro ao exportar');
     const blob = await res.blob();
@@ -1907,8 +1900,8 @@ function renderTabelaCupons() {
           const usoLimite = c.limite_uso_total ? `${c.uso_total}/${c.limite_uso_total}` : `${c.uso_total}/∞`;
           return `
           <tr>
-            <td style="font-weight:700">${c.codigo}${c.frete_gratis ? ' <span class=\"td-badge\">Frete grátis</span>' : ''}</td>
-            <td style="color:var(--text-muted)">${c.descricao || '—'}</td>
+            <td style="font-weight:700">${safeText(c.codigo)}${c.frete_gratis ? ' <span class=\"td-badge\">Frete grátis</span>' : ''}</td>
+            <td style="color:var(--text-muted)">${safeText(c.descricao || '—')}</td>
             <td>${_formatCupomValor(c)}</td>
             <td>${c.valor_minimo_compra ? formatBRL(c.valor_minimo_compra) : '—'}</td>
             <td style="color:var(--text-muted);font-size:.82rem">${_formatCupomValidade(c)}</td>
@@ -1922,7 +1915,7 @@ function renderTabelaCupons() {
                 <div class="action-dropdown__menu">
                   <div class="action-dropdown__item" onclick="closeAllDropdowns();openEditCupomModal(${c.id})">Editar</div>
                   <div class="action-dropdown__item" onclick="closeAllDropdowns();duplicarCupomAdmin(${c.id})">Duplicar</div>
-                  <div class="action-dropdown__item" onclick="closeAllDropdowns();toggleCupomStatus(${c.id},'${c.status}')">${isAtivo ? 'Desativar' : 'Ativar'}</div>
+                  <div class="action-dropdown__item" onclick="closeAllDropdowns();toggleCupomStatus(${c.id},'${isAtivo ? 'ativo' : 'inativo'}')">${isAtivo ? 'Desativar' : 'Ativar'}</div>
                   <div class="action-dropdown__item" onclick="closeAllDropdowns();verUsosCupom(${c.id})">Ver utilizações</div>
                   <div class="action-dropdown__sep"></div>
                   <div class="action-dropdown__item action-dropdown__item--danger" onclick="closeAllDropdowns();confirmDeleteCupom(${c.id})">Excluir</div>
@@ -1948,9 +1941,13 @@ function _populateCupomMultiSelect(selectId, filterId, items, labelFn, selectedI
   const sel = document.getElementById(selectId);
   if (!sel) return;
   const selecionados = selectedIds.map(String);
-  sel.innerHTML = items.map(item => `
-    <option value="${item.id}" ${selecionados.includes(String(item.id)) ? 'selected' : ''}>${labelFn(item)}</option>
-  `).join('');
+  sel.replaceChildren(...items.map((item) => {
+    const option = document.createElement('option');
+    option.value = String(item.id);
+    option.selected = selecionados.includes(String(item.id));
+    option.textContent = labelFn(item);
+    return option;
+  }));
 
   const filtro = document.getElementById(filterId);
   if (filtro) {
@@ -2081,7 +2078,7 @@ function confirmDeleteCupom(id) {
   if (!c) return;
   cupomDeleteTargetId = id;
   document.getElementById('cupomDeleteBody').innerHTML =
-    `<p>Tem certeza que deseja excluir o cupom <strong>${c.codigo}</strong>? Esta ação não pode ser desfeita.</p>`;
+    `<p>Tem certeza que deseja excluir o cupom <strong>${safeText(c.codigo)}</strong>? Esta ação não pode ser desfeita.</p>`;
   document.getElementById('cupomDeleteOverlay').style.display = 'flex';
 }
 
@@ -2124,7 +2121,7 @@ async function verUsosCupom(id) {
           ${pedidos.map(p => `
             <tr>
               <td>#${p.id}</td>
-              <td>${p.nome_cliente || p.email_cliente || '—'}</td>
+              <td>${safeText(p.nome_cliente || p.email_cliente || '—')}</td>
               <td>${formatBRL(p.cupom_desconto || 0)}</td>
               <td>${formatBRL(p.total)}</td>
               <td style="font-size:.8rem;color:var(--text-muted)">${new Date(p.created_at).toLocaleString('pt-BR')}</td>
@@ -2193,10 +2190,10 @@ function renderTabelaPromocoes() {
           const isAtivo = p.status === 'ativo';
           return `
           <tr>
-            <td style="font-weight:700">${p.nome}</td>
-            <td>${PROMO_TIPO_LABEL[p.tipo] || p.tipo}</td>
-            <td style="font-size:.82rem">${_formatPromoValor(p)}</td>
-            <td style="color:var(--text-muted);font-size:.82rem">${_formatCupomValidade(p)}</td>
+            <td style="font-weight:700">${safeText(p.nome)}</td>
+            <td>${safeText(PROMO_TIPO_LABEL[p.tipo] || p.tipo)}</td>
+            <td style="font-size:.82rem">${safeText(_formatPromoValor(p))}</td>
+            <td style="color:var(--text-muted);font-size:.82rem">${safeText(_formatCupomValidade(p))}</td>
             <td>${p.destaque ? '<span class="td-badge">Sim</span>' : '—'}${p.mostrar_contador ? ' <span class="td-badge">Contador</span>' : ''}</td>
             <td><span class="td-badge ${isAtivo ? '' : 'td-badge--off'}">${isAtivo ? 'Ativo' : 'Inativo'}</span></td>
             <td>
@@ -2204,7 +2201,7 @@ function renderTabelaPromocoes() {
                 <button class="btn btn--outline btn--sm" onclick="toggleDropdown('promoActions${p.id}')">Ações ▾</button>
                 <div class="action-dropdown__menu">
                   <div class="action-dropdown__item" onclick="closeAllDropdowns();openEditPromocaoModal(${p.id})">Editar</div>
-                  <div class="action-dropdown__item" onclick="closeAllDropdowns();togglePromocaoStatus(${p.id},'${p.status}')">${isAtivo ? 'Desativar' : 'Ativar'}</div>
+                  <div class="action-dropdown__item" onclick="closeAllDropdowns();togglePromocaoStatus(${p.id},'${isAtivo ? 'ativo' : 'inativo'}')">${isAtivo ? 'Desativar' : 'Ativar'}</div>
                   <div class="action-dropdown__sep"></div>
                   <div class="action-dropdown__item action-dropdown__item--danger" onclick="closeAllDropdowns();confirmDeletePromocao(${p.id})">Excluir</div>
                 </div>
@@ -2366,7 +2363,7 @@ function confirmDeletePromocao(id) {
   if (!p) return;
   promocaoDeleteTargetId = id;
   document.getElementById('promocaoDeleteBody').innerHTML =
-    `<p>Tem certeza que deseja excluir a promoção <strong>${p.nome}</strong>? Esta ação não pode ser desfeita.</p>`;
+    `<p>Tem certeza que deseja excluir a promoção <strong>${safeText(p.nome)}</strong>? Esta ação não pode ser desfeita.</p>`;
   document.getElementById('promocaoDeleteOverlay').style.display = 'flex';
 }
 
@@ -2457,9 +2454,9 @@ function renderTabelaFuncionarios() {
           const numPerm = (f.permissoes || []).length;
           return `
           <tr>
-            <td style="font-weight:700">${f.nome}${isSelf ? ' <span style="color:var(--text-dim);font-size:.75rem">(você)</span>' : ''}</td>
-            <td style="color:var(--text-muted)">${f.email}</td>
-            <td>${f.cargo || '—'}</td>
+            <td style="font-weight:700">${safeText(f.nome)}${isSelf ? ' <span style="color:var(--text-dim);font-size:.75rem">(você)</span>' : ''}</td>
+            <td style="color:var(--text-muted)">${safeText(f.email)}</td>
+            <td>${safeText(f.cargo || '—')}</td>
             <td style="font-size:.82rem;color:var(--text-muted)">${numPerm === PERMISSOES.length ? 'Todas' : `${numPerm} de ${PERMISSOES.length}`}</td>
             <td style="color:var(--text-muted);font-size:.82rem">${f.ultimo_acesso ? new Date(f.ultimo_acesso).toLocaleString('pt-BR') : 'Nunca acessou'}</td>
             <td><span class="td-badge ${isAtivo ? '' : 'td-badge--off'}">${isAtivo ? 'Ativo' : 'Inativo'}</span></td>
@@ -2468,8 +2465,8 @@ function renderTabelaFuncionarios() {
                 <button class="btn btn--outline btn--sm" onclick="toggleDropdown('funcActions${f.id}')">Ações ▾</button>
                 <div class="action-dropdown__menu">
                   <div class="action-dropdown__item" onclick="closeAllDropdowns();openEditFuncionarioModal(${f.id})">Editar</div>
-                  ${isSelf ? '' : `<div class="action-dropdown__item" onclick="closeAllDropdowns();toggleFuncionarioStatus(${f.id},'${f.status}')">${isAtivo ? 'Desativar acesso' : 'Ativar acesso'}</div>`}
-                  <div class="action-dropdown__item" onclick="closeAllDropdowns();verHistorico(${f.id}, '${f.nome}')">Ver histórico</div>
+                  ${isSelf ? '' : `<div class="action-dropdown__item" onclick="closeAllDropdowns();toggleFuncionarioStatus(${f.id},'${isAtivo ? 'ativo' : 'inativo'}')">${isAtivo ? 'Desativar acesso' : 'Ativar acesso'}</div>`}
+                  <div class="action-dropdown__item" onclick="closeAllDropdowns();verHistorico(${f.id})">Ver histórico</div>
                 </div>
               </div>
             </td>
@@ -2562,7 +2559,9 @@ async function toggleFuncionarioStatus(id, currentStatus) {
 async function verHistorico(usuarioId, nome) {
   const overlay = document.getElementById('historicoOverlay');
   const body = document.getElementById('historicoBody');
-  document.getElementById('historicoTitle').textContent = usuarioId ? `Histórico — ${nome}` : 'Histórico de Ações';
+  const funcionario = funcionariosCache.find((item) => String(item.id) === String(usuarioId));
+  document.getElementById('historicoTitle').textContent = usuarioId
+    ? `Histórico — ${funcionario?.nome || 'Funcionário'}` : 'Histórico de Ações';
   body.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
   overlay.style.display = 'flex';
 
@@ -2578,9 +2577,9 @@ async function verHistorico(usuarioId, nome) {
         <tbody>
           ${logs.map(l => `
             <tr>
-              <td style="font-weight:600">${l.acao}</td>
-              <td style="color:var(--text-muted);font-size:.85rem">${l.detalhes || '—'}</td>
-              <td style="font-size:.85rem">${l.usuario_nome || '—'}</td>
+              <td style="font-weight:600">${safeText(l.acao)}</td>
+              <td style="color:var(--text-muted);font-size:.85rem">${safeText(l.detalhes || '—')}</td>
+              <td style="font-size:.85rem">${safeText(l.usuario_nome || '—')}</td>
               <td style="font-size:.8rem;color:var(--text-muted)">${new Date(l.created_at).toLocaleString('pt-BR')}</td>
             </tr>
           `).join('')}
@@ -2602,7 +2601,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const data = await api.post('/auth/login', { email, senha });
       if (data.user.perfil !== 'admin') throw new Error('Usuário não é administrador');
-      localStorage.setItem('fc_token', data.token);
+      localStorage.removeItem('fc_token');
       localStorage.setItem('fc_user', JSON.stringify(data.user));
       document.getElementById('loginRequired').style.display = 'none';
       document.getElementById('adminUserName').textContent = `${data.user.nome}`;
@@ -2786,8 +2785,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('historicoOverlay').style.display = 'none';
   });
 
-  document.getElementById('btnLogout')?.addEventListener('click', () => {
+  document.getElementById('btnLogout')?.addEventListener('click', async () => {
     if (confirm('Deseja sair do painel?')) {
+      try { await api.post('/auth/logout', {}); } catch (_) {}
       localStorage.removeItem('fc_token');
       localStorage.removeItem('fc_user');
       window.location.href = '../index.html';

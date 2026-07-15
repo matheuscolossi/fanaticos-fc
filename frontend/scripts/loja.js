@@ -36,19 +36,19 @@ function writeCache(data) {
 function produtoCard(p) {
   const img = (p.imagens || [])[0];
   return `
-    <div class="produto-card" onclick="openProdutoModal(${p.id})">
+    <div class="produto-card" data-product-id="${Number(p.id)}">
       <div class="produto-card__img">
         ${img
-          ? `<img src="${img}" alt="${p.nome}" loading="lazy" decoding="async" />`
+          ? `<img src="${safeUrl(img)}" alt="${safeAttr(p.nome)}" loading="lazy" decoding="async" />`
           : `<div class="produto-card__placeholder"></div>`}
         ${p.destaque ? `<span class="produto-card__badge">Destaque</span>` : ''}
       </div>
       <div class="produto-card__info">
-        <div class="produto-card__cat">${p.categoria_nome || 'Sem categoria'}</div>
-        <div class="produto-card__nome">${p.nome}</div>
+        <div class="produto-card__cat">${safeText(p.categoria_nome || 'Sem categoria')}</div>
+        <div class="produto-card__nome">${safeText(p.nome)}</div>
         <div class="produto-card__footer">
           <span class="produto-card__preco">${formatBRL(p.preco)}</span>
-          <button class="produto-card__btn" onclick="event.stopPropagation();addToCart(${JSON.stringify(JSON.stringify(p))})">
+          <button class="produto-card__btn">
             + Carrinho
           </button>
         </div>
@@ -105,7 +105,7 @@ function produtoCardSafe(p) {
              <span class="gphoto-label">Ver imagens</span>
            </div>`
         : img
-          ? `<img src="${img}" alt="${p.nome}" loading="lazy" decoding="async" />`
+          ? `<img src="${safeUrl(img)}" alt="${safeAttr(p.nome)}" loading="lazy" decoding="async" />`
           : `<div class="produto-card__placeholder">${placeholderLabel}</div>`}
       <div class="produto-card__badges">
         ${p.destaque ? `<span class="produto-card__badge">Destaque</span>` : ''}
@@ -114,8 +114,8 @@ function produtoCardSafe(p) {
       ${isJogador ? `<span class="produto-card__badge produto-card__badge--jogador">Jogador</span>` : ''}
     </div>
     <div class="produto-card__info">
-      <div class="produto-card__cat">${p.categoria_nome || 'Sem categoria'}</div>
-      <div class="produto-card__nome">${p.nome}</div>
+      <div class="produto-card__cat">${safeText(p.categoria_nome || 'Sem categoria')}</div>
+      <div class="produto-card__nome">${safeText(p.nome)}</div>
       ${precoCardHtml(p)}
       ${p.em_promocao && p.promocao_fim ? `<div class="produto-card__countdown"></div>` : ''}
       <button class="produto-card__btn">Adicionar ao Carrinho</button>
@@ -218,10 +218,10 @@ async function renderCategoriaCards() {
     card.className = 'categoria-card';
     card.href = categoriaUrl(c);
     card.innerHTML = `
-      <div class="categoria-card__img"${img ? ` style="background-image:url('${img}')"` : ''}>
-        ${img ? '' : `<span class="categoria-card__placeholder">${c.nome.charAt(0)}</span>`}
+      <div class="categoria-card__img"${img ? ` style="background-image:url('${safeUrl(img)}')"` : ''}>
+        ${img ? '' : `<span class="categoria-card__placeholder">${safeText(c.nome.charAt(0))}</span>`}
       </div>
-      <div class="categoria-card__nome">${c.nome}</div>
+      <div class="categoria-card__nome">${safeText(c.nome)}</div>
       <div class="categoria-card__count">${c.produtos_count || 0} produto${c.produtos_count === '1' ? '' : 's'}</div>
     `;
     grid.appendChild(card);
@@ -280,20 +280,20 @@ async function openProdutoModal(id) {
               ? `<div class="gphoto-detail">
                    <div class="gphoto-detail__emoji">${emoji2}</div>
                    <p class="gphoto-detail__text">Fotos disponíveis no álbum</p>
-                   <a href="${mainImg}" target="_blank" rel="noopener" class="btn btn--primary gphoto-detail__btn">
-                     Ver Fotos do ${p.nome}
+                   <a href="${safeUrl(mainImg)}" target="_blank" rel="noopener" class="btn btn--primary gphoto-detail__btn">
+                     Ver Fotos do ${safeText(p.nome)}
                    </a>
                  </div>`
               : mainImg
-                ? `<img src="${mainImg}" alt="${p.nome}" id="mainImgEl" decoding="async" />`
+                ? `<img src="${safeUrl(mainImg)}" alt="${safeAttr(p.nome)}" id="mainImgEl" decoding="async" />`
                 : `<div style="height:300px;display:flex;align-items:center;justify-content:center;font-size:5rem;">${emoji2}</div>`}
           </div>
         </div>
         <div class="product-detail__info">
-          <div class="product-detail__cat">${p.categoria_nome || 'Sem categoria'}</div>
-          <h2 class="product-detail__nome">${p.nome}</h2>
+          <div class="product-detail__cat">${safeText(p.categoria_nome || 'Sem categoria')}</div>
+          <h2 class="product-detail__nome">${safeText(p.nome)}</h2>
           <div class="product-detail__preco">${formatBRL(p.preco)}</div>
-          <p class="product-detail__desc">${p.descricao || 'Sem descrição disponível.'}</p>
+          <p class="product-detail__desc">${safeText(p.descricao || 'Sem descrição disponível.')}</p>
           ${p.estoque ? `<p class="product-detail__estoque">${p.estoque} em estoque</p>` : ''}
           <div class="product-detail__actions">
             <button class="btn btn--primary" id="btnAddModal"> Adicionar ao Carrinho</button>
@@ -400,7 +400,7 @@ async function loadHeroGallery() {
       .filter(Boolean)
       .filter(url => !isGooglePhotosLink(url));
     gallery.innerHTML = fotos
-      .map(url => `<div class="hero__gallery-item" style="background-image:url('${url}')"></div>`)
+      .map(url => `<div class="hero__gallery-item" style="background-image:url('${safeUrl(url)}')"></div>`)
       .join('');
   } catch (e) {
     console.warn('[hero-gallery:error]', e);

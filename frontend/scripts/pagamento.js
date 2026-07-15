@@ -17,11 +17,6 @@ async function confirmPaymentStatus(attempt = 0) {
     return;
   }
 
-  if (!localStorage.getItem('fc_token')) {
-    setPaymentStatus('Faça login para consultar o pedido', 'O pagamento pode ter sido concluído, mas é necessário entrar na conta usada na compra para consultar a confirmação.', '🔐');
-    return;
-  }
-
   try {
     const status = await api.get(`/pagamentos/stripe/session/${encodeURIComponent(paymentSessionId)}`);
     if (status.paymentStatus === 'paid') {

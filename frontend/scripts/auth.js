@@ -1,14 +1,21 @@
 function getCurrentUser() {
-  const raw = localStorage.getItem('fc_user');
-  return raw ? JSON.parse(raw) : null;
+  try {
+    const raw = localStorage.getItem('fc_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    localStorage.removeItem('fc_user');
+    return null;
+  }
 }
 
-function setSession(token, user) {
-  localStorage.setItem('fc_token', token);
+function setSession(user) {
+  // O JWT fica exclusivamente no cookie HttpOnly emitido pelo backend.
+  localStorage.removeItem('fc_token');
   localStorage.setItem('fc_user', JSON.stringify(user));
 }
 
-function clearSession() {
+async function clearSession() {
+  try { await api.post('/auth/logout', {}); } catch (_) {}
   localStorage.removeItem('fc_token');
   localStorage.removeItem('fc_user');
 }
@@ -78,7 +85,7 @@ function openAuthModal(defaultTab = 'login') {
     const errEl = document.getElementById('loginError');
     try {
       const data = await api.post('/auth/login', { email, senha });
-      setSession(data.token, data.user);
+      setSession(data.user);
       updateUserUI();
       closeAuthModal();
       showToast(`Bem-vindo, ${data.user.nome.split(' ')[0]}! `);
@@ -132,10 +139,10 @@ function openAuthModal(defaultTab = 'login') {
 
     try {
       const res = await api.post('/auth/register', { nome, email, senha, cpf, telefone });
-      if (res.requiresVerification === false && res.token) {
+      if (res.requiresVerification === false && res.user) {
         // Não foi possível enviar o código (ex.: domínio ainda não verificado
         // na Resend) — entra direto, sem travar o cadastro.
-        setSession(res.token, res.user);
+        setSession(res.user);
         updateUserUI();
         closeAuthModal();
         showToast(`Conta criada! Bem-vindo, ${res.user.nome.split(' ')[0]}!`);
@@ -176,7 +183,7 @@ function openVerificationStep(email) {
     </div>
     <div class="auth-form" style="display:flex">
       <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:.5rem">
-        Enviamos um código de 6 dígitos para <strong>${email}</strong>. Confira sua caixa de entrada (e o spam).
+        Enviamos um código de 6 dígitos para <strong id="verifEmail"></strong>. Confira sua caixa de entrada (e o spam).
       </p>
       <label>Código de verificação</label>
       <input type="text" id="verifCodigo" placeholder="000000" maxlength="6" inputmode="numeric" style="letter-spacing:6px;font-size:1.2rem;text-align:center" />
@@ -185,6 +192,8 @@ function openVerificationStep(email) {
       <button class="btn btn--outline" id="btnVerifReenviar" style="margin-top:.5rem">Reenviar código</button>
     </div>
   `;
+
+  document.getElementById('verifEmail').textContent = email;
 
   document.getElementById('verifCodigo')?.addEventListener('input', (e) => {
     e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
@@ -200,7 +209,7 @@ function openVerificationStep(email) {
     }
     try {
       const data = await api.post('/auth/verificar-email', { email, codigo });
-      setSession(data.token, data.user);
+      setSession(data.user);
       updateUserUI();
       closeAuthModal();
       showToast(`E-mail confirmado! Bem-vindo, ${data.user.nome.split(' ')[0]}!`);

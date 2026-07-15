@@ -83,29 +83,29 @@ function renderProduto(p) {
         ${isGPhotos
           ? `<div class="gphoto-detail">
                <p class="gphoto-detail__text">Fotos disponíveis no álbum</p>
-               <a href="${mainImg}" target="_blank" rel="noopener" class="btn btn--primary gphoto-detail__btn">Ver fotos do produto</a>
+               <a href="${safeUrl(mainImg)}" target="_blank" rel="noopener" class="btn btn--primary gphoto-detail__btn">Ver fotos do produto</a>
              </div>`
           : mainImg
-            ? `<img src="${mainImg}" alt="${p.nome}" id="produtoMainImgEl" decoding="async" />`
+            ? `<img src="${safeUrl(mainImg)}" alt="${safeAttr(p.nome)}" id="produtoMainImgEl" decoding="async" />`
             : `<div class="produto-page__placeholder">${placeholderLabel}</div>`}
       </div>
       ${imagens.length > 1 && !isGPhotos ? `
         <div class="produto-page__thumbs">
           ${imagens.map((img, idx) => `
             <button class="produto-page__thumb ${idx === imagemAtual ? 'active' : ''}" data-img-index="${idx}" aria-label="Ver imagem ${idx + 1}">
-              <img src="${img}" alt="${p.nome} ${idx + 1}" loading="lazy" decoding="async" />
+              <img src="${safeUrl(img)}" alt="${safeAttr(`${p.nome} ${idx + 1}`)}" loading="lazy" decoding="async" />
             </button>
           `).join('')}
         </div>
       ` : ''}
     </div>
     <div class="produto-page__info">
-      <div class="product-detail__cat">${p.categoria_nome || 'Sem categoria'}</div>
+      <div class="product-detail__cat">${safeText(p.categoria_nome || 'Sem categoria')}</div>
       ${p.em_promocao ? `<span class="produto-page__badge produto-page__badge--promo">${p.promocao_destaque ? '★ Oferta' : 'Promoção'}</span>` : ''}
-      <h1 class="produto-page__title">${p.nome}</h1>
+      <h1 class="produto-page__title">${safeText(p.nome)}</h1>
       ${precoPaginaHtml(p)}
       ${p.em_promocao && p.promocao_fim ? `<div class="produto-page__countdown"></div>` : ''}
-      <p class="produto-page__desc">${p.descricao || 'Camisa premium com acabamento de alta qualidade, ideal para jogo, treino ou coleção.'}</p>
+      <p class="produto-page__desc">${safeText(p.descricao || 'Camisa premium com acabamento de alta qualidade, ideal para jogo, treino ou coleção.')}</p>
 
       <div class="produto-options">
         <div class="produto-options__header">
@@ -207,10 +207,10 @@ function renderComentarios() {
       ${comentarios.map(c => `
         <article class="produto-comment">
           <div class="produto-comment__top">
-            <strong>${c.nome}</strong>
+            <strong>${safeText(c.nome)}</strong>
             <span>${renderStars(c.nota || 5)}</span>
           </div>
-          <p>${c.texto}</p>
+          <p>${safeText(c.texto)}</p>
         </article>
       `).join('')}
     </div>
