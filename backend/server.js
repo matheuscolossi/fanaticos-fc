@@ -3,7 +3,16 @@ const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const openapiSpec = require('./src/docs/openapi');
 const { init } = require('./src/config/database');
-const { buildAdminMiddleware, buildAuthMiddleware, buildBasicAuthMiddleware, buildPermissionMiddleware } = require('./src/middleware/auth');
+const {
+  buildAdminMiddleware,
+  buildAuthMiddleware,
+  buildBasicAuthMiddleware,
+  buildOptionalAuthMiddleware,
+  buildPermissionMiddleware,
+  buildVerifiedEmailMiddleware,
+} = require('./src/middleware/auth');
+const { buildSecurityRateLimiters } = require('./src/middleware/rateLimit');
+const { loadSecurityConfig } = require('./src/config/security');
 const { errorHandler } = require('./src/utils/http');
 const authRoutes = require('./src/routes/authRoutes');
 const categoryRoutes = require('./src/routes/categoryRoutes');
@@ -22,14 +31,23 @@ const specRoutes = require('./src/routes/specRoutes');
 const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) { console.error('[api] JWT_SECRET não definido'); process.exit(1); }
+let securityConfig;
+try {
+  securityConfig = loadSecurityConfig(process.env);
+} catch (error) {
+  console.error(`[api:config:error] ${error.message}`);
+  process.exit(1);
+}
+const JWT_SECRET = securityConfig.jwtSecret;
 const authMiddleware = buildAuthMiddleware(JWT_SECRET);
+const optionalAuthMiddleware = buildOptionalAuthMiddleware(authMiddleware);
+const verifiedEmailMiddleware = buildVerifiedEmailMiddleware(authMiddleware);
+const rateLimiters = buildSecurityRateLimiters(process.env.RATE_LIMIT_SECRET || JWT_SECRET);
 const adminMiddleware = buildAdminMiddleware(authMiddleware);
 const perm = (key) => buildPermissionMiddleware(authMiddleware, key);
 const basicAuthMiddleware = buildBasicAuthMiddleware(
-  process.env.BASIC_AUTH_USER || process.env.DEFAULT_ADMIN_EMAIL || 'admin@fanaticosfc.com',
-  process.env.BASIC_AUTH_PASS || process.env.DEFAULT_ADMIN_PASSWORD || 'admin123'
+  securityConfig.basicAuthUser,
+  securityConfig.basicAuthPass
 );
 
 const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:5500,http://127.0.0.1:5500')
@@ -93,12 +111,25 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-app.use('/api/auth', authRoutes({ authMiddleware, jwtSecret: JWT_SECRET }));
+app.use('/api/auth', authRoutes({ authMiddleware, jwtSecret: JWT_SECRET, rateLimiters }));
 app.use('/api/categorias', categoryRoutes(adminMiddleware));
 app.use('/api/produtos', productRoutes({ adminMiddleware, perm }));
-app.use('/api/pedidos', orderRoutes({ adminMiddleware, authMiddleware, perm }));
-app.use('/api/pagamentos', paymentRoutes({ authMiddleware }));
-app.use('/api/payments', paymentRoutes({ authMiddleware }));
+app.use('/api/pedidos', orderRoutes({
+  adminMiddleware,
+  authMiddleware,
+  perm,
+  trackingRateLimit: rateLimiters.tracking,
+}));
+app.use('/api/pagamentos', paymentRoutes({
+  authMiddleware,
+  checkoutRateLimit: rateLimiters.checkout,
+  verifiedEmailMiddleware,
+}));
+app.use('/api/payments', paymentRoutes({
+  authMiddleware,
+  checkoutRateLimit: rateLimiters.checkout,
+  verifiedEmailMiddleware,
+}));
 app.use('/api/config', configRoutes());
 app.use('/api/admin/usuarios', userRoutes({ adminMiddleware, perm }));
 app.use('/api/admin/dashboard', dashboardRoutes(perm('financeiro.visualizar')));
@@ -109,7 +140,12 @@ app.use('/api/admin/logs', logRoutes(perm('administradores.gerenciar')));
 
 // Rotas no formato exigido pelo PDF do trabalho (sem prefixo /api) — usadas pelo
 // professor no Postman. O site continua usando as rotas /api/produtos acima.
-app.use('/', specRoutes({ basicAuthMiddleware, isDbReady: () => dbReady }));
+app.use('/', specRoutes({
+  basicAuthMiddleware,
+  cartRateLimit: rateLimiters.cart,
+  isDbReady: () => dbReady,
+  optionalAuthMiddleware,
+}));
 
 app.use(errorHandler);
 
@@ -123,7 +159,7 @@ async function connectWithRetry(delaySec = 30) {
   try {
     await init();
     dbReady = true;
-    console.log('[api] Database ready. Default admin: admin@fanaticosfc.com');
+    console.log('[api] Database ready.');
   } catch (err) {
     console.error(`[api:init:error] ${err.message} — retrying in ${delaySec}s`);
     setTimeout(() => connectWithRetry(Math.min(delaySec * 2, 300)), delaySec * 1000);

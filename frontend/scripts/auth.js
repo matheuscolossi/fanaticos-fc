@@ -96,6 +96,11 @@ function openAuthModal(defaultTab = 'login') {
         }
       }
     } catch (e) {
+      if (e.code === 'EMAIL_NOT_VERIFIED') {
+        showToast('Confirme seu e-mail para entrar.', 'error');
+        openVerificationStep(email);
+        return;
+      }
       errEl.textContent = e.message;
       errEl.style.display = 'block';
     }
@@ -139,18 +144,14 @@ function openAuthModal(defaultTab = 'login') {
 
     try {
       const res = await api.post('/auth/register', { nome, email, senha, cpf, telefone });
-      if (res.requiresVerification === false && res.user) {
-        // Não foi possível enviar o código (ex.: domínio ainda não verificado
-        // na Resend) — entra direto, sem travar o cadastro.
-        setSession(res.user);
-        updateUserUI();
-        closeAuthModal();
-        showToast(`Conta criada! Bem-vindo, ${res.user.nome.split(' ')[0]}!`);
-        return;
-      }
       showToast('Conta criada! Enviamos um código para seu e-mail.');
       openVerificationStep(email);
     } catch (e) {
+      if (e.code === 'EMAIL_SEND_FAILED') {
+        showToast('Conta criada, mas o envio falhou. Use “Reenviar código” para tentar novamente.', 'error');
+        openVerificationStep(email);
+        return;
+      }
       errEl.textContent = e.message;
       errEl.style.display = 'block';
     }
@@ -223,12 +224,13 @@ function openVerificationStep(email) {
     const btn = document.getElementById('btnVerifReenviar');
     btn.disabled = true; btn.textContent = 'Enviando...';
     try {
-      await api.post('/auth/reenviar-codigo', { email });
+      const result = await api.post('/auth/reenviar-codigo', { email });
       showToast('Código reenviado para seu e-mail.');
+      startVerificationResendCooldown(btn, result.resendCooldownSeconds);
     } catch (e) {
       showToast(e.message, 'error');
+      btn.disabled = false; btn.textContent = 'Reenviar código';
     }
-    btn.disabled = false; btn.textContent = 'Reenviar código';
   });
 }
 

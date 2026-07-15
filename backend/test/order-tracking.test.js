@@ -1,3 +1,5 @@
+require('./testEnv');
+
 process.env.DATABASE_URL = '';
 process.env.DB_REQUIRE_POSTGRES = '';
 process.env.NODE_ENV = 'test';
@@ -67,10 +69,16 @@ test('permite rastrear somente o pedido da própria conta e reduz a resposta', a
 
 test('protege a rota de rastreamento com autenticação', () => {
   const authMiddleware = (req, res, next) => next();
-  const router = buildOrderRoutes({ authMiddleware, perm: () => (req, res, next) => next() });
+  const trackingRateLimit = (req, res, next) => next();
+  const router = buildOrderRoutes({
+    authMiddleware,
+    perm: () => (req, res, next) => next(),
+    trackingRateLimit,
+  });
   const trackingRoute = router.stack.find((layer) => layer.route?.path === '/:id/rastreio');
   assert.ok(trackingRoute);
   assert.equal(trackingRoute.route.stack[0].handle, authMiddleware);
+  assert.equal(trackingRoute.route.stack[1].handle, trackingRateLimit);
 });
 
 test('pedido de terceiro e ID inexistente retornam o mesmo erro', async () => {

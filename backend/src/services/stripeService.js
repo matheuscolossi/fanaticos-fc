@@ -4,6 +4,7 @@ const cartService = require('./cartService');
 const orderModel = require('../models/orderModel');
 const orderService = require('./orderService');
 const paymentModel = require('../models/paymentModel');
+const userModel = require('../models/userModel');
 const { transaction } = require('../config/database');
 const { createHttpError } = require('../utils/http');
 
@@ -167,6 +168,16 @@ async function createCheckoutSession({ items, customer, cupomCodigo, uf, userId 
   if (!stripe) throw createHttpError(500, 'Stripe não está configurado.', 'STRIPE_NOT_CONFIGURED');
   if (!Number.isInteger(Number(userId)) || Number(userId) < 1) {
     throw createHttpError(401, 'Faça login para finalizar a compra.', 'AUTH_REQUIRED');
+  }
+  const checkoutUser = await userModel.findById(Number(userId));
+  if (!checkoutUser) {
+    throw createHttpError(401, 'Faça login para finalizar a compra.', 'AUTH_REQUIRED');
+  }
+  if (checkoutUser.status === 'inativo') {
+    throw createHttpError(403, 'Seu acesso foi desativado.', 'ACCESS_DISABLED');
+  }
+  if (!checkoutUser.email_verificado) {
+    throw createHttpError(403, 'Confirme seu e-mail antes de finalizar a compra.', 'EMAIL_NOT_VERIFIED');
   }
 
   const normalizedItems = normalizeCartItems(items);

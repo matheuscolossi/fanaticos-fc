@@ -16,6 +16,7 @@ function buildCurrentUser(user) {
     cargo: user.cargo || null,
     permissoes: parsePermissoes(user.permissoes),
     status: user.status || 'ativo',
+    email_verificado: Boolean(user.email_verificado),
   };
 }
 
@@ -73,6 +74,36 @@ function buildAdminMiddleware(authMiddleware) {
   };
 }
 
+function buildVerifiedEmailMiddleware(authMiddleware) {
+  return function verifiedEmailMiddleware(req, res, next) {
+    authMiddleware(req, res, (err) => {
+      if (err) return next(err);
+      if (!req.user?.email_verificado) {
+        return next(createHttpError(403, 'Confirme seu e-mail antes de continuar.', 'EMAIL_NOT_VERIFIED'));
+      }
+      next();
+    });
+  };
+}
+
+function buildOptionalAuthMiddleware(authMiddleware) {
+  return function optionalAuthMiddleware(req, res, next) {
+    const hasBearer = String(req.headers?.authorization || '').startsWith('Bearer ');
+    const hasCookie = String(req.headers?.cookie || '').split(';').some(
+      (part) => part.trim().startsWith('fc_session=')
+    );
+    if (!hasBearer && !hasCookie) return next();
+
+    authMiddleware(req, res, (err) => {
+      if (err) {
+        delete req.user;
+        delete req.staffUser;
+      }
+      next();
+    });
+  };
+}
+
 function buildPermissionMiddleware(authMiddleware, permissionKey) {
   return function permissionMiddleware(req, res, next) {
     authMiddleware(req, res, (err) => {
@@ -117,5 +148,7 @@ module.exports = {
   buildAdminMiddleware,
   buildAuthMiddleware,
   buildBasicAuthMiddleware,
+  buildOptionalAuthMiddleware,
   buildPermissionMiddleware,
+  buildVerifiedEmailMiddleware,
 };

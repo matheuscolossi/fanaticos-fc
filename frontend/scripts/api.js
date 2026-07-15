@@ -118,6 +118,22 @@ function showToast(msg, type = 'success') {
   setTimeout(() => t.remove(), 3000);
 }
 
+function startVerificationResendCooldown(button, seconds = 60, label = 'Reenviar código') {
+  let remaining = Math.max(1, Number(seconds) || 60);
+  button.disabled = true;
+  const update = () => {
+    button.textContent = `${label} (${remaining}s)`;
+    remaining -= 1;
+    if (remaining < 0) {
+      clearInterval(timer);
+      button.disabled = false;
+      button.textContent = label;
+    }
+  };
+  const timer = setInterval(update, 1000);
+  update();
+}
+
 function formatBRL(value) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }

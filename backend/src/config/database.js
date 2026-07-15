@@ -247,6 +247,13 @@ async function createPostgresSchema() {
       cargo TEXT,
       permissoes JSONB DEFAULT '[]'::jsonb,
       status TEXT DEFAULT 'ativo',
+      email_verificado BOOLEAN DEFAULT false,
+      codigo_verificacao TEXT,
+      codigo_expira_em TIMESTAMPTZ,
+      codigo_ultimo_envio_em TIMESTAMPTZ,
+      codigo_janela_inicio_em TIMESTAMPTZ,
+      codigo_envios_na_janela INTEGER NOT NULL DEFAULT 0,
+      codigo_tentativas INTEGER NOT NULL DEFAULT 0,
       ultimo_acesso TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT now()
     )
@@ -389,6 +396,18 @@ async function createPostgresSchema() {
       created_at TIMESTAMPTZ DEFAULT now()
     )
   `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS rate_limits (
+      scope TEXT NOT NULL,
+      identifier_hash TEXT NOT NULL,
+      window_key BIGINT NOT NULL,
+      request_count INTEGER NOT NULL DEFAULT 0,
+      expires_at TIMESTAMPTZ NOT NULL,
+      PRIMARY KEY (scope, identifier_hash, window_key)
+    )
+  `);
+  await run('CREATE INDEX IF NOT EXISTS rate_limits_expires_idx ON rate_limits(expires_at)');
 }
 
 async function createSqliteSchema() {
@@ -428,6 +447,13 @@ async function createSqliteSchema() {
     cargo TEXT,
     permissoes TEXT DEFAULT '[]',
     status TEXT DEFAULT 'ativo',
+    email_verificado INTEGER DEFAULT 0,
+    codigo_verificacao TEXT,
+    codigo_expira_em DATETIME,
+    codigo_ultimo_envio_em DATETIME,
+    codigo_janela_inicio_em DATETIME,
+    codigo_envios_na_janela INTEGER NOT NULL DEFAULT 0,
+    codigo_tentativas INTEGER NOT NULL DEFAULT 0,
     ultimo_acesso DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
@@ -556,6 +582,16 @@ async function createSqliteSchema() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
   )`);
+
+  await run(`CREATE TABLE IF NOT EXISTS rate_limits (
+    scope TEXT NOT NULL,
+    identifier_hash TEXT NOT NULL,
+    window_key INTEGER NOT NULL,
+    request_count INTEGER NOT NULL DEFAULT 0,
+    expires_at DATETIME NOT NULL,
+    PRIMARY KEY (scope, identifier_hash, window_key)
+  )`);
+  await run('CREATE INDEX IF NOT EXISTS rate_limits_expires_idx ON rate_limits(expires_at)');
 }
 
 async function runOptionalMigration(sql) {
@@ -576,6 +612,11 @@ async function runMigrations() {
     await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email_verificado BOOLEAN DEFAULT false');
     await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS codigo_verificacao TEXT');
     await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS codigo_expira_em TIMESTAMP');
+    await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS codigo_ultimo_envio_em TIMESTAMPTZ');
+    await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS codigo_janela_inicio_em TIMESTAMPTZ');
+    await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS codigo_envios_na_janela INTEGER NOT NULL DEFAULT 0');
+    await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS codigo_tentativas INTEGER NOT NULL DEFAULT 0');
+    await runOptionalMigration("UPDATE usuarios SET email_verificado = true WHERE perfil = 'admin' AND email_verificado = false");
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS nome_cliente TEXT');
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS email_cliente TEXT');
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS telefone_cliente TEXT');
@@ -657,6 +698,11 @@ async function runMigrations() {
   await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN email_verificado INTEGER DEFAULT 0');
   await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN codigo_verificacao TEXT');
   await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN codigo_expira_em TEXT');
+  await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN codigo_ultimo_envio_em TEXT');
+  await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN codigo_janela_inicio_em TEXT');
+  await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN codigo_envios_na_janela INTEGER NOT NULL DEFAULT 0');
+  await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN codigo_tentativas INTEGER NOT NULL DEFAULT 0');
+  await runOptionalMigration("UPDATE usuarios SET email_verificado = 1 WHERE perfil = 'admin' AND COALESCE(email_verificado, 0) = 0");
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN nome_cliente TEXT');
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN email_cliente TEXT');
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN telefone_cliente TEXT');
@@ -741,21 +787,30 @@ async function seedDefaults() {
 
   const admin = await get("SELECT COUNT(*) as c FROM usuarios WHERE perfil='admin'");
   if (Number(admin.c) === 0) {
+    const adminEmail = process.env.DEFAULT_ADMIN_EMAIL;
+    const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD;
+    if (!adminEmail || !adminPassword) {
+      throw new Error(
+        'DEFAULT_ADMIN_EMAIL e DEFAULT_ADMIN_PASSWORD são obrigatórias para provisionar o primeiro administrador.'
+      );
+    }
     const { PERMISSOES_KEYS } = require('../constants/permissions');
-    const hash = bcrypt.hashSync(process.env.DEFAULT_ADMIN_PASSWORD || 'admin123', 10);
+    const hash = bcrypt.hashSync(adminPassword, 10);
     await run(
-      `INSERT INTO usuarios (nome, email, senha, perfil, cargo, permissoes, status) VALUES (?, ?, ?, ?, ?, JSON_VALUE(?), ?)`,
+      `INSERT INTO usuarios (nome, email, senha, perfil, cargo, permissoes, status, email_verificado)
+       VALUES (?, ?, ?, ?, ?, JSON_VALUE(?), ?, ?)`,
       [
         'Administrador',
-        process.env.DEFAULT_ADMIN_EMAIL || 'admin@fanaticosfc.com',
+        adminEmail,
         hash,
         'admin',
         'Administrador',
         JSON.stringify(PERMISSOES_KEYS),
         'ativo',
+        1,
       ]
     );
-    console.log('[database] Default admin created.');
+    console.log('[database] Bootstrap administrator created.');
   }
 
   // Migra admins criados antes do sistema de permissões granulares (cargo

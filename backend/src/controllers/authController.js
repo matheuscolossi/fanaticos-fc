@@ -45,7 +45,7 @@ function buildAuthController(jwtSecret) {
     },
 
     async reenviarCodigo(req, res) {
-      res.json(await reenviarCodigoEmail(req.body));
+      res.json(await reenviarCodigoEmail(req.body, jwtSecret));
     },
 
     async profile(req, res) {

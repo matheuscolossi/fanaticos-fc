@@ -1,3 +1,5 @@
+require('./testEnv');
+
 process.env.DATABASE_URL = '';
 process.env.DB_REQUIRE_POSTGRES = '';
 process.env.NODE_ENV = 'test';

@@ -7,7 +7,7 @@ const { asyncHandler } = require('../utils/http');
 // Reaproveitam a mesma lógica de /api/produtos, apenas com o nome/forma de rota
 // que o professor testa no Postman: POST /products, DELETE /product/:id,
 // GET /product/:id, GET /search?query=&cat=&page=&limit=, GET /health.
-module.exports = ({ basicAuthMiddleware, isDbReady }) => {
+module.exports = ({ basicAuthMiddleware, cartRateLimit, isDbReady, optionalAuthMiddleware }) => {
   const router = express.Router();
 
   router.get('/health', (req, res) => {
@@ -23,7 +23,7 @@ module.exports = ({ basicAuthMiddleware, isDbReady }) => {
   router.delete('/product/:id', basicAuthMiddleware, asyncHandler(controller.destroy));
   router.get('/product/:id', asyncHandler(controller.show));
   router.get('/search', asyncHandler(controller.search));
-  router.post('/cart', asyncHandler(cartController.summary));
+  router.post('/cart', optionalAuthMiddleware, cartRateLimit, asyncHandler(cartController.summary));
 
   return router;
 };

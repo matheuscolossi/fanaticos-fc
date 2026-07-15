@@ -17,7 +17,7 @@ O backend segue um padrão em camadas (rotas → controllers → services → mo
 - [Fluxo de Arquitetura](#fluxo-de-arquitetura)
 - [Keep-alive no Render (free tier)](#keep-alive-no-render-free-tier)
 - [Guia de Contribuição](#guia-de-contribuição)
-- [Credenciais Padrão](#credenciais-padrão)
+- [Provisionamento seguro](#provisionamento-seguro)
 
 ## Tecnologias
 
@@ -193,10 +193,14 @@ Definidas em `backend/.env` (modelo em `backend/.env.example`):
 | `DB_SSL` | `true` para exigir SSL na conexão PostgreSQL (ex.: Neon, Render). |
 | `JWT_SECRET` | Chave usada para assinar/validar os tokens JWT. Obrigatória. |
 | `CORS_ORIGIN` | Lista de origens permitidas, separadas por vírgula. |
-| `DEFAULT_ADMIN_EMAIL` / `DEFAULT_ADMIN_PASSWORD` | Credenciais do admin criado automaticamente quando o banco está vazio. |
-| `BASIC_AUTH_USER` / `BASIC_AUTH_PASS` | Credenciais HTTP Basic Auth usadas em `POST /products` e `DELETE /product/:id` (rotas testadas via Postman). Se não definidas, caem para `DEFAULT_ADMIN_EMAIL`/`DEFAULT_ADMIN_PASSWORD`. |
+| `DEFAULT_ADMIN_EMAIL` / `DEFAULT_ADMIN_PASSWORD` | Credenciais obrigatórias para provisionar o primeiro administrador quando o banco está vazio. Não possuem fallback. |
+| `BASIC_AUTH_USER` / `BASIC_AUTH_PASS` | Credenciais obrigatórias e exclusivas do HTTP Basic Auth em `POST /products` e `DELETE /product/:id`. Devem ser diferentes das credenciais administrativas. |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Credenciais do Cloudinary para upload/armazenamento de imagens de produto. |
 | `RESEND_API_KEY` / `RESEND_FROM` | Credenciais do serviço de e-mail (verificação de cadastro). |
+| `EMAIL_CODE_TTL_MINUTES` / `EMAIL_CODE_MAX_ATTEMPTS` | Validade do código e máximo de tentativas antes da invalidação. |
+| `EMAIL_RESEND_COOLDOWN_SECONDS` / `EMAIL_RESEND_WINDOW_MINUTES` / `EMAIL_RESEND_MAX_PER_WINDOW` | Cooldown e limite persistente de reenvios por conta. |
+| `RATE_LIMIT_SECRET` | Chave opcional usada para transformar IPs e contas em HMAC antes de persistir os contadores. Se omitida, usa `JWT_SECRET`. |
+| `RATE_LIMIT_*_IP` / `RATE_LIMIT_*_ACCOUNT` | Limites por janela para cadastro, login, verificação, reenvio, rastreio, carrinho e checkout. |
 
 ## Documentação da API (Swagger/OpenAPI)
 
@@ -230,11 +234,11 @@ curl https://fanaticos-fc.onrender.com/health
 
 Cadastra um produto, incluindo atributos (cor, tamanho, peso, descrição).
 
-No Postman: aba **Authorization** → tipo `Basic Auth` → usuário/senha definidos em `BASIC_AUTH_USER`/`BASIC_AUTH_PASS` (local padrão: `admin@fanaticosfc.com` / `admin123`).
+No Postman: aba **Authorization** → tipo `Basic Auth` → informe os valores secretos configurados em `BASIC_AUTH_USER` e `BASIC_AUTH_PASS`.
 
 ```bash
 curl -X POST https://fanaticos-fc.onrender.com/products \
-  -u admin@fanaticosfc.com:admin123 \
+  -u "$BASIC_AUTH_USER:$BASIC_AUTH_PASS" \
   -H "Content-Type: application/json" \
   -d '{
     "nome": "Camisa Flamengo Home 25/26",
@@ -263,7 +267,7 @@ Remove um produto específico pelo ID.
 
 ```bash
 curl -X DELETE https://fanaticos-fc.onrender.com/product/246 \
-  -u admin@fanaticosfc.com:admin123
+  -u "$BASIC_AUTH_USER:$BASIC_AUTH_PASS"
 ```
 
 ```json
@@ -466,15 +470,15 @@ git commit -m "feat: reorganiza backend em MVC"
 - Como testar.
 - Se houve impacto em banco, `.env` ou frontend.
 
-## Credenciais Padrão
+## Provisionamento seguro
 
-Quando o banco é inicializado sem usuários administradores, a API cria um admin padrão:
+A API não possui credenciais padrão. Antes da primeira inicialização, configure `JWT_SECRET`, `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD`, `BASIC_AUTH_USER` e `BASIC_AUTH_PASS` no gerenciador de segredos do ambiente. A inicialização falha se algum valor estiver ausente, fraco ou se o administrador e o HTTP Basic Auth compartilharem usuário ou senha.
 
-```txt
-E-mail: admin@fanaticosfc.com
-Senha: admin123
-```
+Quando o banco está vazio, `DEFAULT_ADMIN_EMAIL` e `DEFAULT_ADMIN_PASSWORD` provisionam o primeiro administrador. Em bancos existentes, altere a senha administrativa pela área de conta; a variável de bootstrap não substitui automaticamente a senha armazenada.
 
-Essas mesmas credenciais são usadas, por padrão, como usuário/senha do **HTTP Basic Auth** em `POST /products` e `DELETE /product/:id` (ver `BASIC_AUTH_USER`/`BASIC_AUTH_PASS` em [Variáveis de Ambiente](#variáveis-de-ambiente)).
+Para rotacionar credenciais já utilizadas:
 
-Em produção, altere `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD`, `BASIC_AUTH_USER`, `BASIC_AUTH_PASS` e `JWT_SECRET`.
+1. Troque a senha administrativa pela área de conta.
+2. Gere um usuário e uma senha independentes para o Basic Auth e atualize os segredos da hospedagem.
+3. Gere um novo `JWT_SECRET`; isso encerra todas as sessões existentes.
+4. Reinicie o backend e remova imediatamente versões antigas dos segredos no provedor.

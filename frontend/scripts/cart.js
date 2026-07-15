@@ -416,9 +416,10 @@ async function confirmarPedido() {
       // Conta criada antes da verificação por e-mail existir, ou que nunca confirmou:
       // oferece confirmar agora mesmo, sem perder os dados já preenchidos no checkout.
       if (apiErr.code === 'EMAIL_NOT_VERIFIED') {
+        const verificationEmail = getCurrentUser()?.email || email;
         showToast('Confirme seu e-mail para finalizar a compra.', 'error');
-        try { await api.post('/auth/reenviar-codigo', { email }); } catch (_) {}
-        renderCheckoutVerification(email, { nome, telefone, email, endRua, cidade, cep });
+        try { await api.post('/auth/reenviar-codigo', { email: verificationEmail }); } catch (_) {}
+        renderCheckoutVerification(verificationEmail, { nome, telefone, email, endRua, cidade, cep });
         return;
       }
       showToast(apiErr.message || 'Erro ao criar pedido. Tente novamente.', 'error');
@@ -492,12 +493,13 @@ function renderCheckoutVerification(email, dadosForm) {
     const btn = document.getElementById('btnVerifReenviarCheckout');
     btn.disabled = true; btn.textContent = 'Enviando...';
     try {
-      await api.post('/auth/reenviar-codigo', { email });
+      const result = await api.post('/auth/reenviar-codigo', { email });
       showToast('Código reenviado para seu e-mail.');
+      startVerificationResendCooldown(btn, result.resendCooldownSeconds);
     } catch (e) {
       showToast(e.message, 'error');
+      btn.disabled = false; btn.textContent = 'Reenviar código';
     }
-    btn.disabled = false; btn.textContent = 'Reenviar código';
   });
 }
 

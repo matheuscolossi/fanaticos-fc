@@ -76,16 +76,94 @@ function updateName(userId, nome) {
   return run('UPDATE usuarios SET nome = ? WHERE id = ?', [nome, userId]);
 }
 
-function setVerificationCode(userId, codigo, expiraEm) {
+function timestampMs(value) {
+  const parsed = value ? Date.parse(value) : NaN;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function storeVerificationCode(userId, {
+  codeHash,
+  expiresAt,
+  now,
+  enforceLimits,
+  cooldownSeconds,
+  windowMinutes,
+  maxSendsPerWindow,
+}) {
+  return database.transaction(async (db) => {
+    const user = await db.get(
+      `SELECT id, codigo_ultimo_envio_em, codigo_janela_inicio_em,
+              COALESCE(codigo_envios_na_janela, 0) AS codigo_envios_na_janela
+       FROM usuarios WHERE id = ?`,
+      [userId]
+    );
+    if (!user) return { status: 'not_found' };
+
+    const nowMs = timestampMs(now);
+    const lastSentMs = timestampMs(user.codigo_ultimo_envio_em);
+    const windowStartMs = timestampMs(user.codigo_janela_inicio_em);
+    const windowDurationMs = windowMinutes * 60 * 1000;
+    const withinWindow = windowStartMs > 0 && nowMs - windowStartMs < windowDurationMs;
+    const currentSends = withinWindow ? Number(user.codigo_envios_na_janela || 0) : 0;
+
+    if (enforceLimits && lastSentMs > 0) {
+      const retryAfterSeconds = Math.ceil((lastSentMs + cooldownSeconds * 1000 - nowMs) / 1000);
+      if (retryAfterSeconds > 0) return { status: 'cooldown', retryAfterSeconds };
+    }
+    if (enforceLimits && withinWindow && currentSends >= maxSendsPerWindow) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((windowStartMs + windowDurationMs - nowMs) / 1000));
+      return { status: 'rate_limit', retryAfterSeconds };
+    }
+
+    const windowStartedAt = withinWindow ? user.codigo_janela_inicio_em : now;
+    await db.run(
+      `UPDATE usuarios SET
+         codigo_verificacao = ?, codigo_expira_em = ?, codigo_ultimo_envio_em = ?,
+         codigo_janela_inicio_em = ?, codigo_envios_na_janela = ?, codigo_tentativas = 0
+       WHERE id = ?`,
+      [codeHash, expiresAt, now, windowStartedAt, currentSends + 1, userId]
+    );
+    return { status: 'stored' };
+  });
+}
+
+function clearVerificationCode(userId, codeHash) {
   return run(
-    'UPDATE usuarios SET codigo_verificacao = ?, codigo_expira_em = ? WHERE id = ?',
-    [codigo, expiraEm, userId]
+    `UPDATE usuarios SET
+       codigo_verificacao = NULL, codigo_expira_em = NULL, codigo_ultimo_envio_em = NULL,
+       codigo_tentativas = 0
+     WHERE id = ? AND codigo_verificacao = ?`,
+    [userId, codeHash]
   );
+}
+
+function recordVerificationFailure(userId, maxAttempts) {
+  return database.transaction(async (db) => {
+    const user = await db.get(
+      'SELECT codigo_verificacao, COALESCE(codigo_tentativas, 0) AS codigo_tentativas FROM usuarios WHERE id = ?',
+      [userId]
+    );
+    if (!user?.codigo_verificacao) return { attempts: maxAttempts, invalidated: true };
+
+    const attempts = Number(user.codigo_tentativas || 0) + 1;
+    const invalidated = attempts >= maxAttempts;
+    await db.run(
+      `UPDATE usuarios SET codigo_tentativas = ?,
+         codigo_verificacao = CASE WHEN ? THEN NULL ELSE codigo_verificacao END,
+         codigo_expira_em = CASE WHEN ? THEN NULL ELSE codigo_expira_em END
+       WHERE id = ?`,
+      [attempts, invalidated, invalidated, userId]
+    );
+    return { attempts, invalidated };
+  });
 }
 
 function markEmailVerified(userId) {
   return run(
-    'UPDATE usuarios SET email_verificado = ?, codigo_verificacao = NULL, codigo_expira_em = NULL WHERE id = ?',
+    `UPDATE usuarios SET email_verificado = ?, codigo_verificacao = NULL, codigo_expira_em = NULL,
+       codigo_ultimo_envio_em = NULL, codigo_janela_inicio_em = NULL,
+       codigo_envios_na_janela = 0, codigo_tentativas = 0
+     WHERE id = ?`,
     [1, userId]
   );
 }
@@ -131,6 +209,7 @@ function setFuncionarioStatus(userId, status) {
 module.exports = {
   countAdminsAtivos,
   countPedidos,
+  clearVerificationCode,
   create,
   createFuncionario,
   findByEmail,
@@ -139,9 +218,10 @@ module.exports = {
   listClientsView,
   listFuncionarios,
   markEmailVerified,
+  recordVerificationFailure,
   removeClientWithRelations,
   setFuncionarioStatus,
-  setVerificationCode,
+  storeVerificationCode,
   updateAddress,
   updateFuncionario,
   updateFuncionarioSenha,
