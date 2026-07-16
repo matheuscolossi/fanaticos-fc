@@ -7,18 +7,18 @@ async function consume({ scope, identifierHash, windowMs, limit, nowMs = Date.no
 
   return database.transaction(async (db) => {
     await db.run(
-      'DELETE FROM rate_limits WHERE expires_at < ?',
+      'DELETE FROM security_rate_limits_v2 WHERE expires_at < ?',
       [new Date(nowMs).toISOString()]
     );
     await db.run(
-      `INSERT INTO rate_limits (scope, identifier_hash, window_key, request_count, expires_at)
+      `INSERT INTO security_rate_limits_v2 (scope, identifier_hash, window_key, request_count, expires_at)
        VALUES (?, ?, ?, 1, ?)
        ON CONFLICT(scope, identifier_hash, window_key)
-       DO UPDATE SET request_count = rate_limits.request_count + 1, expires_at = excluded.expires_at`,
+       DO UPDATE SET request_count = security_rate_limits_v2.request_count + 1, expires_at = excluded.expires_at`,
       [scope, identifierHash, windowKey, expiresAt]
     );
     const row = await db.get(
-      `SELECT request_count FROM rate_limits
+      `SELECT request_count FROM security_rate_limits_v2
        WHERE scope = ? AND identifier_hash = ? AND window_key = ?`,
       [scope, identifierHash, windowKey]
     );
@@ -35,7 +35,7 @@ async function consume({ scope, identifierHash, windowMs, limit, nowMs = Date.no
 }
 
 function clearAll() {
-  return database.run('DELETE FROM rate_limits');
+  return database.run('DELETE FROM security_rate_limits_v2');
 }
 
 module.exports = { clearAll, consume };

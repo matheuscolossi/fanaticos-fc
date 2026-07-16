@@ -455,6 +455,17 @@ async function createPostgresSchema() {
     )
   `);
   await run('CREATE INDEX IF NOT EXISTS rate_limits_expires_idx ON rate_limits(expires_at)');
+  await run(`
+    CREATE TABLE IF NOT EXISTS security_rate_limits_v2 (
+      scope TEXT NOT NULL,
+      identifier_hash TEXT NOT NULL,
+      window_key BIGINT NOT NULL,
+      request_count INTEGER NOT NULL DEFAULT 0,
+      expires_at TIMESTAMPTZ NOT NULL,
+      PRIMARY KEY (scope, identifier_hash, window_key)
+    )
+  `);
+  await run('CREATE INDEX IF NOT EXISTS security_rate_limits_v2_expires_idx ON security_rate_limits_v2(expires_at)');
 }
 
 async function createSqliteSchema() {
@@ -686,6 +697,15 @@ async function createSqliteSchema() {
     PRIMARY KEY (scope, identifier_hash, window_key)
   )`);
   await run('CREATE INDEX IF NOT EXISTS rate_limits_expires_idx ON rate_limits(expires_at)');
+  await run(`CREATE TABLE IF NOT EXISTS security_rate_limits_v2 (
+    scope TEXT NOT NULL,
+    identifier_hash TEXT NOT NULL,
+    window_key INTEGER NOT NULL,
+    request_count INTEGER NOT NULL DEFAULT 0,
+    expires_at DATETIME NOT NULL,
+    PRIMARY KEY (scope, identifier_hash, window_key)
+  )`);
+  await run('CREATE INDEX IF NOT EXISTS security_rate_limits_v2_expires_idx ON security_rate_limits_v2(expires_at)');
 }
 
 async function runOptionalMigration(sql) {

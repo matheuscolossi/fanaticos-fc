@@ -87,7 +87,7 @@ test('limite por conta não pode ser contornado trocando o IP', async () => {
 
 test('identificadores são persistidos somente como HMAC', async () => {
   const rows = await database.all(
-    `SELECT identifier_hash FROM rate_limits
+    `SELECT identifier_hash FROM security_rate_limits_v2
      WHERE scope IN ('test-ip:ip', 'test-account:account')`
   );
   assert.ok(rows.length > 0);
