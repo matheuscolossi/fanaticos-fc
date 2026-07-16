@@ -93,7 +93,7 @@ function renderCartPage() {
         <p class="cart-summary__cupom-msg" id="cepMsg"></p>
 
         <div class="cart-page__cupom">
-          <input type="text" id="inputCupom" placeholder="Código do cupom (ex: URI10)" value="${safeAttr(getCupomAplicado())}" />
+          <input type="text" id="inputCupom" placeholder="Código do cupom (ex:OFF10)" value="${safeAttr(getCupomAplicado())}" />
           <button class="btn btn--outline btn--sm" id="btnAplicarCupom">Aplicar</button>
         </div>
         <p class="cart-summary__cupom-msg" id="cupomMsg"></p>
