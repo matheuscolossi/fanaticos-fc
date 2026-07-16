@@ -21,7 +21,18 @@ async function apiFetch(path, options = {}) {
     credentials: 'include',
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
+    const contentType = String(res.headers.get('content-type') || '').toLowerCase();
+    let err;
+    if (contentType.includes('application/json')) {
+      err = await res.json().catch(() => ({}));
+    } else {
+      const responseText = await res.text().catch(() => '');
+      err = {
+        error: res.status === 404
+          ? 'Este recurso ainda não está disponível no backend publicado. Publique a versão atual da API.'
+          : responseText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240),
+      };
+    }
     const sessionInvalid = res.status === 401
       || (res.status === 403 && ['ACCESS_DISABLED', 'AUTH_USER_NOT_FOUND'].includes(err.code));
     if (sessionInvalid) {
@@ -33,7 +44,7 @@ async function apiFetch(path, options = {}) {
         throw new Error('Sessão expirada. Faça login novamente.');
       }
     }
-    const error = new Error(err.error || `HTTP ${res.status}`);
+    const error = new Error(err.error || `Falha na API (HTTP ${res.status}).`);
     error.code = err.code;
     error.status = res.status;
     error.details = err.details;

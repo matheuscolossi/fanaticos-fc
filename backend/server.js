@@ -155,6 +155,15 @@ app.use('/', specRoutes({
   publicRateLimit: rateLimiters.publicRead,
 }));
 
+// Mantém o contrato JSON da API inclusive para versões de frontend que
+// solicitarem uma rota ainda não publicada no backend.
+app.use('/api', (req, res) => {
+  res.status(404).json({
+    error: 'Rota da API não encontrada.',
+    code: 'API_ROUTE_NOT_FOUND',
+  });
+});
+
 app.use(errorHandler);
 
 // Porta abre imediatamente — Render considera o deploy bem-sucedido
