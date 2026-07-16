@@ -122,6 +122,11 @@ async function runPostgres(sql, params = []) {
   return { lastID: result.rows[0]?.id, changes: result.rowCount };
 }
 
+async function runPostgresNoId(sql, params = []) {
+  const result = await pgPool.query(toPostgresSql(sql), params);
+  return { changes: result.rowCount };
+}
+
 async function getPostgres(sql, params = []) {
   const result = await pgPool.query(toPostgresSql(sql), params);
   return result.rows[0];
@@ -134,6 +139,10 @@ async function allPostgres(sql, params = []) {
 
 function run(sql, params = []) {
   return isPostgres ? runPostgres(sql, params) : runSqlite(sql, params);
+}
+
+function runNoId(sql, params = []) {
+  return isPostgres ? runPostgresNoId(sql, params) : runSqlite(sql, params);
 }
 
 function get(sql, params = []) {
@@ -152,6 +161,10 @@ async function transaction(work) {
         const finalSql = toPostgresSql(shouldReturnId(sql) ? `${sql} RETURNING id` : sql);
         const result = await client.query(finalSql, params);
         return { lastID: result.rows[0]?.id, changes: result.rowCount };
+      },
+      runNoId: async (sql, params = []) => {
+        const result = await client.query(toPostgresSql(sql), params);
+        return { changes: result.rowCount };
       },
       get: async (sql, params = []) => {
         const result = await client.query(toPostgresSql(sql), params);
@@ -178,7 +191,7 @@ async function transaction(work) {
 
   const execute = async () => {
     await runSqlite('BEGIN IMMEDIATE TRANSACTION');
-    const tx = { run: runSqlite, get: getSqlite, all: allSqlite };
+    const tx = { run: runSqlite, runNoId: runSqlite, get: getSqlite, all: allSqlite };
     try {
       const result = await work(tx);
       await runSqlite('COMMIT');
@@ -1552,4 +1565,4 @@ async function init() {
   console.log('[database] Initialized.');
 }
 
-module.exports = { all, close, get, init, isPostgres, isUsingPostgres: () => isPostgres, run, transaction };
+module.exports = { all, close, get, init, isPostgres, isUsingPostgres: () => isPostgres, run, runNoId, transaction };

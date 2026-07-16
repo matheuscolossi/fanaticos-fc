@@ -10,7 +10,7 @@ async function consume({ scope, identifierHash, windowMs, limit, nowMs = Date.no
       'DELETE FROM security_rate_limits_v2 WHERE expires_at < ?',
       [new Date(nowMs).toISOString()]
     );
-    await db.run(
+    await db.runNoId(
       `INSERT INTO security_rate_limits_v2 (scope, identifier_hash, window_key, request_count, expires_at)
        VALUES (?, ?, ?, 1, ?)
        ON CONFLICT(scope, identifier_hash, window_key)
