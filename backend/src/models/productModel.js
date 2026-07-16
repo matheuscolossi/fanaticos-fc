@@ -27,7 +27,7 @@ const ADMIN_PRODUCT_SELECT = `
   p.categoria_id, p.descricao, p.descricao_curta,
   p.imagens, p.estoque, COALESCE(p.estoque_reservado, 0) AS estoque_reservado, p.estoque_minimo, p.destaque,
   p.time, p.pais, p.competicao, p.temporada, p.tipo, p.marca, p.genero,
-  p.tamanhos, p.cores, p.status, p.produto_novo, p.produto_promocional,
+  p.tamanhos, p.cores, p.guia_tamanhos, p.status, p.produto_novo, p.produto_promocional,
   p.peso, p.dimensoes, p.info_lavagem, p.keywords, p.meta_titulo, p.meta_descricao,
   p.created_at, c.nome as categoria_nome
 `;
@@ -47,7 +47,7 @@ const PUBLIC_PRODUCT_DETAIL_SELECT = `
   p.descricao, p.descricao_curta, p.imagens,
   p.estoque, COALESCE(p.estoque_reservado, 0) AS estoque_reservado, p.destaque,
   p.time, p.pais, p.competicao, p.temporada, p.tipo, p.marca, p.genero,
-  p.tamanhos, p.cores, p.produto_novo, p.produto_promocional,
+  p.tamanhos, p.cores, p.guia_tamanhos, p.produto_novo, p.produto_promocional,
   p.peso, p.dimensoes, p.info_lavagem, p.keywords, p.meta_titulo, p.meta_descricao,
   c.nome AS categoria_nome
 `;
@@ -185,14 +185,14 @@ function create(p, db = database) {
       categoria_id, descricao, descricao_curta,
       imagens, estoque, estoque_minimo, destaque,
       time, pais, competicao, temporada, tipo, marca, genero,
-      tamanhos, cores, status, produto_novo, produto_promocional,
+      tamanhos, cores, guia_tamanhos, status, produto_novo, produto_promocional,
       peso, dimensoes, info_lavagem, keywords, meta_titulo, meta_descricao
     ) VALUES (
       ?, ?, ?, ?, ?, ?,
       ?, ?, ?,
       JSON_VALUE(?), ?, ?, ?,
       ?, ?, ?, ?, ?, ?, ?,
-      JSON_VALUE(?), JSON_VALUE(?), ?, ?, ?,
+      JSON_VALUE(?), JSON_VALUE(?), JSON_VALUE(?), ?, ?, ?,
       ?, JSON_VALUE(?), ?, ?, ?, ?
     )`,
     [
@@ -200,7 +200,7 @@ function create(p, db = database) {
       p.categoria_id, p.descricao, p.descricao_curta,
       p.imagens, p.estoque, p.estoque_minimo, p.destaque,
       p.time, p.pais, p.competicao, p.temporada, p.tipo, p.marca, p.genero,
-      p.tamanhos, p.cores, p.status, p.produto_novo, p.produto_promocional,
+      p.tamanhos, p.cores, p.guia_tamanhos, p.status, p.produto_novo, p.produto_promocional,
       p.peso, p.dimensoes, p.info_lavagem, p.keywords, p.meta_titulo, p.meta_descricao,
     ]
   );
@@ -213,7 +213,7 @@ function update(productId, p, db = database) {
       categoria_id=?, descricao=?, descricao_curta=?,
       imagens=JSON_VALUE(?), estoque=?, estoque_minimo=?, destaque=?,
       time=?, pais=?, competicao=?, temporada=?, tipo=?, marca=?, genero=?,
-      tamanhos=JSON_VALUE(?), cores=JSON_VALUE(?), status=?, produto_novo=?, produto_promocional=?,
+      tamanhos=JSON_VALUE(?), cores=JSON_VALUE(?), guia_tamanhos=JSON_VALUE(?), status=?, produto_novo=?, produto_promocional=?,
       peso=?, dimensoes=JSON_VALUE(?), info_lavagem=?, keywords=?, meta_titulo=?, meta_descricao=?
      WHERE id=? AND ? >= COALESCE(estoque_reservado, 0)`,
     [
@@ -221,7 +221,7 @@ function update(productId, p, db = database) {
       p.categoria_id, p.descricao, p.descricao_curta,
       p.imagens, p.estoque, p.estoque_minimo, p.destaque,
       p.time, p.pais, p.competicao, p.temporada, p.tipo, p.marca, p.genero,
-      p.tamanhos, p.cores, p.status, p.produto_novo, p.produto_promocional,
+      p.tamanhos, p.cores, p.guia_tamanhos, p.status, p.produto_novo, p.produto_promocional,
       p.peso, p.dimensoes, p.info_lavagem, p.keywords, p.meta_titulo, p.meta_descricao,
       productId, p.estoque,
     ]
@@ -238,6 +238,50 @@ function listVariants(productIds, db = database) {
      ORDER BY produto_id, id`,
     ids
   );
+}
+
+function listColorVariants(productIds, db = database) {
+  const ids = [...new Set((productIds || []).map(Number).filter(Number.isSafeInteger))];
+  if (ids.length === 0) return Promise.resolve([]);
+  return db.all(
+    `SELECT produto_id, tamanho, cor, estoque, estoque_reservado
+     FROM produto_variantes_cores WHERE produto_id IN (${ids.map(() => '?').join(',')})
+     ORDER BY produto_id, tamanho, cor`,
+    ids
+  );
+}
+
+async function syncColorVariants(productId, variants, db = database) {
+  const current = await db.all(
+    'SELECT tamanho, cor, estoque_reservado FROM produto_variantes_cores WHERE produto_id = ?',
+    [productId]
+  );
+  const requested = new Set(variants.map((variant) => `${variant.tamanho}\u0000${variant.cor}`));
+  if (current.some((variant) => !requested.has(`${variant.tamanho}\u0000${variant.cor}`) && Number(variant.estoque_reservado) > 0)) {
+    throw createHttpError(409, 'Uma combinação de tamanho e cor reservada não pode ser removida.', 'COLOR_VARIANT_HAS_RESERVATION');
+  }
+  for (const variant of variants) {
+    const result = await db.run(
+      `INSERT INTO produto_variantes_cores (produto_id, tamanho, cor, estoque, estoque_reservado)
+       VALUES (?, ?, ?, ?, 0)
+       ON CONFLICT(produto_id, tamanho, cor) DO UPDATE SET estoque = excluded.estoque
+       WHERE excluded.estoque >= produto_variantes_cores.estoque_reservado`,
+      [productId, variant.tamanho, variant.cor, variant.estoque]
+    );
+    if (Number(result.changes) !== 1) {
+      throw createHttpError(409, `O estoque de ${variant.tamanho} / ${variant.cor} não pode ficar abaixo das reservas.`, 'COLOR_VARIANT_STOCK_BELOW_RESERVED');
+    }
+  }
+  for (const variant of current) {
+    const key = `${variant.tamanho}\u0000${variant.cor}`;
+    if (!requested.has(key)) {
+      const result = await db.run(
+        'DELETE FROM produto_variantes_cores WHERE produto_id = ? AND tamanho = ? AND cor = ? AND estoque_reservado = 0',
+        [productId, variant.tamanho, variant.cor]
+      );
+      if (Number(result.changes) !== 1) throw createHttpError(409, 'Uma combinação reservada não pode ser removida.', 'COLOR_VARIANT_HAS_RESERVATION');
+    }
+  }
 }
 
 async function syncVariants(productId, variants, db = database) {
@@ -395,10 +439,12 @@ module.exports = {
   findPublicById,
   list,
   listPaginated,
+  listColorVariants,
   listVariants,
   remove,
   setDestaque,
   setStatus,
   syncVariants,
+  syncColorVariants,
   update,
 };

@@ -144,6 +144,94 @@ function normalizeText(str) {
   return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
+function analyticsSessionId() {
+  let id = sessionStorage.getItem('fc_analytics_session');
+  if (!id) {
+    id = typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+    sessionStorage.setItem('fc_analytics_session', id);
+  }
+  return id;
+}
+
+async function trackCommerceEvent(evento, dados = {}) {
+  if (localStorage.getItem('fc_privacy_consent') !== 'accepted') return false;
+  try {
+    const result = await api.post('/recursos/analytics/eventos', {
+      sessionId: analyticsSessionId(), evento, dados,
+    });
+    return Boolean(result.recorded);
+  } catch { return false; }
+}
+
+function renderPrivacyConsent() {
+  if (localStorage.getItem('fc_privacy_consent')) return;
+  const banner = document.createElement('section');
+  banner.className = 'privacy-consent';
+  banner.setAttribute('role', 'dialog');
+  banner.setAttribute('aria-label', 'Preferências de privacidade');
+  const paragraph = document.createElement('p');
+  paragraph.textContent = 'Usamos dados essenciais para a loja funcionar. Você escolhe separadamente analytics e lembretes de carrinho; nenhum deles registra senha, CPF ou pagamento.';
+  const preferences = document.createElement('div');
+  preferences.className = 'privacy-consent__preferences';
+  const analyticsLabel = document.createElement('label');
+  const analyticsInput = document.createElement('input');
+  analyticsInput.type = 'checkbox';
+  analyticsLabel.append(analyticsInput, document.createTextNode(' Permitir analytics'));
+  const marketingLabel = document.createElement('label');
+  const marketingInput = document.createElement('input');
+  marketingInput.type = 'checkbox';
+  marketingLabel.append(marketingInput, document.createTextNode(' Receber lembrete de carrinho'));
+  preferences.append(analyticsLabel, marketingLabel);
+  const actions = document.createElement('div');
+  const reject = document.createElement('button');
+  reject.className = 'btn btn--outline btn--sm';
+  reject.textContent = 'Somente essenciais';
+  const accept = document.createElement('button');
+  accept.className = 'btn btn--primary btn--sm';
+  accept.textContent = 'Salvar preferências';
+  actions.append(reject, accept);
+  banner.append(paragraph, preferences, actions);
+  document.body.appendChild(banner);
+
+  const save = async (analytics, marketing) => {
+    localStorage.setItem('fc_privacy_consent', analytics ? 'accepted' : 'essential');
+    localStorage.setItem('fc_marketing_consent', marketing ? 'accepted' : 'declined');
+    banner.remove();
+    renderPrivacySettingsButton();
+    await api.post('/recursos/privacidade/consentimento', {
+      sessionId: analyticsSessionId(), analytics, marketing,
+    }).catch(() => {});
+    if (analytics) trackCommerceEvent('page_view', { path: window.location.pathname });
+  };
+  reject.addEventListener('click', () => save(false, false));
+  accept.addEventListener('click', () => save(analyticsInput.checked, marketingInput.checked));
+}
+
+function renderPrivacySettingsButton() {
+  if (document.querySelector('.privacy-settings') || !localStorage.getItem('fc_privacy_consent')) return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'privacy-settings';
+  button.textContent = 'Privacidade';
+  button.addEventListener('click', () => {
+    localStorage.removeItem('fc_privacy_consent');
+    localStorage.removeItem('fc_marketing_consent');
+    button.remove();
+    renderPrivacyConsent();
+  });
+  document.body.appendChild(button);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  renderPrivacyConsent();
+  renderPrivacySettingsButton();
+  if (localStorage.getItem('fc_privacy_consent') === 'accepted') {
+    trackCommerceEvent('page_view', { path: window.location.pathname });
+  }
+});
+
 // --- CEP (ViaCEP) -----------------------------------------------------------
 async function buscarCep(cep) {
   const cleaned = String(cep || '').replace(/\D/g, '');

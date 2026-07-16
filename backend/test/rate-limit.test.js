@@ -128,6 +128,7 @@ test('todas as rotas sensíveis aplicam o middleware correspondente', () => {
     login: function loginRate(req, res, next) { next(); },
     verifyEmail: function verifyRate(req, res, next) { next(); },
     resendCode: function resendRate(req, res, next) { next(); },
+    passwordReset: function passwordResetRate(req, res, next) { next(); },
   };
   const authRouter = buildAuthRoutes({ authMiddleware: pass, jwtSecret: secret, rateLimiters });
   const routeMiddleware = (router, path, method = 'post') => router.stack.find(
@@ -138,6 +139,8 @@ test('todas as rotas sensíveis aplicam o middleware correspondente', () => {
   assert.equal(routeMiddleware(authRouter, '/login')[0], rateLimiters.login);
   assert.equal(routeMiddleware(authRouter, '/verificar-email')[0], rateLimiters.verifyEmail);
   assert.equal(routeMiddleware(authRouter, '/reenviar-codigo')[0], rateLimiters.resendCode);
+  assert.equal(routeMiddleware(authRouter, '/solicitar-recuperacao')[0], rateLimiters.passwordReset);
+  assert.equal(routeMiddleware(authRouter, '/redefinir-senha')[0], rateLimiters.passwordReset);
 
   const trackingRateLimit = function trackingRate(req, res, next) { next(); };
   const orderRouter = buildOrderRoutes({

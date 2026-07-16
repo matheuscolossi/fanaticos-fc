@@ -193,12 +193,14 @@ Definidas em `backend/.env` (modelo em `backend/.env.example`):
 | `DB_SSL` | `true` para exigir SSL na conexão PostgreSQL (ex.: Neon, Render). |
 | `JWT_SECRET` | Chave usada para assinar/validar os tokens JWT. Obrigatória. |
 | `CORS_ORIGIN` | Lista de origens permitidas, separadas por vírgula. |
+| `FRONTEND_URL` | URL pública HTTPS usada em recuperação de senha, carrinho abandonado, alerta de reposição e retornos do Stripe. |
+| `SHIPPING_PROVIDER` | Nome da modalidade/transportadora mostrado na estimativa local. Cotações externas exigem a API e as credenciais do provedor escolhido. |
 | `DEFAULT_ADMIN_EMAIL` / `DEFAULT_ADMIN_PASSWORD` | Credenciais obrigatórias para provisionar o primeiro administrador quando o banco está vazio. Não possuem fallback. |
 | `ENABLE_ACADEMIC_API` | Feature flag das mutações acadêmicas. O padrão seguro é `false`; nesse estado as rotas não são registradas. |
 | `ACADEMIC_API_HOST` / `COMMERCIAL_API_HOST` | Hosts obrigatoriamente distintos quando a API acadêmica é habilitada em produção. Requisições de mutação no host comercial recebem `404`. |
 | `BASIC_AUTH_USER` / `BASIC_AUTH_PASS` | Credenciais exclusivas exigidas somente quando `ENABLE_ACADEMIC_API=true`. |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Credenciais do Cloudinary para upload/armazenamento de imagens de produto. |
-| `RESEND_API_KEY` / `RESEND_FROM` | Credenciais do serviço de e-mail (verificação de cadastro). |
+| `RESEND_API_KEY` / `RESEND_FROM` | Credenciais do serviço de e-mail para verificação, recuperação, pedidos, reposição e carrinho abandonado. |
 | `EMAIL_CODE_TTL_MINUTES` / `EMAIL_CODE_MAX_ATTEMPTS` | Validade do código e máximo de tentativas antes da invalidação. |
 | `EMAIL_RESEND_COOLDOWN_SECONDS` / `EMAIL_RESEND_WINDOW_MINUTES` / `EMAIL_RESEND_MAX_PER_WINDOW` | Cooldown e limite persistente de reenvios por conta. |
 | `RATE_LIMIT_SECRET` | Chave opcional usada para transformar IPs e contas em HMAC antes de persistir os contadores. Se omitida, usa `JWT_SECRET`. |

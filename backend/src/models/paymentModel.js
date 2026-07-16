@@ -7,8 +7,8 @@ function createCheckoutDraft(draft, db = database) {
     `INSERT INTO checkout_drafts (
        id, usuario_id, itens, subtotal, frete, desconto, total, currency,
        nome_cliente, email_cliente, telefone_cliente, endereco, uf, cupom_codigo, status,
-       stock_status, stock_expires_at
-     ) VALUES (?, ?, JSON_VALUE(?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       stock_status, stock_expires_at, prazo_entrega_min, prazo_entrega_max, previsao_entrega, transportadora
+     ) VALUES (?, ?, JSON_VALUE(?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       draft.id,
       draft.usuario_id,
@@ -27,6 +27,10 @@ function createCheckoutDraft(draft, db = database) {
       draft.status || 'created',
       draft.stock_status || 'none',
       draft.stock_expires_at || null,
+      draft.prazo_entrega_min ?? null,
+      draft.prazo_entrega_max ?? null,
+      draft.previsao_entrega || null,
+      draft.transportadora || null,
     ]
   );
 }

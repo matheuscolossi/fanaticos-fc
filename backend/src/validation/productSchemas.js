@@ -65,6 +65,38 @@ function normalizeVariants(value, sizes) {
   return variants;
 }
 
+function normalizeColorVariants(value, sizes, colors) {
+  if (value === undefined || value === null) return null;
+  const parsed = jsonValue(value, 'variantes_cores', []);
+  if (!Array.isArray(parsed) || parsed.length > 600) {
+    throw validationError('variantes_cores', 'A grade de tamanho e cor deve conter no máximo 600 itens.', 'COLOR_VARIANTS_INVALID');
+  }
+  if (sizes.length === 0 || colors.length === 0) {
+    if (parsed.length === 0) return [];
+    throw validationError('variantes_cores', 'Cadastre tamanhos e cores antes da grade de estoque.', 'COLOR_VARIANTS_INVALID');
+  }
+  const variants = parsed.map((variant) => {
+    requirePlainObject(variant, 'Variação de cor');
+    return {
+      tamanho: stringValue(variant.tamanho, 'variantes_cores.tamanho', { label: 'Tamanho', min: 1, max: 20 }),
+      cor: stringValue(variant.cor, 'variantes_cores.cor', { label: 'Cor', min: 1, max: 50 }),
+      estoque: numberValue(variant.estoque, 'variantes_cores.estoque', {
+        label: 'Estoque da combinação', min: 0, max: MAX_STOCK, integer: true,
+      }),
+    };
+  });
+  const expected = new Set(sizes.flatMap((size) => colors.map((color) => `${size}\u0000${color}`)));
+  const actual = new Set(variants.map((variant) => `${variant.tamanho}\u0000${variant.cor}`));
+  if (actual.size !== variants.length || actual.size !== expected.size || [...expected].some((key) => !actual.has(key))) {
+    throw validationError(
+      'variantes_cores',
+      'Informe o estoque de cada combinação entre tamanho e cor cadastrados.',
+      'COLOR_VARIANT_STOCK_INVALID'
+    );
+  }
+  return variants;
+}
+
 function normalizeDimensions(value) {
   const parsed = jsonValue(value, 'dimensoes', {});
   requirePlainObject(parsed, 'Dimensões');
@@ -75,6 +107,21 @@ function normalizeDimensions(value) {
     });
   }
   return dimensions;
+}
+
+function normalizeSizeGuide(value) {
+  const parsed = jsonValue(value, 'guia_tamanhos', []);
+  if (!Array.isArray(parsed) || parsed.length > 30) {
+    throw validationError('guia_tamanhos', 'O guia de tamanhos deve conter até 30 linhas.');
+  }
+  return parsed.map((row) => {
+    requirePlainObject(row, 'Medida');
+    return {
+      tamanho: stringValue(row.tamanho, 'guia_tamanhos.tamanho', { label: 'Tamanho', min: 1, max: 20 }),
+      largura: numberValue(row.largura, 'guia_tamanhos.largura', { label: 'Largura', min: 1, max: 500, decimals: 1 }),
+      comprimento: numberValue(row.comprimento, 'guia_tamanhos.comprimento', { label: 'Comprimento', min: 1, max: 500, decimals: 1 }),
+    };
+  });
 }
 
 function validateProduct(data) {
@@ -91,10 +138,26 @@ function validateProduct(data) {
   }
 
   const tamanhos = normalizeStringArray(data.tamanhos, 'tamanhos', { maxItems: 30, itemMax: 20 });
-  const variantes = normalizeVariants(data.variantes, tamanhos);
+  const cores = normalizeStringArray(data.cores, 'cores', { maxItems: 20, itemMax: 50 });
+  const variantesCores = normalizeColorVariants(data.variantes_cores, tamanhos, cores);
+  let variantes = normalizeVariants(data.variantes, tamanhos);
+  if (variantesCores?.length) {
+    variantes = tamanhos.map((tamanho) => ({
+      tamanho,
+      estoque: variantesCores
+        .filter((variant) => variant.tamanho === tamanho)
+        .reduce((sum, variant) => sum + variant.estoque, 0),
+    }));
+  }
   const estoqueInformado = numberValue(data.estoque ?? 0, 'estoque', {
     label: 'Estoque', min: 0, max: MAX_STOCK, integer: true,
   });
+  const estoqueVariantes = variantes?.length
+    ? variantes.reduce((total, variant) => total + variant.estoque, 0)
+    : null;
+  if (estoqueVariantes !== null && estoqueVariantes > MAX_STOCK) {
+    throw validationError('variantes', `O estoque total não pode ultrapassar ${MAX_STOCK}.`, 'VARIANT_STOCK_INVALID');
+  }
 
   let categoriaId = null;
   if (data.categoria_id !== null && data.categoria_id !== undefined && data.categoria_id !== '') {
@@ -121,9 +184,7 @@ function validateProduct(data) {
     descricao: optionalText(data, 'descricao', 'Descrição', 10000) || '',
     descricao_curta: optionalText(data, 'descricao_curta', 'Descrição curta', 160) || '',
     imagens,
-    estoque: variantes?.length
-      ? variantes.reduce((total, variant) => total + variant.estoque, 0)
-      : estoqueInformado,
+    estoque: estoqueVariantes ?? estoqueInformado,
     estoque_minimo: numberValue(data.estoque_minimo ?? 0, 'estoque_minimo', {
       label: 'Estoque mínimo', min: 0, max: MAX_STOCK, integer: true,
     }),
@@ -137,7 +198,9 @@ function validateProduct(data) {
     genero: enumValue(data.genero, 'genero', PRODUCT_GENDERS, { label: 'Gênero', fallback: 'masculino' }),
     tamanhos,
     variantes,
-    cores: normalizeStringArray(data.cores, 'cores', { maxItems: 20, itemMax: 50 }),
+    cores,
+    variantes_cores: variantesCores,
+    guia_tamanhos: normalizeSizeGuide(data.guia_tamanhos),
     status: enumValue(data.status, 'status', PRODUCT_STATUSES, { label: 'Status', fallback: 'ativo' }),
     produto_novo: booleanValue(data.produto_novo, 'produto_novo'),
     produto_promocional: booleanValue(data.produto_promocional, 'produto_promocional'),

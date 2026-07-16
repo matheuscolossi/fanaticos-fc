@@ -11,6 +11,8 @@ module.exports = ({ authMiddleware, jwtSecret, rateLimiters }) => {
   router.post('/logout', controller.logout);
   router.post('/verificar-email', rateLimiters.verifyEmail, asyncHandler(controller.verificarEmail));
   router.post('/reenviar-codigo', rateLimiters.resendCode, asyncHandler(controller.reenviarCodigo));
+  router.post('/solicitar-recuperacao', rateLimiters.passwordReset, asyncHandler(controller.solicitarRecuperacao));
+  router.post('/redefinir-senha', rateLimiters.passwordReset, asyncHandler(controller.redefinirSenha));
   router.get('/perfil', authMiddleware, asyncHandler(controller.profile));
   router.put('/perfil', authMiddleware, asyncHandler(controller.updateProfile));
 

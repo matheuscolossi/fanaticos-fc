@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const userModel = require('../models/userModel');
+const { transaction } = require('../config/database');
 const { createHttpError } = require('../utils/http');
 const emailService = require('./emailService');
 const logService = require('./logService');
@@ -25,6 +26,7 @@ const RESEND_COOLDOWN_SECONDS = boundedInteger(process.env.EMAIL_RESEND_COOLDOWN
 const RESEND_WINDOW_MINUTES = boundedInteger(process.env.EMAIL_RESEND_WINDOW_MINUTES, 60, 15, 24 * 60);
 const RESEND_MAX_PER_WINDOW = boundedInteger(process.env.EMAIL_RESEND_MAX_PER_WINDOW, 5, 2, 20);
 const VERIFY_MAX_ATTEMPTS = boundedInteger(process.env.EMAIL_CODE_MAX_ATTEMPTS, 5, 3, 10);
+const PASSWORD_RESET_TTL_MINUTES = 30;
 function parsePermissoes(value) {
   if (Array.isArray(value)) return value;
   try { return JSON.parse(value || '[]'); } catch { return []; }
@@ -206,6 +208,61 @@ async function getProfile(userId) {
   return { ...user, permissoes: parsePermissoes(user.permissoes) };
 }
 
+function passwordResetFrontendUrl(token) {
+  const configured = String(process.env.FRONTEND_URL || '').trim().replace(/\/$/, '');
+  if (!configured) throw new Error('FRONTEND_URL não configurada.');
+  const base = new URL(configured);
+  const production = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+  if (production && base.protocol !== 'https:') throw new Error('FRONTEND_URL deve usar HTTPS em produção.');
+  if (!['http:', 'https:'].includes(base.protocol)) throw new Error('FRONTEND_URL inválida.');
+  return `${base.href.replace(/\/$/, '')}/pages/recuperar-senha.html?token=${encodeURIComponent(token)}`;
+}
+
+async function requestPasswordReset({ email } = {}) {
+  const generic = { message: 'Se o e-mail estiver cadastrado, enviaremos as instruções de recuperação.' };
+  let normalizedEmail;
+  try { normalizedEmail = normalizeEmail(email); } catch { return generic; }
+  const user = await userModel.findByEmail(normalizedEmail);
+  if (!user || user.status === 'inativo') return generic;
+
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MINUTES * 60 * 1000).toISOString();
+  await transaction(async (db) => {
+    await userModel.invalidatePasswordResetTokens(user.id, db);
+    await userModel.createPasswordResetToken(user.id, tokenHash, expiresAt, db);
+  });
+  try {
+    await emailService.enviarRecuperacaoSenha(
+      user.email,
+      passwordResetFrontendUrl(rawToken),
+      PASSWORD_RESET_TTL_MINUTES
+    );
+  } catch (error) {
+    console.error('[auth:password-reset-email:error]', error.message);
+    await userModel.invalidatePasswordResetTokens(user.id).catch(() => {});
+  }
+  return generic;
+}
+
+async function resetPassword({ token, novaSenha } = {}) {
+  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/i.test(token)) {
+    throw createHttpError(400, 'Link de recuperação inválido ou expirado.', 'PASSWORD_RESET_INVALID');
+  }
+  validatePassword(novaSenha);
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  await transaction(async (db) => {
+    const reset = await userModel.findValidPasswordResetToken(tokenHash, db);
+    if (!reset || reset.status === 'inativo') {
+      throw createHttpError(400, 'Link de recuperação inválido ou expirado.', 'PASSWORD_RESET_INVALID');
+    }
+    const passwordHash = bcrypt.hashSync(novaSenha, 10);
+    const consumed = await userModel.consumePasswordResetToken(reset.id, reset.usuario_id, passwordHash, db);
+    if (!consumed) throw createHttpError(400, 'Link de recuperação inválido ou expirado.', 'PASSWORD_RESET_INVALID');
+  });
+  return { message: 'Senha redefinida. Entre novamente com a nova senha.' };
+}
+
 async function updateProfile(userId, data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw createHttpError(400, 'Dados inválidos.', 'VALIDATION_ERROR');
@@ -253,8 +310,10 @@ async function updateProfile(userId, data) {
 module.exports = {
   getProfile,
   loginUser,
+  requestPasswordReset,
   registerUser,
   reenviarCodigoEmail,
+  resetPassword,
   updateProfile,
   validarForcaSenha,
   verificarCodigoEmail,

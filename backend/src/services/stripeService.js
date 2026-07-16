@@ -5,6 +5,8 @@ const orderModel = require('../models/orderModel');
 const orderService = require('./orderService');
 const paymentModel = require('../models/paymentModel');
 const userModel = require('../models/userModel');
+const commerceFeaturesModel = require('../models/commerceFeaturesModel');
+const emailService = require('./emailService');
 const { transaction } = require('../config/database');
 const { createHttpError } = require('../utils/http');
 
@@ -37,6 +39,7 @@ function normalizeCartItems(items) {
     productId: Number(item?.productId ?? item?.id),
     qty: Number(item?.qty),
     tamanho: cleanText(item?.tamanho, 50) || null,
+    cor: cleanText(item?.cor, 50) || null,
     personalizacao: normalizePersonalization(item?.personalizacao),
   }));
 }
@@ -72,6 +75,7 @@ function getShippingSnapshot(session) {
 function buildLineItem(item) {
   const details = [
     item.tamanho ? `Tamanho: ${item.tamanho}` : '',
+    item.cor ? `Cor: ${item.cor}` : '',
     item.personalizacao?.nome ? `Nome: ${item.personalizacao.nome}` : '',
     item.personalizacao?.numero ? `Número: ${item.personalizacao.numero}` : '',
   ].filter(Boolean).join(' · ');
@@ -217,6 +221,10 @@ async function createCheckoutSession({ items, customer, cupomCodigo, uf, userId 
     endereco: cleanText(customer?.address, 300),
     uf: cleanText(uf, 2).toUpperCase(),
     cupom_codigo: cleanText(cupomCodigo, 50),
+    prazo_entrega_min: summary.deliveryEstimate?.minBusinessDays,
+    prazo_entrega_max: summary.deliveryEstimate?.maxBusinessDays,
+    previsao_entrega: summary.deliveryEstimate?.estimatedDate,
+    transportadora: summary.deliveryEstimate?.carrier,
   }, new Date(expiresAtUnix * 1000).toISOString());
 
   const sessionParams = {
@@ -285,11 +293,17 @@ async function fulfillCheckoutSession(session, eventId, db) {
   }, db);
   await paymentModel.updateDraftStatus(draft.id, 'paid', db);
   console.log('[stripe] Pedido confirmado pelo webhook', { orderId: order.id, sessionId: session.id });
-  return order;
+  return {
+    ...order,
+    usuario_id: draft.usuario_id || null,
+    email_cliente: session.customer_details?.email || draft.email_cliente,
+    nome_cliente: session.customer_details?.name || draft.nome_cliente,
+  };
 }
 
 async function processWebhookEvent(event) {
-  return transaction(async (db) => {
+  let notification = null;
+  const result = await transaction(async (db) => {
     const alreadyProcessed = await paymentModel.findWebhookEvent(event.id, db);
     if (alreadyProcessed) return { duplicate: true };
 
@@ -299,14 +313,32 @@ async function processWebhookEvent(event) {
     switch (event.type) {
       case 'checkout.session.completed':
         if (object.payment_status === 'paid') {
-          await fulfillCheckoutSession(object, event.id, db);
+          const order = await fulfillCheckoutSession(object, event.id, db);
+          if (order.usuario_id) await commerceFeaturesModel.markCartConverted(order.usuario_id, db);
+          notification = {
+            to: order.email_cliente,
+            nome: order.nome_cliente,
+            pedidoId: order.id,
+            tipo: 'confirmado',
+            status: 'pago',
+          };
         } else {
           const checkoutId = object.metadata?.checkout_id || object.client_reference_id;
           if (checkoutId) await paymentModel.updateDraftStatus(checkoutId, 'awaiting_payment', db);
         }
         break;
       case 'checkout.session.async_payment_succeeded':
-        await fulfillCheckoutSession(object, event.id, db);
+        {
+          const order = await fulfillCheckoutSession(object, event.id, db);
+          if (order.usuario_id) await commerceFeaturesModel.markCartConverted(order.usuario_id, db);
+          notification = {
+            to: order.email_cliente,
+            nome: order.nome_cliente,
+            pedidoId: order.id,
+            tipo: 'confirmado',
+            status: 'pago',
+          };
+        }
         break;
       case 'checkout.session.async_payment_failed': {
         const checkoutId = object.metadata?.checkout_id || object.client_reference_id;
@@ -349,6 +381,14 @@ async function processWebhookEvent(event) {
               }
             );
           }
+          const order = await orderModel.findNotificationByPaymentIntent(paymentIntentId, db);
+          if (order) notification = {
+            to: order.email_cliente,
+            nome: order.nome_cliente,
+            pedidoId: order.id,
+            tipo: 'reembolsado',
+            status: object.refunded === true ? 'reembolsado' : 'reembolsado parcialmente',
+          };
         }
         break;
       }
@@ -358,6 +398,11 @@ async function processWebhookEvent(event) {
 
     return { duplicate: false };
   });
+  if (notification?.to && process.env.RESEND_API_KEY) {
+    await emailService.enviarAtualizacaoPedido(notification.to, notification)
+      .catch((error) => console.error('[stripe:email:error]', error.message));
+  }
+  return result;
 }
 
 async function handleWebhook(rawBody, signatureHeader) {

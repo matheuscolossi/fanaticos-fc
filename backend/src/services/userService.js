@@ -16,6 +16,13 @@ async function deleteClient(targetId) {
     // Administradores e IDs inexistentes são indistinguíveis nesta rota.
     throw createHttpError(404, 'Cliente não encontrado.', 'CLIENT_NOT_FOUND');
   }
+  if (deleted.protectedByReturns) {
+    throw createHttpError(
+      409,
+      'A conta possui solicitações de troca/devolução e deve ser desativada ou anonimizada, não excluída.',
+      'CLIENT_HAS_RETURN_HISTORY'
+    );
+  }
   return { message: 'Cliente excluído.' };
 }
 

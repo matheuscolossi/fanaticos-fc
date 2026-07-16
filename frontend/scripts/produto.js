@@ -19,6 +19,38 @@ function variantStock(product, size) {
   return Number(product?.estoque || 0);
 }
 
+function colorVariantStock(product, size, color) {
+  const variants = Array.isArray(product?.variantes_cores) ? product.variantes_cores : [];
+  if (!variants.length) return variantStock(product, size);
+  const variant = variants.find((item) => String(item.tamanho) === String(size) && String(item.cor) === String(color));
+  return variant ? Number(variant.estoque) : 0;
+}
+
+function refreshProductVariantOptions() {
+  const colorVariants = Array.isArray(produtoAtual?.variantes_cores) ? produtoAtual.variantes_cores : [];
+  if (!colorVariants.length) return;
+  const selectedSize = document.querySelector('#produtoSizeGrid .produto-size.active')?.dataset.size || null;
+  const selectedColor = document.querySelector('.produto-color.active')?.dataset.color || null;
+  document.querySelectorAll('#produtoSizeGrid .produto-size').forEach((button) => {
+    const available = selectedColor
+      ? colorVariantStock(produtoAtual, button.dataset.size, selectedColor)
+      : colorVariants.filter((item) => String(item.tamanho) === button.dataset.size).reduce((sum, item) => sum + Number(item.estoque || 0), 0);
+    button.disabled = available <= 0;
+    if (button.disabled && button.classList.contains('active')) button.classList.remove('active');
+  });
+  document.querySelectorAll('.produto-color').forEach((button) => {
+    const available = selectedSize
+      ? colorVariantStock(produtoAtual, selectedSize, button.dataset.color)
+      : colorVariants.filter((item) => String(item.cor) === button.dataset.color).reduce((sum, item) => sum + Number(item.estoque || 0), 0);
+    button.disabled = available <= 0;
+    if (button.disabled && button.classList.contains('active')) button.classList.remove('active');
+  });
+  const finalSize = document.querySelector('#produtoSizeGrid .produto-size.active')?.dataset.size;
+  const finalColor = document.querySelector('.produto-color.active')?.dataset.color;
+  const message = document.getElementById('produtoStockMessage');
+  if (message && finalSize && finalColor) message.textContent = `${colorVariantStock(produtoAtual, finalSize, finalColor)} em estoque nesta combinação`;
+}
+
 function produtoIdFromUrl() {
   const fromQuery = new URLSearchParams(window.location.search).get('id');
   if (fromQuery) return fromQuery;
@@ -73,6 +105,8 @@ function renderProduto(p) {
   const placeholderLabel = getProductPlaceholderLabel();
   const content = document.getElementById('produtoContent');
   const sizes = productSizes(p);
+  const colors = Array.isArray(p.cores) ? p.cores.map(String).filter(Boolean) : [];
+  const sizeGuide = Array.isArray(p.guia_tamanhos) ? p.guia_tamanhos : [];
 
   document.title = `${p.nome} - Fanáticos FC`;
   content.innerHTML = `
@@ -119,6 +153,20 @@ function renderProduto(p) {
         </div>
       </div>` : ''}
 
+      ${colors.length > 0 ? `<div class="produto-options">
+        <div class="produto-options__header"><h2>Cor</h2><span>Escolha antes de adicionar</span></div>
+        <div class="produto-size-grid" id="produtoColorGrid">
+          ${colors.map((color) => `<button class="produto-size produto-color" data-color="${safeAttr(color)}">${safeText(color)}</button>`).join('')}
+        </div>
+      </div>` : ''}
+
+      ${sizeGuide.length > 0 ? `<details class="produto-size-guide">
+        <summary>Ver guia de tamanhos e medidas</summary>
+        <div class="table-wrap"><table><thead><tr><th>Tamanho</th><th>Largura</th><th>Comprimento</th></tr></thead><tbody>
+          ${sizeGuide.map((row) => `<tr><td>${safeText(row.tamanho)}</td><td>${Number(row.largura)} cm</td><td>${Number(row.comprimento)} cm</td></tr>`).join('')}
+        </tbody></table></div>
+      </details>` : ''}
+
       <div class="produto-options">
         <div class="produto-options__header">
           <h2>Personalização</h2>
@@ -137,6 +185,8 @@ function renderProduto(p) {
       <p class="product-detail__estoque" id="produtoStockMessage">${p.estoque > 0 ? `${p.estoque} em estoque` : 'Produto esgotado'}</p>
       <div class="produto-page__actions">
         <button class="btn btn--primary" id="btnAddProduto" ${p.estoque <= 0 ? 'disabled' : ''}>Adicionar ao Carrinho</button>
+        <button class="btn btn--outline" id="btnFavoriteProduto" type="button">♡ Favoritar</button>
+        ${p.estoque <= 0 ? '<button class="btn btn--outline" id="btnRestockAlert" type="button">Avise-me quando voltar</button>' : ''}
       </div>
     </div>
   `;
@@ -152,29 +202,48 @@ function renderProduto(p) {
     document.getElementById('produtoCustomFields').style.display = event.target.checked ? 'grid' : 'none';
   });
 
-  document.querySelectorAll('.produto-size').forEach(btn => {
+  document.querySelectorAll('#produtoSizeGrid .produto-size').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.produto-size').forEach(item => item.classList.remove('active'));
+      document.querySelectorAll('#produtoSizeGrid .produto-size').forEach(item => item.classList.remove('active'));
       btn.classList.add('active');
       const stockMessage = document.getElementById('produtoStockMessage');
       if (stockMessage) stockMessage.textContent = `${variantStock(produtoAtual, btn.dataset.size)} em estoque neste tamanho`;
+      refreshProductVariantOptions();
+    });
+  });
+
+  document.querySelectorAll('.produto-color').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.produto-color').forEach((item) => item.classList.remove('active'));
+      btn.classList.add('active');
+      refreshProductVariantOptions();
     });
   });
 
   document.getElementById('btnAddProduto')?.addEventListener('click', addProdutoSelecionado);
+  document.getElementById('btnFavoriteProduto')?.addEventListener('click', toggleFavoriteProduto);
+  document.getElementById('btnRestockAlert')?.addEventListener('click', createRestockAlertProduto);
+  refreshProductVariantOptions();
 
   if (p.em_promocao && p.promocao_fim) {
     attachCountdown(content.querySelector('.produto-page__countdown'), p.promocao_fim);
   }
 
   loadAvaliacoesProduto();
+  loadProductEngagement();
 }
 
 function addProdutoSelecionado() {
   const sizes = productSizes(produtoAtual);
-  const tamanho = document.querySelector('.produto-size.active')?.dataset.size;
+  const tamanho = document.querySelector('#produtoSizeGrid .produto-size.active')?.dataset.size;
+  const colors = Array.isArray(produtoAtual?.cores) ? produtoAtual.cores : [];
+  const cor = document.querySelector('.produto-color.active')?.dataset.color;
   if (sizes.length > 0 && !tamanho) {
     showToast('Escolha um tamanho antes de adicionar.', 'error');
+    return;
+  }
+  if (colors.length > 0 && !cor) {
+    showToast('Escolha uma cor antes de adicionar.', 'error');
     return;
   }
 
@@ -189,8 +258,72 @@ function addProdutoSelecionado() {
 
   addToCart(produtoAtual, {
     tamanho: tamanho || null,
+    cor: cor || null,
     personalizacao: personalizar ? { nome, numero } : null,
   });
+}
+
+async function toggleFavoriteProduto() {
+  const button = document.getElementById('btnFavoriteProduto');
+  if (!button || !produtoAtual?.id) return;
+  try {
+    const favorites = await api.get('/recursos/favoritos');
+    const isFavorite = favorites.some((item) => String(item.id) === String(produtoAtual.id));
+    if (isFavorite) await api.delete(`/recursos/favoritos/${produtoAtual.id}`);
+    else await api.post(`/recursos/favoritos/${produtoAtual.id}`, {});
+    button.textContent = isFavorite ? '♡ Favoritar' : '♥ Nos favoritos';
+    showToast(isFavorite ? 'Removido dos favoritos.' : 'Adicionado aos favoritos.');
+  } catch (error) {
+    if (error.status === 401) window.location.href = '/pages/conta.html';
+    else showToast(error.message, 'error');
+  }
+}
+
+async function createRestockAlertProduto() {
+  try {
+    const tamanho = document.querySelector('#produtoSizeGrid .produto-size.active')?.dataset.size || null;
+    const cor = document.querySelector('.produto-color.active')?.dataset.color || null;
+    const result = await api.post(`/recursos/alertas-reposicao/${produtoAtual.id}`, { tamanho, cor });
+    showToast(result.message);
+  } catch (error) {
+    if (error.status === 401) window.location.href = '/pages/conta.html';
+    else showToast(error.message, 'error');
+  }
+}
+
+function engagementProductCard(product) {
+  const image = product.imagens?.[0];
+  const slug = normalizeText(product.nome).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return `<a class="produto-related-card" href="/p/${safeAttr(slug)}/${Number(product.id)}">
+    ${image ? `<img src="${safeUrl(image)}" alt="${safeAttr(product.nome)}" loading="lazy" />` : '<div class="produto-page__placeholder">Imagem indisponível</div>'}
+    <strong>${safeText(product.nome)}</strong><span>${formatBRL(product.preco_promocional ?? product.preco)}</span>
+  </a>`;
+}
+
+async function loadProductEngagement() {
+  if (!produtoAtual?.id) return;
+  if (typeof trackCommerceEvent === 'function') trackCommerceEvent('view_product', { product_id: produtoAtual.id });
+  api.post(`/recursos/vistos-recentemente/${produtoAtual.id}`, {}).catch(() => {});
+  api.get('/recursos/favoritos').then((favorites) => {
+    const button = document.getElementById('btnFavoriteProduto');
+    if (button && favorites.some((item) => String(item.id) === String(produtoAtual.id))) button.textContent = '♥ Nos favoritos';
+  }).catch(() => {});
+  try {
+    const [related, recent] = await Promise.all([
+      api.get(`/recursos/produtos/${produtoAtual.id}/relacionados`),
+      api.get('/recursos/vistos-recentemente').catch(() => []),
+    ]);
+    let section = document.getElementById('produtoRecommendations');
+    if (!section) {
+      section = document.createElement('section');
+      section.id = 'produtoRecommendations';
+      section.className = 'produto-recommendations';
+      document.getElementById('produtoComments')?.after(section);
+    }
+    const recentWithoutCurrent = recent.filter((item) => String(item.id) !== String(produtoAtual.id));
+    section.innerHTML = `${related.length ? `<h2>Produtos relacionados</h2><div class="produto-related-grid">${related.map(engagementProductCard).join('')}</div>` : ''}
+      ${recentWithoutCurrent.length ? `<h2>Vistos recentemente</h2><div class="produto-related-grid">${recentWithoutCurrent.map(engagementProductCard).join('')}</div>` : ''}`;
+  } catch (_) {}
 }
 
 function reviewStatusMessage(review) {

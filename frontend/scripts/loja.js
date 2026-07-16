@@ -425,6 +425,47 @@ async function loadHeroGallery() {
   }
 }
 
+async function loadManagedContent() {
+  try {
+    const [banners, contents] = await Promise.all([
+      api.get('/recursos/banners?posicao=home_hero'),
+      api.get('/recursos/conteudos'),
+    ]);
+    const banner = banners[0];
+    const hero = document.querySelector('.hero');
+    if (banner && hero) {
+      const title = hero.querySelector('.hero__title');
+      const subtitle = hero.querySelector('.hero__sub');
+      const cta = hero.querySelector('.hero__cta');
+      if (title) title.textContent = banner.titulo;
+      if (subtitle) subtitle.textContent = banner.subtitulo || '';
+      if (cta && banner.link_url) cta.href = safeUrl(banner.link_url);
+      if (banner.imagem_url) {
+        const gallery = document.getElementById('heroGallery');
+        if (gallery) {
+          gallery.replaceChildren();
+          const image = document.createElement('div');
+          image.className = 'hero__gallery-item';
+          image.style.backgroundImage = `url("${banner.imagem_url.replace(/["\\]/g, '')}")`;
+          gallery.appendChild(image);
+        }
+      }
+    }
+    const about = contents.find((item) => item.chave === 'sobre_loja');
+    const aboutContainer = document.querySelector('.sobre__text');
+    if (about && aboutContainer) {
+      const heading = aboutContainer.querySelector('h2');
+      if (heading) heading.textContent = about.titulo;
+      aboutContainer.querySelectorAll(':scope > p').forEach((paragraph) => paragraph.remove());
+      for (const line of String(about.conteudo).split(/\n+/).filter(Boolean)) {
+        const paragraph = document.createElement('p');
+        paragraph.textContent = line;
+        aboutContainer.insertBefore(paragraph, aboutContainer.querySelector('.sobre__stats'));
+      }
+    }
+  } catch (_) {}
+}
+
 async function loadDestaques() {
   const gridD = document.getElementById('gridDestaques');
   if (!gridD) return;
@@ -504,7 +545,7 @@ async function goToPage(page) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  await Promise.all([loadCategorias(), loadProdutos(), loadDestaques(), loadHeroGallery()]);
+  await Promise.all([loadCategorias(), loadProdutos(), loadDestaques(), loadHeroGallery(), loadManagedContent()]);
 
   let searchTimer;
   document.getElementById('inputBusca')?.addEventListener('input', () => {

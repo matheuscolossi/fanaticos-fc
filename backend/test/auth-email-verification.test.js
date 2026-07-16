@@ -6,6 +6,7 @@ process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'email-verification-test-secret';
 process.env.STRIPE_SECRET_KEY = 'sk_test_local_only';
 process.env.STRIPE_WEBHOOK_SECRET = 'whsec_local_only';
+process.env.FRONTEND_URL = 'https://loja.example.test';
 
 const assert = require('node:assert/strict');
 const { after, before, test } = require('node:test');
@@ -23,6 +24,8 @@ const testEmails = [
 ];
 const sentCodes = new Map();
 const originalSend = emailService.enviarCodigoVerificacao;
+const originalPasswordResetSend = emailService.enviarRecuperacaoSenha;
+let passwordResetUrl;
 
 function registrationData(email, nome = 'Cliente Verificação') {
   return {
@@ -48,6 +51,7 @@ before(async () => {
 
 after(async () => {
   emailService.enviarCodigoVerificacao = originalSend;
+  emailService.enviarRecuperacaoSenha = originalPasswordResetSend;
   await database.run(
     `DELETE FROM usuarios WHERE email IN (${testEmails.map(() => '?').join(',')})`,
     testEmails
@@ -182,4 +186,28 @@ test('checkout exige verificação na rota e novamente no serviço', async () =>
     (error) => error.statusCode === 403 && error.code === 'EMAIL_NOT_VERIFIED'
   );
   assert.deepEqual(calls, []);
+});
+
+test('recuperação usa token aleatório com hash, uso único e resposta anti-enumeração', async () => {
+  const email = testEmails[0];
+  emailService.enviarRecuperacaoSenha = async (_email, url) => { passwordResetUrl = url; };
+  const generic = await authService.requestPasswordReset({ email: 'inexistente@example.test' });
+  const requested = await authService.requestPasswordReset({ email });
+  assert.deepEqual(requested, generic);
+
+  const token = new URL(passwordResetUrl).searchParams.get('token');
+  assert.match(token, /^[a-f0-9]{64}$/);
+  const stored = await database.get(
+    'SELECT token_hash FROM password_reset_tokens WHERE usuario_id = (SELECT id FROM usuarios WHERE email = ?) ORDER BY id DESC LIMIT 1',
+    [email]
+  );
+  assert.notEqual(stored.token_hash, token);
+
+  await authService.resetPassword({ token, novaSenha: 'NovaSenhaSegura456' });
+  const login = await authService.loginUser({ email, senha: 'NovaSenhaSegura456' }, jwtSecret);
+  assert.ok(login.token);
+  await assert.rejects(
+    () => authService.resetPassword({ token, novaSenha: 'OutraSenhaSegura789' }),
+    (error) => error.code === 'PASSWORD_RESET_INVALID'
+  );
 });

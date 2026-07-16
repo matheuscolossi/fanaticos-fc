@@ -29,8 +29,9 @@ async function createPaidFromStripe(order, db = database) {
        usuario_id, itens, total, nome_cliente, email_cliente, telefone_cliente, endereco,
        metodo_pagamento, status, cupom_codigo, cupom_desconto,
        stripe_session_id, stripe_payment_intent_id, stripe_customer_id, stripe_event_id,
-       payment_status, currency, shipping_address, stock_status, updated_at
-     ) VALUES (?, JSON_VALUE(?), ?, ?, ?, ?, ?, 'stripe', 'pago', ?, ?, ?, ?, ?, ?, 'paid', ?, JSON_VALUE(?), 'committed', CURRENT_TIMESTAMP)`,
+       payment_status, currency, shipping_address, stock_status, updated_at,
+       prazo_entrega_min, prazo_entrega_max, previsao_entrega, transportadora
+     ) VALUES (?, JSON_VALUE(?), ?, ?, ?, ?, ?, 'stripe', 'pago', ?, ?, ?, ?, ?, ?, 'paid', ?, JSON_VALUE(?), 'committed', CURRENT_TIMESTAMP, ?, ?, ?, ?)`,
     [
       order.usuario_id || null,
       JSON.stringify(order.itens || []),
@@ -47,6 +48,10 @@ async function createPaidFromStripe(order, db = database) {
       order.stripe_event_id,
       order.currency || 'BRL',
       JSON.stringify(order.shipping_address || {}),
+      order.prazo_entrega_min ?? null,
+      order.prazo_entrega_max ?? null,
+      order.previsao_entrega || null,
+      order.transportadora || null,
     ]
   );
 
@@ -65,7 +70,7 @@ async function createPaidFromStripe(order, db = database) {
         price,
         quantity,
         item.tamanho || null,
-        JSON.stringify(item.personalizacao || item.variacao || {}),
+        JSON.stringify({ ...(item.personalizacao || item.variacao || {}), ...(item.cor ? { cor: item.cor } : {}) }),
         Math.round(price * quantity * 100) / 100,
       ]
     );
@@ -97,6 +102,22 @@ function findByStripePaymentIntent(paymentIntentId, db = database) {
   return db.get(
     'SELECT id, status, payment_status, stripe_session_id FROM pedidos WHERE stripe_payment_intent_id = ?',
     [paymentIntentId]
+  );
+}
+
+function findNotificationByPaymentIntent(paymentIntentId, db = database) {
+  return db.get(
+    `SELECT id, nome_cliente, email_cliente, status, payment_status,
+            transportadora, rastreio_url FROM pedidos WHERE stripe_payment_intent_id = ?`,
+    [paymentIntentId]
+  );
+}
+
+function findNotificationById(orderId, db = database) {
+  return db.get(
+    `SELECT id, nome_cliente, email_cliente, status, payment_status,
+            transportadora, rastreio_url FROM pedidos WHERE id = ?`,
+    [orderId]
   );
 }
 
@@ -210,7 +231,8 @@ function listByUser(user) {
 
 function findTrackingForUser(orderId, user) {
   return get(
-    `SELECT id, status, codigo_rastreio, created_at
+    `SELECT id, status, codigo_rastreio, transportadora, rastreio_url,
+            prazo_entrega_min, prazo_entrega_max, previsao_entrega, created_at
      FROM pedidos
      WHERE id = ?
        AND (
@@ -224,7 +246,8 @@ function findTrackingForUser(orderId, user) {
 function exists(orderId, db = database) {
   return db.get(
     `SELECT id, status, payment_status, stock_status, arquivado_em,
-            codigo_rastreio, motivo_cancelamento
+            codigo_rastreio, transportadora, rastreio_url, prazo_entrega_min,
+            prazo_entrega_max, previsao_entrega, motivo_cancelamento
      FROM pedidos WHERE id = ?`,
     [orderId]
   );
@@ -233,14 +256,26 @@ function exists(orderId, db = database) {
 function updateTracking(orderId, {
   status,
   codigo_rastreio,
+  transportadora,
+  rastreio_url,
+  prazo_entrega_min,
+  prazo_entrega_max,
   motivo_cancelamento,
   cancelado_por,
 }, db = database) {
   const changesTracking = codigo_rastreio !== undefined;
+  const changesCarrier = transportadora !== undefined;
+  const changesTrackingUrl = rastreio_url !== undefined;
+  const changesDeliveryMin = prazo_entrega_min !== undefined;
+  const changesDeliveryMax = prazo_entrega_max !== undefined;
   return db.run(
     `UPDATE pedidos SET
        status = COALESCE(?, status),
        codigo_rastreio = CASE WHEN ? THEN ? ELSE codigo_rastreio END,
+       transportadora = CASE WHEN ? THEN ? ELSE transportadora END,
+       rastreio_url = CASE WHEN ? THEN ? ELSE rastreio_url END,
+       prazo_entrega_min = CASE WHEN ? THEN ? ELSE prazo_entrega_min END,
+       prazo_entrega_max = CASE WHEN ? THEN ? ELSE prazo_entrega_max END,
        cancelado_em = CASE WHEN ? = 'cancelado' THEN COALESCE(cancelado_em, CURRENT_TIMESTAMP) ELSE cancelado_em END,
        cancelado_por = CASE WHEN ? = 'cancelado' THEN COALESCE(cancelado_por, ?) ELSE cancelado_por END,
        motivo_cancelamento = CASE WHEN ? = 'cancelado' THEN COALESCE(motivo_cancelamento, ?) ELSE motivo_cancelamento END,
@@ -250,6 +285,14 @@ function updateTracking(orderId, {
       status || null,
       changesTracking ? 1 : 0,
       codigo_rastreio ?? null,
+      changesCarrier ? 1 : 0,
+      transportadora ?? null,
+      changesTrackingUrl ? 1 : 0,
+      rastreio_url ?? null,
+      changesDeliveryMin ? 1 : 0,
+      prazo_entrega_min ?? null,
+      changesDeliveryMax ? 1 : 0,
+      prazo_entrega_max ?? null,
       status || null,
       status || null,
       cancelado_por || null,
@@ -318,6 +361,8 @@ module.exports = {
   clearArchived,
   exists,
   findByStripePaymentIntent,
+  findNotificationById,
+  findNotificationByPaymentIntent,
   findByStripeSession,
   findPaymentStatusForUser,
   findTrackingForUser,

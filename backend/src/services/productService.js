@@ -30,8 +30,12 @@ function normalizeSizes(value) {
 }
 
 async function attachVariants(products, { publicView }) {
-  const variants = await productModel.listVariants(products.map((product) => product.id));
+  const [variants, colorVariants] = await Promise.all([
+    productModel.listVariants(products.map((product) => product.id)),
+    productModel.listColorVariants(products.map((product) => product.id)),
+  ]);
   const grouped = new Map();
+  const groupedColors = new Map();
   for (const variant of variants) {
     const list = grouped.get(String(variant.produto_id)) || [];
     const physical = Number(variant.estoque);
@@ -41,11 +45,20 @@ async function attachVariants(products, { publicView }) {
       : { tamanho: variant.tamanho, estoque: physical, estoque_reservado: reserved });
     grouped.set(String(variant.produto_id), list);
   }
+  for (const variant of colorVariants) {
+    const list = groupedColors.get(String(variant.produto_id)) || [];
+    const physical = Number(variant.estoque);
+    const reserved = Number(variant.estoque_reservado || 0);
+    list.push(publicView
+      ? { tamanho: variant.tamanho, cor: variant.cor, estoque: Math.max(0, physical - reserved) }
+      : { tamanho: variant.tamanho, cor: variant.cor, estoque: physical, estoque_reservado: reserved });
+    groupedColors.set(String(variant.produto_id), list);
+  }
   return products.map((product) => {
     const sizes = normalizeSizes(product.tamanhos);
     const variantsForProduct = grouped.get(String(product.id)) || [];
     variantsForProduct.sort((a, b) => sizes.indexOf(a.tamanho) - sizes.indexOf(b.tamanho));
-    return { ...product, variantes: variantsForProduct };
+    return { ...product, variantes: variantsForProduct, variantes_cores: groupedColors.get(String(product.id)) || [] };
   });
 }
 
@@ -55,6 +68,7 @@ function serializeProduct(product) {
     imagens:   parseJson(product.imagens, []),
     tamanhos:  parseJson(product.tamanhos, []),
     cores:     parseJson(product.cores, []),
+    guia_tamanhos: parseJson(product.guia_tamanhos, []),
     dimensoes: parseJson(product.dimensoes, {}),
     destaque:        Boolean(product.destaque),
     produto_novo:    Boolean(product.produto_novo),
@@ -72,6 +86,7 @@ async function normalizeProductPayload(body) {
     imagens: JSON.stringify(await normalizeProductImages(product.imagens)),
     tamanhos: JSON.stringify(product.tamanhos),
     cores: JSON.stringify(product.cores),
+    guia_tamanhos: JSON.stringify(product.guia_tamanhos),
     dimensoes: JSON.stringify(product.dimensoes),
   };
 }
@@ -111,6 +126,13 @@ function serializePublicProduct(product, { detail = false, imageLimit = null } =
         estoque: Math.max(0, Number(variant.estoque)),
       }))
       : [],
+    variantes_cores: Array.isArray(product.variantes_cores)
+      ? product.variantes_cores.map((variant) => ({
+        tamanho: variant.tamanho,
+        cor: variant.cor,
+        estoque: Math.max(0, Number(variant.estoque)),
+      }))
+      : [],
     destaque: Boolean(product.destaque),
     time: product.time || null,
     pais: product.pais || null,
@@ -128,6 +150,7 @@ function serializePublicProduct(product, { detail = false, imageLimit = null } =
       descricao: product.descricao || '',
       descricao_curta: product.descricao_curta || '',
       cores: parseJson(product.cores, []),
+      guia_tamanhos: parseJson(product.guia_tamanhos, []),
       peso: product.peso == null ? null : Number(product.peso),
       dimensoes: parseJson(product.dimensoes, {}),
       info_lavagem: product.info_lavagem || null,
@@ -183,6 +206,9 @@ async function createProduct(data) {
   const product = await normalizeProductPayload(data);
   const result = await transaction(async (db) => {
     const created = await productModel.create(product, db);
+    if (product.variantes_cores !== null) {
+      await productModel.syncColorVariants(created.lastID, product.variantes_cores, db);
+    }
     if (product.variantes !== null) {
       await productModel.syncVariants(created.lastID, product.variantes, db);
     }
@@ -195,6 +221,9 @@ async function updateProduct(productId, data) {
   await ensureProductExists(productId);
   const product = await normalizeProductPayload(data);
   await transaction(async (db) => {
+    if (product.variantes_cores !== null) {
+      await productModel.syncColorVariants(productId, product.variantes_cores, db);
+    }
     if (product.variantes === null) {
       const existingVariants = await productModel.listVariants([productId], db);
       if (existingVariants.length > 0) {

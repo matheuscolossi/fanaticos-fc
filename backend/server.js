@@ -30,6 +30,8 @@ const promocoesRoutes = require('./src/routes/promocoesRoutes');
 const funcionariosRoutes = require('./src/routes/funcionariosRoutes');
 const logRoutes = require('./src/routes/logRoutes');
 const reviewRoutes = require('./src/routes/reviewRoutes');
+const commerceFeaturesRoutes = require('./src/routes/commerceFeaturesRoutes');
+const { processAbandonedCarts, processRestockAlerts } = require('./src/services/commerceFeaturesService');
 const specRoutes = require('./src/routes/specRoutes');
 
 const app = express();
@@ -130,6 +132,12 @@ app.use('/api/avaliacoes', reviewRoutes({
   perm,
   verifiedEmailMiddleware,
 }));
+app.use('/api/recursos', commerceFeaturesRoutes({
+  authMiddleware,
+  optionalAuthMiddleware,
+  perm,
+  verifiedEmailMiddleware,
+}));
 app.use('/api/admin/funcionarios', funcionariosRoutes(perm('administradores.gerenciar')));
 app.use('/api/admin/logs', logRoutes(perm('administradores.gerenciar')));
 
@@ -160,6 +168,10 @@ async function connectWithRetry(delaySec = 30) {
     await init();
     dbReady = true;
     console.log('[api] Database ready.');
+    if (process.env.NODE_ENV === 'production') {
+      processAbandonedCarts().catch((error) => console.error('[cart:abandonment:error]', error.message));
+      processRestockAlerts().catch((error) => console.error('[restock:error]', error.message));
+    }
   } catch (err) {
     console.error(`[api:init:error] ${err.message} — retrying in ${delaySec}s`);
     setTimeout(() => connectWithRetry(Math.min(delaySec * 2, 300)), delaySec * 1000);
@@ -167,3 +179,10 @@ async function connectWithRetry(delaySec = 30) {
 }
 
 connectWithRetry();
+
+if (process.env.NODE_ENV === 'production') {
+  setInterval(() => {
+    if (dbReady) processAbandonedCarts().catch((error) => console.error('[cart:abandonment:error]', error.message));
+    if (dbReady) processRestockAlerts().catch((error) => console.error('[restock:error]', error.message));
+  }, 15 * 60 * 1000).unref();
+}

@@ -2,9 +2,11 @@ const { sendCreated } = require('../utils/http');
 const {
   getProfile,
   loginUser,
+  requestPasswordReset,
   registerUser,
   reenviarCodigoEmail,
   updateProfile,
+  resetPassword,
   verificarCodigoEmail,
 } = require('../services/authService');
 
@@ -46,6 +48,14 @@ function buildAuthController(jwtSecret) {
 
     async reenviarCodigo(req, res) {
       res.json(await reenviarCodigoEmail(req.body, jwtSecret));
+    },
+
+    async solicitarRecuperacao(req, res) {
+      res.json(await requestPasswordReset(req.body));
+    },
+
+    async redefinirSenha(req, res) {
+      res.json(await resetPassword(req.body));
     },
 
     async profile(req, res) {

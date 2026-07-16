@@ -125,6 +125,14 @@ function buildSecurityRateLimiters(secret) {
         emailPolicy(configuredLimit('RATE_LIMIT_RESEND_ACCOUNT', 6), 60 * MINUTE_MS),
       ],
     }),
+    passwordReset: createRateLimiter({
+      secret,
+      scope: 'auth-password-reset',
+      policies: [
+        ipPolicy(configuredLimit('RATE_LIMIT_PASSWORD_RESET_IP', 10), 60 * MINUTE_MS),
+        emailPolicy(configuredLimit('RATE_LIMIT_PASSWORD_RESET_ACCOUNT', 5), 60 * MINUTE_MS),
+      ],
+    }),
     tracking: createRateLimiter({
       secret,
       scope: 'order-tracking',

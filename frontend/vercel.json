@@ -17,6 +17,10 @@
       "destination": "/pages/carrinho.html"
     },
     {
+      "source": "/recuperar-senha",
+      "destination": "/pages/recuperar-senha.html"
+    },
+    {
       "source": "/pagamento-sucesso",
       "destination": "/pages/pagamento-sucesso.html"
     },

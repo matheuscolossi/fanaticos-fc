@@ -14,6 +14,27 @@ const FRETE_POR_UF = {
   BA: 35, SE: 35, AL: 35, PE: 35, PB: 35, RN: 35, CE: 35, PI: 35, MA: 35,
   TO: 35, PA: 35, AP: 35, AM: 35, RR: 35, RO: 35, AC: 35, // Norte/Nordeste
 };
+const PRAZO_POR_UF = {
+  RS: [2, 4], SC: [3, 5], PR: [3, 6],
+  SP: [4, 7], RJ: [5, 8], MG: [5, 8], ES: [6, 9],
+  MT: [6, 10], MS: [6, 10], GO: [6, 10], DF: [6, 9],
+};
+
+function estimateDelivery(uf) {
+  const [minBusinessDays, maxBusinessDays] = PRAZO_POR_UF[String(uf || '').toUpperCase()] || [8, 15];
+  const date = new Date();
+  let remaining = maxBusinessDays;
+  while (remaining > 0) {
+    date.setDate(date.getDate() + 1);
+    if (![0, 6].includes(date.getDay())) remaining -= 1;
+  }
+  return {
+    minBusinessDays,
+    maxBusinessDays,
+    estimatedDate: date.toISOString().slice(0, 10),
+    carrier: process.env.SHIPPING_PROVIDER || 'Envio padrão',
+  };
+}
 
 function moneyToCents(value) {
   const amount = Number(value);
@@ -61,20 +82,35 @@ async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
     }
     const sizes = Array.isArray(product.tamanhos) ? product.tamanhos.map(String) : [];
     const selectedSize = String(item.tamanho || '').trim() || null;
+    const colors = Array.isArray(product.cores) ? product.cores.map(String) : [];
+    const selectedColor = String(item.cor || '').trim() || null;
     if (sizes.length > 0 && !selectedSize) {
       throw createHttpError(400, `Selecione um tamanho para "${product.nome}".`, 'PRODUCT_VARIANT_REQUIRED');
     }
     if (selectedSize && !sizes.includes(selectedSize)) {
       throw createHttpError(400, `Tamanho inválido para "${product.nome}".`, 'PRODUCT_VARIANT_INVALID');
     }
+    if (colors.length > 0 && !selectedColor) {
+      throw createHttpError(400, `Selecione uma cor para "${product.nome}".`, 'PRODUCT_COLOR_REQUIRED');
+    }
+    if (selectedColor && !colors.includes(selectedColor)) {
+      throw createHttpError(400, `Cor inválida para "${product.nome}".`, 'PRODUCT_COLOR_INVALID');
+    }
     const variants = Array.isArray(product.variantes) ? product.variantes : [];
+    const colorVariants = Array.isArray(product.variantes_cores) ? product.variantes_cores : [];
+    const selectedColorVariant = selectedSize && selectedColor
+      ? colorVariants.find((variant) => String(variant.tamanho) === selectedSize && String(variant.cor) === selectedColor)
+      : null;
+    if (colorVariants.length > 0 && !selectedColorVariant) {
+      throw createHttpError(400, `Combinação de tamanho e cor indisponível para "${product.nome}".`, 'PRODUCT_COLOR_VARIANT_INVALID');
+    }
     const selectedVariant = selectedSize
       ? variants.find((variant) => String(variant.tamanho) === selectedSize)
       : null;
     if (variants.length > 0 && !selectedVariant) {
       throw createHttpError(400, `Variação indisponível para "${product.nome}".`, 'PRODUCT_VARIANT_INVALID');
     }
-    const availableStock = Number(selectedVariant?.estoque ?? product.estoque);
+    const availableStock = Number(selectedColorVariant?.estoque ?? selectedVariant?.estoque ?? product.estoque);
     if (!Number.isSafeInteger(availableStock) || qty > availableStock) {
       throw createHttpError(
         409,
@@ -105,6 +141,7 @@ async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
       qty,
       image: product.imagens[0] || null,
       tamanho: selectedSize,
+      cor: selectedColor,
       personalizacao: item.personalizacao || null,
       promocaoAplicada: promocaoAplicada?.nome || product.promocao_nome || null,
       subtotalAposPromocao: centsToMoney(lineSubtotalCents),
@@ -136,13 +173,14 @@ async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
   const totalCents = subtotalCents + freightCents - discountCents;
 
   const resposta = {
-    items: resolvedItems.map(({ productId, name, price, qty, image, tamanho, personalizacao, promocaoAplicada }) =>
-      ({ productId, name, price, qty, image, tamanho, personalizacao, promocaoAplicada })),
+    items: resolvedItems.map(({ productId, name, price, qty, image, tamanho, cor, personalizacao, promocaoAplicada }) =>
+      ({ productId, name, price, qty, image, tamanho, cor, personalizacao, promocaoAplicada })),
     subtotal: centsToMoney(subtotalCents),
     freight: centsToMoney(freightCents),
     discount: centsToMoney(discountCents),
     total: centsToMoney(totalCents),
     promocoesDesconto: centsToMoney(promocoesDescontoCents),
+    deliveryEstimate: estimateDelivery(uf),
   };
   if (cupomErro) resposta.cupomErro = cupomErro;
   return resposta;
@@ -152,5 +190,6 @@ module.exports = {
   MAX_CART_ITEMS,
   buildCartSummary,
   centsToMoney,
+  estimateDelivery,
   moneyToCents,
 };

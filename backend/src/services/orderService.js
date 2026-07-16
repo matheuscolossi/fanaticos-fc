@@ -2,6 +2,7 @@ const orderModel = require('../models/orderModel');
 const { transaction } = require('../config/database');
 const { createHttpError } = require('../utils/http');
 const { validateArchiveReason, validateOrderUpdate } = require('../validation/orderSchemas');
+const emailService = require('./emailService');
 
 function parseOrderItems(order) {
   const itens = Array.isArray(order.itens) ? order.itens : JSON.parse(order.itens || '[]');
@@ -57,6 +58,10 @@ async function createPaidOrderFromStripe(data, db) {
     stripe_event_id: eventId,
     currency: String(session.currency || draft.currency || 'brl').toUpperCase(),
     shipping_address: shippingAddress?.raw || {},
+    prazo_entrega_min: draft.prazo_entrega_min,
+    prazo_entrega_max: draft.prazo_entrega_max,
+    previsao_entrega: draft.previsao_entrega,
+    transportadora: draft.transportadora,
   };
 
   if (db) return orderModel.createPaidFromStripe(payload, db);
@@ -104,6 +109,11 @@ async function getTrackingForUser(orderId, user) {
     id: order.id,
     status: order.status,
     codigo_rastreio: order.codigo_rastreio || null,
+    transportadora: order.transportadora || null,
+    rastreio_url: order.rastreio_url || null,
+    prazo_entrega_min: order.prazo_entrega_min == null ? null : Number(order.prazo_entrega_min),
+    prazo_entrega_max: order.prazo_entrega_max == null ? null : Number(order.prazo_entrega_max),
+    previsao_entrega: order.previsao_entrega || null,
     created_at: order.created_at,
   };
 }
@@ -116,6 +126,7 @@ function eventActor(actor) {
 }
 
 async function updateOrder(orderId, data, actor) {
+  let notificationType = null;
   await transaction(async (db) => {
     const existingOrder = await orderModel.exists(orderId, db);
     if (!existingOrder) throw createHttpError(404, 'Order not found.', 'ORDER_NOT_FOUND');
@@ -132,6 +143,8 @@ async function updateOrder(orderId, data, actor) {
     }, db);
 
     if (normalized.status && normalized.status !== existingOrder.status) {
+      if (normalized.status === 'enviado') notificationType = 'enviado';
+      if (normalized.status === 'cancelado') notificationType = 'cancelado';
       await orderModel.recordEvent(orderId, {
         tipo: normalized.status === 'cancelado' ? 'pedido_cancelado' : 'status_alterado',
         status_anterior: existingOrder.status,
@@ -154,6 +167,18 @@ async function updateOrder(orderId, data, actor) {
       }, db);
     }
   });
+  if (notificationType && process.env.RESEND_API_KEY) {
+    const order = await orderModel.findNotificationById(orderId);
+    if (order?.email_cliente) {
+      await emailService.enviarAtualizacaoPedido(order.email_cliente, {
+        nome: order.nome_cliente,
+        pedidoId: order.id,
+        tipo: notificationType,
+        status: order.status,
+        rastreioUrl: order.rastreio_url,
+      }).catch((error) => console.error('[order:email:error]', error.message));
+    }
+  }
   return { message: 'Order updated.' };
 }
 

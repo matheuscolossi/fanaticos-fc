@@ -80,6 +80,7 @@ function renderCartPage() {
           <span>Frete</span>
           <span class="cart-summary__frete-calc">Calculando...</span>
         </div>
+        <p class="cart-summary__cupom-msg" id="deliveryEstimate"></p>
         <div class="cart-page__summary-row" id="cartDescontoRow" style="display:none">
           <span>Desconto</span>
           <span class="cart-summary__desconto"></span>
@@ -173,11 +174,15 @@ async function atualizarResumoCarrinho() {
 
   try {
     const resumo = await fetchCartSummary(
-      items.map(i => ({ productId: i.id, qty: i.qty })),
+      cartPayload(),
       cupomAplicado || undefined,
       getUfFrete() || undefined
     );
     setCartResumo(resumo);
+    const estimateEl = document.getElementById('deliveryEstimate');
+    if (estimateEl && resumo.deliveryEstimate) {
+      estimateEl.textContent = `Prazo estimado: ${resumo.deliveryEstimate.minBusinessDays} a ${resumo.deliveryEstimate.maxBusinessDays} dias úteis (${resumo.deliveryEstimate.carrier}).`;
+    }
 
     if (freteRow) {
       const span = freteRow.querySelector('span:last-child');

@@ -10,6 +10,8 @@ let deleteTargetId = null;
 let categoriasAdmin = [];
 let editingImages = [];
 let editingVariantStock = {};
+let editingColorVariantStock = {};
+let editingHadColorVariants = false;
 let viewMode = 'ligas'; // 'ligas' | 'lista'
 
 // ── Dashboard state ────────────────────────────────────────────────────────
@@ -401,6 +403,9 @@ function setTab(name) {
     cupons:     ['Gerenciar Cupons',     'Crie e administre cupons de desconto'],
     promocoes:  ['Gerenciar Promoções',  'Descontos por produto/categoria, combos e promoções por período'],
     avaliacoes: ['Moderar Avaliações',   'Aprove ou rejeite avaliações vinculadas a compras confirmadas'],
+    conteudo:   ['Conteúdo da Loja',      'Gerencie banners e textos institucionais publicados na vitrine'],
+    trocas:     ['Trocas e Devoluções',   'Analise solicitações iniciadas pelos clientes'],
+    analytics:  ['Funil e Conversão',     'Acompanhe eventos registrados somente após consentimento'],
     administradores: ['Administradores e Permissões', 'Cadastre funcionários, defina cargos e permissões individuais'],
   };
   document.getElementById('adminTabTitle').textContent = titles[name]?.[0] ?? name;
@@ -413,6 +418,9 @@ function setTab(name) {
   if (name === 'cupons')   loadCuponsAdmin();
   if (name === 'promocoes') loadPromocoesAdmin();
   if (name === 'avaliacoes') loadAvaliacoesAdmin();
+  if (name === 'conteudo') loadConteudoAdmin();
+  if (name === 'trocas') loadTrocasAdmin();
+  if (name === 'analytics') loadAnalyticsAdmin();
   if (name === 'administradores') loadFuncionariosAdmin();
 }
 
@@ -1049,7 +1057,11 @@ function selectedProductSizes() {
 function updateVariantStockTotal() {
   const sizes = selectedProductSizes();
   if (sizes.length === 0) return;
-  const values = sizes.map((size) => editingVariantStock[size]);
+  const colorControl = document.getElementById('pControlarEstoqueCor')?.checked;
+  const colors = (document.getElementById('pCores')?.value || '').split(',').map((value) => value.trim()).filter(Boolean);
+  const values = colorControl && colors.length
+    ? sizes.flatMap((size) => colors.map((color) => editingColorVariantStock[`${size}\u0000${color}`]))
+    : sizes.map((size) => editingVariantStock[size]);
   const totalInput = document.getElementById('pEstoque');
   if (totalInput) {
     totalInput.value = values.every((value) => Number.isSafeInteger(value) && value >= 0)
@@ -1058,11 +1070,39 @@ function updateVariantStockTotal() {
   }
 }
 
+function renderColorVariantStockFields() {
+  const container = document.getElementById('colorVariantStockFields');
+  if (!container) return;
+  const enabled = Boolean(document.getElementById('pControlarEstoqueCor')?.checked);
+  const sizes = selectedProductSizes();
+  const colors = (document.getElementById('pCores')?.value || '').split(',').map((value) => value.trim()).filter(Boolean);
+  if (!enabled || !sizes.length || !colors.length) {
+    container.innerHTML = enabled ? '<p class="form-hint">Selecione tamanhos e informe ao menos uma cor.</p>' : '';
+    renderVariantStockFields();
+    return;
+  }
+  container.innerHTML = sizes.flatMap((size) => colors.map((color) => {
+    const key = `${size}\u0000${color}`;
+    return `<div class="variant-stock-field"><label>${safeText(size)} / ${safeText(color)}</label><input type="number" min="0" step="1" required data-color-size="${safeAttr(size)}" data-color-name="${safeAttr(color)}" value="${editingColorVariantStock[key] ?? ''}" /></div>`;
+  })).join('');
+  container.querySelectorAll('[data-color-size]').forEach((input) => input.addEventListener('input', () => {
+    const value = input.value === '' ? null : Number(input.value);
+    editingColorVariantStock[`${input.dataset.colorSize}\u0000${input.dataset.colorName}`] = Number.isSafeInteger(value) && value >= 0 ? value : null;
+    for (const size of sizes) {
+      editingVariantStock[size] = colors.reduce((sum, color) => sum + (Number(editingColorVariantStock[`${size}\u0000${color}`]) || 0), 0);
+    }
+    updateVariantStockTotal();
+  }));
+  renderVariantStockFields();
+  updateVariantStockTotal();
+}
+
 function renderVariantStockFields() {
   const container = document.getElementById('variantStockFields');
   const totalInput = document.getElementById('pEstoque');
   if (!container || !totalInput) return;
   const sizes = selectedProductSizes();
+  const colorControl = document.getElementById('pControlarEstoqueCor')?.checked;
   totalInput.readOnly = sizes.length > 0;
   if (sizes.length === 0) {
     container.innerHTML = '';
@@ -1071,7 +1111,7 @@ function renderVariantStockFields() {
   container.innerHTML = sizes.map((size) => `
     <div class="variant-stock-field">
       <label for="variantStock_${safeAttr(size)}">Estoque ${safeText(size)}</label>
-      <input type="number" min="0" step="1" required data-variant-size="${safeAttr(size)}"
+      <input type="number" min="0" step="1" required data-variant-size="${safeAttr(size)}" ${colorControl ? 'readonly' : ''}
         id="variantStock_${safeAttr(size)}" value="${editingVariantStock[size] ?? ''}" />
     </div>
   `).join('');
@@ -1095,12 +1135,15 @@ function _resetFormFields() {
   set('pTipo', 'torcedor'); set('pMarca', ''); set('pGenero', 'masculino');
   set('pEstoque', ''); set('pEstoqueMin', '');
   set('pDescricao', ''); set('pDescricaoCurta', ''); set('pInfoLavagem', '');
-  set('pStatus', 'ativo'); set('pCores', ''); set('pImagemUrl', '');
+  set('pStatus', 'ativo'); set('pCores', ''); set('pGuiaTamanhos', ''); set('pImagemUrl', '');
   set('pPeso', ''); set('pDimComp', ''); set('pDimLarg', ''); set('pDimAlt', '');
   set('pKeywords', ''); set('pMetaTitulo', ''); set('pMetaDescricao', '');
   chk('pDestaque', false); chk('pProdutoNovo', false); chk('pProdutoPromo', false);
   document.querySelectorAll('#sizePicker input').forEach(cb => { cb.checked = false; });
   editingVariantStock = {};
+  editingColorVariantStock = {};
+  editingHadColorVariants = false;
+  chk('pControlarEstoqueCor', false);
   renderVariantStockFields();
   const prev = document.getElementById('imagePreview'); if (prev) prev.innerHTML = '';
 }
@@ -1143,10 +1186,19 @@ function openEditModal(id) {
   editingVariantStock = Object.fromEntries(
     (Array.isArray(p.variantes) ? p.variantes : []).map((variant) => [variant.tamanho, Number(variant.estoque)])
   );
-  renderVariantStockFields();
+  editingColorVariantStock = Object.fromEntries(
+    (Array.isArray(p.variantes_cores) ? p.variantes_cores : []).map((variant) => [`${variant.tamanho}\u0000${variant.cor}`, Number(variant.estoque)])
+  );
+  editingHadColorVariants = Object.keys(editingColorVariantStock).length > 0;
+  chk('pControlarEstoqueCor', editingHadColorVariants);
 
   const cores = parseAdminJson(p.cores, []);
   set('pCores', Array.isArray(cores) ? cores.join(', ') : '');
+  renderColorVariantStockFields();
+  const guia = parseAdminJson(p.guia_tamanhos, []);
+  set('pGuiaTamanhos', Array.isArray(guia)
+    ? guia.map((row) => `${row.tamanho}, ${row.largura}, ${row.comprimento}`).join('\n')
+    : '');
 
   document.getElementById('modalFormTitle').textContent = 'Editar Produto';
   renderImagePreview();
@@ -1198,8 +1250,12 @@ document.addEventListener('DOMContentLoaded', () => {
         editingVariantStock[input.value] = 0;
       }
       if (!input.checked) delete editingVariantStock[input.value];
-      renderVariantStockFields();
+      renderColorVariantStockFields();
     });
+  });
+  document.getElementById('pCores')?.addEventListener('input', renderColorVariantStockFields);
+  document.getElementById('pControlarEstoqueCor')?.addEventListener('change', () => {
+    renderColorVariantStockFields();
   });
   document.getElementById('btnAddUrl')?.addEventListener('click', addImageUrl);
   document.getElementById('pImagemUrl')?.addEventListener('keydown', (e) => {
@@ -1275,6 +1331,29 @@ async function saveProduto(e) {
   }
   const coresText = v('pCores');
   const cores = coresText ? coresText.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const controlarEstoqueCor = Boolean(document.getElementById('pControlarEstoqueCor')?.checked);
+  let variantes_cores;
+  if (controlarEstoqueCor) {
+    variantes_cores = tamanhos.flatMap((tamanho) => cores.map((cor) => ({
+      tamanho, cor, estoque: editingColorVariantStock[`${tamanho}\u0000${cor}`],
+    })));
+    if (!tamanhos.length || !cores.length || variantes_cores.some((variant) => !Number.isSafeInteger(variant.estoque) || variant.estoque < 0)) {
+      showToast('Informe o estoque de cada combinação de tamanho e cor.', 'error');
+      return;
+    }
+  } else if (editingHadColorVariants) {
+    variantes_cores = [];
+  }
+  const guia_tamanhos = v('pGuiaTamanhos')
+    ? v('pGuiaTamanhos').split(/\r?\n/).filter(Boolean).map((line) => {
+      const [tamanho, largura, comprimento] = line.split(',').map((part) => part.trim());
+      return { tamanho, largura: Number(largura), comprimento: Number(comprimento) };
+    })
+    : [];
+  if (guia_tamanhos.some((row) => !row.tamanho || !Number.isFinite(row.largura) || !Number.isFinite(row.comprimento))) {
+    showToast('Revise o guia de tamanhos. Use: tamanho, largura, comprimento.', 'error');
+    return;
+  }
   const dimensoes = { comprimento: n('pDimComp'), largura: n('pDimLarg'), altura: n('pDimAlt') };
 
   const data = {
@@ -1300,6 +1379,8 @@ async function saveProduto(e) {
     tamanhos,
     variantes,
     cores,
+    variantes_cores,
+    guia_tamanhos,
     status:             v('pStatus') || 'ativo',
     destaque:           !!document.getElementById('pDestaque')?.checked,
     produto_novo:       !!document.getElementById('pProdutoNovo')?.checked,
@@ -1607,11 +1688,15 @@ function renderPedidos() {
                 ${arquivado ? '<div style="font-size:.72rem;color:var(--text-muted);margin-top:4px">Arquivado</div>' : ''}
               </td>
               <td>
-                <div style="display:flex;gap:4px;align-items:center">
+                <div style="display:grid;gap:4px;min-width:180px">
+                  <input type="text" class="pedido-transportadora-input" data-id="${p.id}"
+                    value="${safeAttr(p.transportadora || '')}" placeholder="Transportadora" ${arquivado ? 'disabled' : ''} />
                   <input type="text" class="pedido-rastreio-input" data-id="${p.id}"
                     value="${safeAttr(p.codigo_rastreio || '')}" placeholder="Cód. rastreio"
                     ${arquivado ? 'disabled' : ''}
                     style="width:120px;font-size:.8rem;padding:4px 8px;background:var(--bg-card2);border:1px solid var(--border);color:var(--text);border-radius:6px" />
+                  <input type="url" class="pedido-rastreio-url-input" data-id="${p.id}"
+                    value="${safeAttr(p.rastreio_url || '')}" placeholder="https://link-de-rastreio" ${arquivado ? 'disabled' : ''} />
                   <button class="btn btn--outline btn--sm" onclick="salvarRastreioPedido(${p.id})" title="Salvar rastreio" ${arquivado ? 'disabled' : ''}>Salvar</button>
                 </div>
               </td>
@@ -1669,9 +1754,15 @@ async function salvarStatusPedido(id) {
 
 async function salvarRastreioPedido(id) {
   const input = document.querySelector(`.pedido-rastreio-input[data-id="${id}"]`);
+  const carrierInput = document.querySelector(`.pedido-transportadora-input[data-id="${id}"]`);
+  const urlInput = document.querySelector(`.pedido-rastreio-url-input[data-id="${id}"]`);
   if (!input) return;
   try {
-    await api.put(`/pedidos/${id}`, { codigo_rastreio: input.value.trim() });
+    await api.put(`/pedidos/${id}`, {
+      codigo_rastreio: input.value.trim() || null,
+      transportadora: carrierInput?.value.trim() || null,
+      rastreio_url: urlInput?.value.trim() || null,
+    });
     showToast(`Rastreio do pedido #${id} salvo!`);
   } catch(e) {
     showToast('Erro ao salvar rastreio');
@@ -2750,6 +2841,170 @@ async function moderarAvaliacao(id, status) {
   }
 }
 
+// ── Conteúdo, trocas e analytics ─────────────────────────────────────────
+let bannersAdminCache = [];
+let conteudosAdminCache = [];
+
+async function loadConteudoAdmin() {
+  const bannersWrap = document.getElementById('tabelaBannersWrap');
+  const conteudosWrap = document.getElementById('tabelaConteudosWrap');
+  if (!bannersWrap || !conteudosWrap) return;
+  bannersWrap.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Carregando banners...</p></div>';
+  conteudosWrap.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Carregando conteúdo...</p></div>';
+  try {
+    [bannersAdminCache, conteudosAdminCache] = await Promise.all([
+      api.get('/recursos/admin/banners'),
+      api.get('/recursos/admin/conteudos'),
+    ]);
+    renderBannersAdmin();
+    renderConteudosAdmin();
+  } catch (error) {
+    const message = `<div class="loading-state" style="color:var(--danger)">${safeText(error.message || 'Erro ao carregar conteúdo.')}</div>`;
+    bannersWrap.innerHTML = message;
+    conteudosWrap.innerHTML = message;
+  }
+}
+
+function renderBannersAdmin() {
+  const wrap = document.getElementById('tabelaBannersWrap');
+  if (!wrap) return;
+  if (!bannersAdminCache.length) {
+    wrap.innerHTML = '<div class="loading-state">Nenhum banner cadastrado.</div>';
+    return;
+  }
+  wrap.innerHTML = `<table><thead><tr><th>Título</th><th>Posição</th><th>Status</th><th>Ordem</th><th>Ações</th></tr></thead><tbody>${bannersAdminCache.map((banner) => `
+    <tr><td><strong>${safeText(banner.titulo)}</strong><div style="font-size:.75rem;color:var(--text-muted)">${safeText(banner.subtitulo || '')}</div></td>
+    <td>${safeText(banner.posicao)}</td><td><span class="td-badge ${banner.status === 'ativo' ? '' : 'td-badge--off'}">${safeText(banner.status)}</span></td>
+    <td>${Number(banner.ordem) || 0}</td><td style="white-space:nowrap"><button class="btn btn--outline btn--sm" onclick="editarBanner(${Number(banner.id)})">Editar</button> <button class="btn btn--danger btn--sm" onclick="excluirBanner(${Number(banner.id)})">Excluir</button></td></tr>`).join('')}</tbody></table>`;
+}
+
+function limparBanner() {
+  document.getElementById('formBanner')?.reset();
+  document.getElementById('bannerId').value = '';
+  document.getElementById('bannerOrdem').value = '0';
+}
+
+function editarBanner(id) {
+  const banner = bannersAdminCache.find((item) => Number(item.id) === Number(id));
+  if (!banner) return;
+  document.getElementById('bannerId').value = banner.id;
+  document.getElementById('bannerTitulo').value = banner.titulo || '';
+  document.getElementById('bannerSubtitulo').value = banner.subtitulo || '';
+  document.getElementById('bannerImagem').value = banner.imagem_url || '';
+  document.getElementById('bannerLink').value = banner.link_url || '';
+  document.getElementById('bannerPosicao').value = banner.posicao || 'home_hero';
+  document.getElementById('bannerStatus').value = banner.status || 'ativo';
+  document.getElementById('bannerOrdem').value = Number(banner.ordem) || 0;
+  document.getElementById('formBanner')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function salvarBanner(event) {
+  event.preventDefault();
+  const id = document.getElementById('bannerId').value;
+  const body = {
+    titulo: document.getElementById('bannerTitulo').value.trim(),
+    subtitulo: document.getElementById('bannerSubtitulo').value.trim() || null,
+    imagem_url: document.getElementById('bannerImagem').value.trim() || null,
+    link_url: document.getElementById('bannerLink').value.trim() || null,
+    posicao: document.getElementById('bannerPosicao').value,
+    status: document.getElementById('bannerStatus').value,
+    ordem: Number(document.getElementById('bannerOrdem').value) || 0,
+  };
+  try {
+    if (id) await api.put(`/recursos/admin/banners/${Number(id)}`, body);
+    else await api.post('/recursos/admin/banners', body);
+    showToast(id ? 'Banner atualizado.' : 'Banner criado.');
+    limparBanner();
+    await loadConteudoAdmin();
+  } catch (error) { showToast(error.message, 'error'); }
+}
+
+async function excluirBanner(id) {
+  if (!window.confirm('Excluir este banner?')) return;
+  try {
+    await api.delete(`/recursos/admin/banners/${Number(id)}`);
+    showToast('Banner excluído.');
+    await loadConteudoAdmin();
+  } catch (error) { showToast(error.message, 'error'); }
+}
+
+function renderConteudosAdmin() {
+  const wrap = document.getElementById('tabelaConteudosWrap');
+  if (!wrap) return;
+  if (!conteudosAdminCache.length) {
+    wrap.innerHTML = '<div class="loading-state">Nenhum conteúdo institucional cadastrado.</div>';
+    return;
+  }
+  wrap.innerHTML = `<table><thead><tr><th>Chave</th><th>Título</th><th>Status</th><th>Atualizado</th><th>Ações</th></tr></thead><tbody>${conteudosAdminCache.map((item) => `
+    <tr><td><code>${safeText(item.chave)}</code></td><td>${safeText(item.titulo)}</td><td><span class="td-badge ${item.status === 'ativo' ? '' : 'td-badge--off'}">${safeText(item.status)}</span></td><td>${item.updated_at ? safeText(new Date(item.updated_at).toLocaleString('pt-BR')) : '—'}</td><td><button class="btn btn--outline btn--sm" onclick="editarConteudo('${item.chave}')">Editar</button></td></tr>`).join('')}</tbody></table>`;
+}
+
+function editarConteudo(chave) {
+  const item = conteudosAdminCache.find((entry) => entry.chave === chave);
+  if (!item) return;
+  document.getElementById('conteudoChave').value = item.chave;
+  document.getElementById('conteudoTitulo').value = item.titulo || '';
+  document.getElementById('conteudoTexto').value = item.conteudo || '';
+  document.getElementById('conteudoStatus').value = item.status || 'ativo';
+  document.getElementById('formConteudoInstitucional')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function salvarConteudo(event) {
+  event.preventDefault();
+  try {
+    await api.put('/recursos/admin/conteudos', {
+      chave: document.getElementById('conteudoChave').value.trim(),
+      titulo: document.getElementById('conteudoTitulo').value.trim(),
+      conteudo: document.getElementById('conteudoTexto').value.trim(),
+      status: document.getElementById('conteudoStatus').value,
+    });
+    showToast('Conteúdo salvo.');
+    await loadConteudoAdmin();
+  } catch (error) { showToast(error.message, 'error'); }
+}
+
+async function loadTrocasAdmin() {
+  const wrap = document.getElementById('tabelaTrocasWrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Carregando...</p></div>';
+  const status = document.getElementById('filtroTrocasStatus')?.value || '';
+  try {
+    const items = await api.get(`/recursos/admin/trocas${status ? `?status=${encodeURIComponent(status)}` : ''}`);
+    if (!items.length) { wrap.innerHTML = '<div class="loading-state">Nenhuma solicitação encontrada.</div>'; return; }
+    wrap.innerHTML = `<table><thead><tr><th>Pedido</th><th>Cliente</th><th>Solicitação</th><th>Status</th><th>Ação</th></tr></thead><tbody>${items.map((item) => {
+      let productIds = [];
+      try { productIds = typeof item.itens === 'string' ? JSON.parse(item.itens) : item.itens || []; } catch (_) {}
+      return `<tr><td>#${Number(item.pedido_id)}</td><td><strong>${safeText(item.cliente_nome)}</strong><div style="font-size:.75rem">${safeText(item.cliente_email)}</div></td><td><strong>${safeText(item.tipo)}</strong><div style="max-width:340px;white-space:normal">${safeText(item.motivo)}</div><div style="font-size:.75rem">Produtos: ${productIds.map(Number).filter(Number.isSafeInteger).join(', ') || '—'}</div></td><td>${safeText(item.status)}</td><td><button class="btn btn--outline btn--sm" onclick="atualizarTroca(${Number(item.id)})">Analisar</button></td></tr>`;
+    }).join('')}</tbody></table>`;
+  } catch (error) { wrap.innerHTML = `<div class="loading-state" style="color:var(--danger)">${safeText(error.message)}</div>`; }
+}
+
+async function atualizarTroca(id) {
+  const status = window.prompt('Novo status: em_analise, aprovada, rejeitada ou concluida');
+  if (!status) return;
+  const resposta = window.prompt('Resposta ao cliente (obrigatória):');
+  if (!resposta) return;
+  try {
+    await api.patch(`/recursos/admin/trocas/${Number(id)}`, { status: status.trim(), resposta: resposta.trim() });
+    showToast('Solicitação atualizada.');
+    await loadTrocasAdmin();
+  } catch (error) { showToast(error.message, 'error'); }
+}
+
+async function loadAnalyticsAdmin() {
+  const grid = document.getElementById('analyticsResumo');
+  const wrap = document.getElementById('analyticsEventosWrap');
+  if (!grid || !wrap) return;
+  grid.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Carregando...</p></div>';
+  try {
+    const data = await api.get(`/recursos/admin/analytics?dias=${Number(document.getElementById('analyticsPeriodo')?.value) || 30}`);
+    const eventLabels = { page_view: 'Páginas vistas', view_product: 'Produtos vistos', add_to_cart: 'Adições ao carrinho', begin_checkout: 'Checkouts iniciados', purchase: 'Compras' };
+    grid.innerHTML = Object.entries(eventLabels).map(([key, label]) => `<div class="dash-kpi"><div class="dash-kpi__label">${label}</div><div class="dash-kpi__value">${Number(data.eventos[key]) || 0}</div></div>`).join('');
+    const rates = data.conversao || {};
+    wrap.innerHTML = `<table><thead><tr><th>Etapa</th><th>Conversão</th></tr></thead><tbody><tr><td>Produto → carrinho</td><td>${((Number(rates.produto_para_carrinho) || 0) * 100).toFixed(1)}%</td></tr><tr><td>Carrinho → checkout</td><td>${((Number(rates.carrinho_para_checkout) || 0) * 100).toFixed(1)}%</td></tr><tr><td>Checkout → compra</td><td>${((Number(rates.checkout_para_compra) || 0) * 100).toFixed(1)}%</td></tr></tbody></table>`;
+  } catch (error) { grid.innerHTML = `<div class="loading-state" style="color:var(--danger)">${safeText(error.message)}</div>`; }
+}
+
 // ── Administradores e Permissões ──────────────────────────────────────────
 let funcionariosCache = [];
 
@@ -2776,6 +3031,11 @@ const PERMISSOES = [
   { key: 'promocoes.excluir',         label: 'Excluir promoções' },
   { key: 'avaliacoes.visualizar',      label: 'Visualizar avaliações' },
   { key: 'avaliacoes.moderar',         label: 'Moderar avaliações' },
+  { key: 'trocas.visualizar',           label: 'Visualizar trocas e devoluções' },
+  { key: 'trocas.gerenciar',            label: 'Gerenciar trocas e devoluções' },
+  { key: 'conteudo.visualizar',          label: 'Visualizar conteúdo da loja' },
+  { key: 'conteudo.gerenciar',           label: 'Gerenciar conteúdo da loja' },
+  { key: 'analytics.visualizar',         label: 'Visualizar analytics' },
   { key: 'financeiro.visualizar',     label: 'Visualizar financeiro' },
   { key: 'configuracoes.acessar',     label: 'Acessar configurações' },
   { key: 'administradores.gerenciar', label: 'Gerenciar administradores' },
@@ -3059,6 +3319,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('adminFiltroCategoria')?.addEventListener('change', applyAdminFilters);
   document.getElementById('adminOrdem')?.addEventListener('change', applyAdminFilters);
   document.getElementById('filtroAvaliacoesStatus')?.addEventListener('change', loadAvaliacoesAdmin);
+  document.getElementById('filtroTrocasStatus')?.addEventListener('change', loadTrocasAdmin);
+  document.getElementById('analyticsPeriodo')?.addEventListener('change', loadAnalyticsAdmin);
   document.getElementById('pCategoriaBusca')?.addEventListener('input', () => renderProdutoCategoriaSelect());
 
   // Export / Import
@@ -3155,6 +3417,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     promocaoDeleteTargetId = null;
   });
   document.getElementById('btnConfirmDeletePromocao')?.addEventListener('click', doDeletePromocao);
+
+  document.getElementById('formBanner')?.addEventListener('submit', salvarBanner);
+  document.getElementById('btnLimparBanner')?.addEventListener('click', limparBanner);
+  document.getElementById('formConteudoInstitucional')?.addEventListener('submit', salvarConteudo);
 
   document.getElementById('btnNovoFuncionario')?.addEventListener('click', openNovoFuncionarioModal);
   document.getElementById('formFuncionario')?.addEventListener('submit', saveFuncionario);

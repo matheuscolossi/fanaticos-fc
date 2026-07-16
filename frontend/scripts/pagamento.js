@@ -21,6 +21,11 @@ async function confirmPaymentStatus(attempt = 0) {
     const status = await api.get(`/pagamentos/stripe/session/${encodeURIComponent(paymentSessionId)}`);
     if (status.paymentStatus === 'paid') {
       localStorage.removeItem('fc_cart');
+      const trackedKey = `fc_purchase_tracked_${paymentSessionId}`;
+      if (!sessionStorage.getItem(trackedKey)) {
+        sessionStorage.setItem(trackedKey, '1');
+        trackCommerceEvent('purchase', { orderId: Number(status.orderId) || null });
+      }
       setPaymentStatus('Pagamento confirmado!', 'Recebemos a confirmação do Stripe e registramos seu pedido. Você pode acompanhar tudo na sua conta.', '✅', status.orderId);
       return;
     }

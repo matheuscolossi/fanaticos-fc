@@ -33,6 +33,12 @@ function removeClientWithRelations(userId) {
     );
     if (!client) return null;
 
+    const protectedReturns = await db.get(
+      'SELECT COUNT(*) AS total FROM solicitacoes_troca WHERE usuario_id = ?',
+      [userId]
+    );
+    if (Number(protectedReturns?.total || 0) > 0) return { ...client, protectedByReturns: true };
+
     await db.run('UPDATE pedidos SET usuario_id = NULL WHERE usuario_id = ?', [userId]);
     await db.run('UPDATE logs_acoes SET usuario_id = NULL WHERE usuario_id = ?', [userId]);
     const result = await db.run(
@@ -172,6 +178,43 @@ function updateUltimoAcesso(userId) {
   return run('UPDATE usuarios SET ultimo_acesso = CURRENT_TIMESTAMP WHERE id = ?', [userId]);
 }
 
+function invalidatePasswordResetTokens(userId, db = database) {
+  return db.run(
+    'UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE usuario_id = ? AND used_at IS NULL',
+    [userId]
+  );
+}
+
+function createPasswordResetToken(userId, tokenHash, expiresAt, db = database) {
+  return db.run(
+    'INSERT INTO password_reset_tokens (usuario_id, token_hash, expires_at) VALUES (?, ?, ?)',
+    [userId, tokenHash, expiresAt]
+  );
+}
+
+function findValidPasswordResetToken(tokenHash, db = database) {
+  return db.get(
+    `SELECT t.id, t.usuario_id, u.email, u.status
+     FROM password_reset_tokens t JOIN usuarios u ON u.id = t.usuario_id
+     WHERE t.token_hash = ? AND t.used_at IS NULL AND t.expires_at > CURRENT_TIMESTAMP`,
+    [tokenHash]
+  );
+}
+
+async function consumePasswordResetToken(tokenId, userId, passwordHash, db = database) {
+  const claimed = await db.run(
+    'UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE id = ? AND usuario_id = ? AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP',
+    [tokenId, userId]
+  );
+  if (Number(claimed.changes) !== 1) return false;
+  await db.run('UPDATE usuarios SET senha = ? WHERE id = ?', [passwordHash, userId]);
+  await db.run(
+    'UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE usuario_id = ? AND id <> ? AND used_at IS NULL',
+    [userId, tokenId]
+  );
+  return true;
+}
+
 // ── Funcionários/administradores (perfil = 'admin') ────────────────────────
 
 function listFuncionarios() {
@@ -209,15 +252,19 @@ function setFuncionarioStatus(userId, status) {
 module.exports = {
   countAdminsAtivos,
   countPedidos,
+  consumePasswordResetToken,
   clearVerificationCode,
   create,
+  createPasswordResetToken,
   createFuncionario,
   findByEmail,
   findById,
+  findValidPasswordResetToken,
   findPublicById,
   listClientsView,
   listFuncionarios,
   markEmailVerified,
+  invalidatePasswordResetTokens,
   recordVerificationFailure,
   removeClientWithRelations,
   setFuncionarioStatus,

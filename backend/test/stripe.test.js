@@ -61,6 +61,7 @@ test('normaliza apenas IDs, quantidades e variações permitidas', () => {
     productId: 12,
     qty: 2,
     tamanho: 'M',
+    cor: null,
     personalizacao: { nome: 'A'.repeat(30), numero: '10' },
   });
 });

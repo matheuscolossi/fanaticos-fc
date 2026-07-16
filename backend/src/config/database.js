@@ -1237,7 +1237,7 @@ async function seedDefaults() {
   const administrators = await all("SELECT id, permissoes FROM usuarios WHERE perfil = 'admin'");
   const { PERMISSOES_KEYS } = require('../constants/permissions');
   const newResourcePermissions = PERMISSOES_KEYS.filter((permission) =>
-    /^(categorias|cupons|promocoes|avaliacoes)\./.test(permission)
+    /^(categorias|cupons|promocoes|avaliacoes|trocas|conteudo|analytics)\./.test(permission)
   );
   for (const administrator of administrators) {
     let currentPermissions = [];
@@ -1266,6 +1266,259 @@ async function seedDefaults() {
   }
 }
 
+async function createCommerceFeaturesSchema() {
+  if (isPostgres) {
+    await runOptionalMigration("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS guia_tamanhos JSONB DEFAULT '[]'::jsonb");
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS transportadora TEXT');
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS rastreio_url TEXT');
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS prazo_entrega_min INTEGER');
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS prazo_entrega_max INTEGER');
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS previsao_entrega DATE');
+    await runOptionalMigration('ALTER TABLE checkout_drafts ADD COLUMN IF NOT EXISTS prazo_entrega_min INTEGER');
+    await runOptionalMigration('ALTER TABLE checkout_drafts ADD COLUMN IF NOT EXISTS prazo_entrega_max INTEGER');
+    await runOptionalMigration('ALTER TABLE checkout_drafts ADD COLUMN IF NOT EXISTS previsao_entrega DATE');
+    await runOptionalMigration('ALTER TABLE checkout_drafts ADD COLUMN IF NOT EXISTS transportadora TEXT');
+    await run(`CREATE TABLE IF NOT EXISTS produto_variantes_cores (
+      id SERIAL PRIMARY KEY,
+      produto_id INTEGER NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+      tamanho TEXT NOT NULL,
+      cor TEXT NOT NULL,
+      estoque INTEGER NOT NULL DEFAULT 0 CHECK(estoque >= 0),
+      estoque_reservado INTEGER NOT NULL DEFAULT 0 CHECK(estoque_reservado BETWEEN 0 AND estoque),
+      UNIQUE(produto_id, tamanho, cor)
+    )`);
+    await run('CREATE INDEX IF NOT EXISTS produto_variantes_cores_produto_idx ON produto_variantes_cores(produto_id)');
+    await run(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id SERIAL PRIMARY KEY,
+      usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS favoritos (
+      id SERIAL PRIMARY KEY,
+      usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      produto_id INTEGER NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE(usuario_id, produto_id)
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS carrinhos_usuario (
+      id SERIAL PRIMARY KEY,
+      usuario_id INTEGER NOT NULL UNIQUE REFERENCES usuarios(id) ON DELETE CASCADE,
+      itens JSONB NOT NULL DEFAULT '[]'::jsonb,
+      lembrete_enviado_em TIMESTAMPTZ,
+      convertido_em TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS vistos_recentemente (
+      id SERIAL PRIMARY KEY,
+      usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      produto_id INTEGER NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+      viewed_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE(usuario_id, produto_id)
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS alertas_reposicao (
+      id SERIAL PRIMARY KEY,
+      usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+      produto_id INTEGER NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+      email TEXT NOT NULL,
+      tamanho TEXT,
+      cor TEXT,
+      status TEXT NOT NULL DEFAULT 'ativo' CHECK(status IN ('ativo','enviado','cancelado')),
+      enviado_em TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE(email, produto_id, tamanho, cor)
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS solicitacoes_troca (
+      id SERIAL PRIMARY KEY,
+      pedido_id INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE RESTRICT,
+      usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+      tipo TEXT NOT NULL CHECK(tipo IN ('troca','devolucao')),
+      motivo TEXT NOT NULL,
+      itens JSONB NOT NULL DEFAULT '[]'::jsonb,
+      status TEXT NOT NULL DEFAULT 'solicitada' CHECK(status IN ('solicitada','em_analise','aprovada','rejeitada','concluida')),
+      resposta_admin TEXT,
+      analisado_por INTEGER,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS analytics_consents (
+      id SERIAL PRIMARY KEY,
+      usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+      session_id TEXT NOT NULL UNIQUE,
+      analytics BOOLEAN NOT NULL DEFAULT false,
+      marketing BOOLEAN NOT NULL DEFAULT false,
+      updated_at TIMESTAMPTZ DEFAULT now()
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS analytics_eventos (
+      id SERIAL PRIMARY KEY,
+      usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+      session_id TEXT NOT NULL,
+      evento TEXT NOT NULL,
+      dados JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS banners (
+      id SERIAL PRIMARY KEY,
+      titulo TEXT NOT NULL,
+      subtitulo TEXT,
+      imagem_url TEXT,
+      link_url TEXT,
+      posicao TEXT NOT NULL DEFAULT 'home_hero',
+      status TEXT NOT NULL DEFAULT 'ativo' CHECK(status IN ('ativo','inativo')),
+      ordem INTEGER NOT NULL DEFAULT 0,
+      inicio_em TIMESTAMPTZ,
+      fim_em TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS conteudos_institucionais (
+      id SERIAL PRIMARY KEY,
+      chave TEXT NOT NULL UNIQUE,
+      titulo TEXT NOT NULL,
+      conteudo TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'ativo' CHECK(status IN ('ativo','inativo')),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    )`);
+  } else {
+    await runOptionalMigration("ALTER TABLE produtos ADD COLUMN guia_tamanhos TEXT DEFAULT '[]'");
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN transportadora TEXT');
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN rastreio_url TEXT');
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN prazo_entrega_min INTEGER');
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN prazo_entrega_max INTEGER');
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN previsao_entrega TEXT');
+    await runOptionalMigration('ALTER TABLE checkout_drafts ADD COLUMN prazo_entrega_min INTEGER');
+    await runOptionalMigration('ALTER TABLE checkout_drafts ADD COLUMN prazo_entrega_max INTEGER');
+    await runOptionalMigration('ALTER TABLE checkout_drafts ADD COLUMN previsao_entrega TEXT');
+    await runOptionalMigration('ALTER TABLE checkout_drafts ADD COLUMN transportadora TEXT');
+    await run(`CREATE TABLE IF NOT EXISTS produto_variantes_cores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      produto_id INTEGER NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+      tamanho TEXT NOT NULL,
+      cor TEXT NOT NULL,
+      estoque INTEGER NOT NULL DEFAULT 0 CHECK(estoque >= 0),
+      estoque_reservado INTEGER NOT NULL DEFAULT 0 CHECK(estoque_reservado BETWEEN 0 AND estoque),
+      UNIQUE(produto_id, tamanho, cor)
+    )`);
+    await run('CREATE INDEX IF NOT EXISTS produto_variantes_cores_produto_idx ON produto_variantes_cores(produto_id)');
+    await run(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      usuario_id INTEGER NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at DATETIME NOT NULL,
+      used_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS favoritos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      usuario_id INTEGER NOT NULL,
+      produto_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(usuario_id, produto_id),
+      FOREIGN KEY(usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+      FOREIGN KEY(produto_id) REFERENCES produtos(id) ON DELETE CASCADE
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS carrinhos_usuario (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      usuario_id INTEGER NOT NULL UNIQUE,
+      itens TEXT NOT NULL DEFAULT '[]',
+      lembrete_enviado_em DATETIME,
+      convertido_em DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS vistos_recentemente (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      usuario_id INTEGER NOT NULL,
+      produto_id INTEGER NOT NULL,
+      viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(usuario_id, produto_id),
+      FOREIGN KEY(usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+      FOREIGN KEY(produto_id) REFERENCES produtos(id) ON DELETE CASCADE
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS alertas_reposicao (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      usuario_id INTEGER,
+      produto_id INTEGER NOT NULL,
+      email TEXT NOT NULL,
+      tamanho TEXT,
+      cor TEXT,
+      status TEXT NOT NULL DEFAULT 'ativo' CHECK(status IN ('ativo','enviado','cancelado')),
+      enviado_em DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(email, produto_id, tamanho, cor),
+      FOREIGN KEY(usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,
+      FOREIGN KEY(produto_id) REFERENCES produtos(id) ON DELETE CASCADE
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS solicitacoes_troca (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pedido_id INTEGER NOT NULL,
+      usuario_id INTEGER NOT NULL,
+      tipo TEXT NOT NULL CHECK(tipo IN ('troca','devolucao')),
+      motivo TEXT NOT NULL,
+      itens TEXT NOT NULL DEFAULT '[]',
+      status TEXT NOT NULL DEFAULT 'solicitada' CHECK(status IN ('solicitada','em_analise','aprovada','rejeitada','concluida')),
+      resposta_admin TEXT,
+      analisado_por INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(pedido_id) REFERENCES pedidos(id) ON DELETE RESTRICT,
+      FOREIGN KEY(usuario_id) REFERENCES usuarios(id) ON DELETE RESTRICT
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS analytics_consents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      usuario_id INTEGER,
+      session_id TEXT NOT NULL UNIQUE,
+      analytics INTEGER NOT NULL DEFAULT 0,
+      marketing INTEGER NOT NULL DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS analytics_eventos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      usuario_id INTEGER,
+      session_id TEXT NOT NULL,
+      evento TEXT NOT NULL,
+      dados TEXT NOT NULL DEFAULT '{}',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS banners (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      titulo TEXT NOT NULL,
+      subtitulo TEXT,
+      imagem_url TEXT,
+      link_url TEXT,
+      posicao TEXT NOT NULL DEFAULT 'home_hero',
+      status TEXT NOT NULL DEFAULT 'ativo' CHECK(status IN ('ativo','inativo')),
+      ordem INTEGER NOT NULL DEFAULT 0,
+      inicio_em DATETIME,
+      fim_em DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS conteudos_institucionais (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chave TEXT NOT NULL UNIQUE,
+      titulo TEXT NOT NULL,
+      conteudo TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'ativo' CHECK(status IN ('ativo','inativo')),
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+  }
+
+  await run('CREATE INDEX IF NOT EXISTS favoritos_usuario_idx ON favoritos(usuario_id, created_at)');
+  await run('CREATE INDEX IF NOT EXISTS carrinhos_abandono_idx ON carrinhos_usuario(updated_at, lembrete_enviado_em)');
+  await run('CREATE INDEX IF NOT EXISTS vistos_usuario_idx ON vistos_recentemente(usuario_id, viewed_at)');
+  await run('CREATE INDEX IF NOT EXISTS alertas_reposicao_idx ON alertas_reposicao(produto_id, status)');
+  await run('CREATE INDEX IF NOT EXISTS trocas_usuario_idx ON solicitacoes_troca(usuario_id, created_at)');
+  await run('CREATE INDEX IF NOT EXISTS analytics_evento_idx ON analytics_eventos(evento, created_at)');
+}
+
 async function init() {
   if (isPostgres) await tryInitPostgresClient();
   else await initSqliteClient();
@@ -1274,8 +1527,9 @@ async function init() {
   else await createSqliteSchema();
 
   await runMigrations();
+  await createCommerceFeaturesSchema();
   await seedDefaults();
   console.log('[database] Initialized.');
 }
 
-module.exports = { all, close, get, init, isPostgres, run, transaction };
+module.exports = { all, close, get, init, isPostgres, isUsingPostgres: () => isPostgres, run, transaction };

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Recuperar senha — Fanáticos Mantos</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/images/favicon-32.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles/global.css" />
+  <link rel="stylesheet" href="../styles/loja.css" />
+</head>
+<body>
+  <header class="header"><div class="header__inner"><a href="/" class="logo"><span class="logo__text">FANÁTICOS <em>MANTOS</em></span></a></div></header>
+  <main class="conta-page">
+    <div class="container" style="max-width:560px;padding-top:4rem">
+      <section class="perfil-card">
+        <h1 id="resetTitle">Recuperar senha</h1>
+        <p id="resetHelp" style="color:var(--text-muted);margin:1rem 0">Informe seu e-mail e enviaremos um link seguro de uso único.</p>
+        <form id="passwordResetForm">
+          <div class="co-form-group" id="resetEmailGroup">
+            <label for="resetEmail">E-mail</label>
+            <input type="email" id="resetEmail" autocomplete="email" maxlength="254" required />
+          </div>
+          <div id="newPasswordFields" style="display:none">
+            <div class="co-form-group"><label for="resetPassword">Nova senha</label><input type="password" id="resetPassword" autocomplete="new-password" maxlength="128" /></div>
+            <div class="co-form-group"><label for="resetPasswordConfirm">Confirmar nova senha</label><input type="password" id="resetPasswordConfirm" autocomplete="new-password" maxlength="128" /></div>
+          </div>
+          <button class="btn btn--primary" id="resetSubmit" type="submit">Enviar link</button>
+        </form>
+        <p id="resetMessage" class="perfil-msg" style="display:none;margin-top:1rem"></p>
+        <a href="conta.html" class="btn btn--outline" style="margin-top:1rem">Voltar para entrar</a>
+      </section>
+    </div>
+  </main>
+  <script src="../scripts/api.js"></script>
+  <script src="../scripts/recuperar-senha.js"></script>
+</body>
+</html>

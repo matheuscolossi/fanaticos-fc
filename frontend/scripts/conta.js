@@ -84,6 +84,8 @@ async function renderContaPage() {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         Meu Perfil
       </button>
+      <button class="conta-tab ${contaTab === 'favoritos' ? 'active' : ''}" data-tab="favoritos">♥ Favoritos</button>
+      <button class="conta-tab ${contaTab === 'trocas' ? 'active' : ''}" data-tab="trocas">Trocas e devoluções</button>
     </div>
 
     <div id="contaTabContent"></div>
@@ -112,6 +114,8 @@ async function renderContaPage() {
 
 function renderContaTab() {
   if (contaTab === 'perfil') renderPerfilTab();
+  else if (contaTab === 'favoritos') renderFavoritosTab();
+  else if (contaTab === 'trocas') renderTrocasTab();
   else renderPedidosTab();
 }
 
@@ -185,6 +189,7 @@ async function renderPedidosTab() {
                   <span>Código de rastreio:</span>
                   <strong id="trackCode_${pedido.id}">${safeText(pedido.codigo_rastreio)}</strong>
                   <button class="btn btn--outline btn--sm" data-copy="${pedido.id}">Copiar</button>
+                  ${pedido.rastreio_url ? `<a class="btn btn--primary btn--sm" href="${safeUrl(pedido.rastreio_url)}" target="_blank" rel="noopener">Acompanhar na ${safeText(pedido.transportadora || 'transportadora')}</a>` : ''}
                 </div>
               ` : ''}
             </div>
@@ -210,6 +215,92 @@ async function renderPedidosTab() {
       </div>
     `;
     document.getElementById('btnRetryPedidos')?.addEventListener('click', renderPedidosTab);
+  }
+}
+
+// ── Favoritos, alertas e trocas ──────────────────────────────────────────
+
+async function renderFavoritosTab() {
+  const content = document.getElementById('contaTabContent');
+  content.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+  try {
+    const [favorites, alerts] = await Promise.all([
+      api.get('/recursos/favoritos'),
+      api.get('/recursos/alertas-reposicao'),
+    ]);
+    content.innerHTML = `
+      <div class="perfil-card"><h2 class="perfil-card__title">Minha lista de desejos</h2>
+        ${favorites.length ? `<div class="produto-related-grid">${favorites.map((product) => {
+          const slug = normalizeText(product.nome).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+          return `<article class="produto-related-card">
+            <a href="/p/${safeAttr(slug)}/${Number(product.id)}">${product.imagens?.[0] ? `<img src="${safeUrl(product.imagens[0])}" alt="${safeAttr(product.nome)}" />` : ''}<strong>${safeText(product.nome)}</strong></a>
+            <span>${formatBRL(product.preco_promocional ?? product.preco)}</span>
+            <button class="btn btn--outline btn--sm" data-remove-favorite="${Number(product.id)}">Remover</button>
+          </article>`;
+        }).join('')}</div>` : '<p>Nenhum produto favoritado.</p>'}
+      </div>
+      <div class="perfil-card"><h2 class="perfil-card__title">Alertas de reposição</h2>
+        ${alerts.length ? alerts.map((alert) => `<div class="pedido-conta-card__meta"><span>${safeText(alert.produto_nome)}${alert.tamanho ? ` · ${safeText(alert.tamanho)}` : ''}${alert.cor ? ` · ${safeText(alert.cor)}` : ''}</span><span>${safeText(alert.status)}</span><button class="btn btn--outline btn--sm" data-cancel-alert="${Number(alert.id)}">Cancelar</button></div>`).join('') : '<p>Nenhum alerta ativo.</p>'}
+      </div>`;
+    content.querySelectorAll('[data-remove-favorite]').forEach((button) => button.addEventListener('click', async () => {
+      await api.delete(`/recursos/favoritos/${button.dataset.removeFavorite}`);
+      renderFavoritosTab();
+    }));
+    content.querySelectorAll('[data-cancel-alert]').forEach((button) => button.addEventListener('click', async () => {
+      await api.delete(`/recursos/alertas-reposicao/${button.dataset.cancelAlert}`);
+      renderFavoritosTab();
+    }));
+  } catch (error) {
+    content.innerHTML = `<p style="color:var(--danger)">${safeText(error.message)}</p>`;
+  }
+}
+
+async function renderTrocasTab() {
+  const content = document.getElementById('contaTabContent');
+  content.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+  try {
+    const [orders, requests] = await Promise.all([api.get('/pedidos/meus'), api.get('/recursos/trocas')]);
+    const eligibleOrders = orders.filter((order) => ['enviado', 'entregue'].includes(order.status));
+    content.innerHTML = `
+      <div class="perfil-card"><h2 class="perfil-card__title">Iniciar troca ou devolução</h2>
+        ${eligibleOrders.length ? `<form id="returnRequestForm">
+          <div class="co-form-group"><label>Pedido</label><select id="returnOrderId">${eligibleOrders.map((order) => `<option value="${Number(order.id)}">Pedido #${Number(order.id)}</option>`).join('')}</select></div>
+          <div class="co-form-group"><label>Tipo</label><select id="returnType"><option value="troca">Troca</option><option value="devolucao">Devolução</option></select></div>
+          <div id="returnItems"></div>
+          <div class="co-form-group"><label>Motivo</label><textarea id="returnReason" minlength="20" maxlength="2000" rows="4" required></textarea></div>
+          <button class="btn btn--primary" type="submit">Enviar solicitação</button>
+        </form>` : '<p>Nenhum pedido está elegível no momento. Solicitações ficam disponíveis após o envio.</p>'}
+      </div>
+      <div class="perfil-card"><h2 class="perfil-card__title">Minhas solicitações</h2>
+        ${requests.length ? requests.map((request) => `<div class="pedido-conta-card"><strong>#${Number(request.id)} · Pedido #${Number(request.pedido_id)}</strong><p>${safeText(request.tipo)} — ${safeText(request.status)}</p><p>${safeText(request.motivo)}</p>${request.resposta_admin ? `<p><strong>Resposta:</strong> ${safeText(request.resposta_admin)}</p>` : ''}</div>`).join('') : '<p>Nenhuma solicitação registrada.</p>'}
+      </div>`;
+
+    const orderSelect = document.getElementById('returnOrderId');
+    const renderItems = () => {
+      const order = eligibleOrders.find((item) => String(item.id) === orderSelect?.value);
+      const wrap = document.getElementById('returnItems');
+      if (!wrap || !order) return;
+      wrap.innerHTML = `<label>Itens</label>${order.itens.map((item) => `<label class="produto-check"><input type="checkbox" name="returnItem" value="${Number(item.id)}" /><span>${safeText(item.nome)} · ${safeText(item.tamanho || '')}</span></label>`).join('')}`;
+    };
+    orderSelect?.addEventListener('change', renderItems);
+    renderItems();
+    document.getElementById('returnRequestForm')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const itens = Array.from(document.querySelectorAll('input[name="returnItem"]:checked')).map((input) => Number(input.value));
+      if (!itens.length) return showToast('Selecione ao menos um item.', 'error');
+      try {
+        const result = await api.post('/recursos/trocas', {
+          pedidoId: Number(orderSelect.value),
+          tipo: document.getElementById('returnType').value,
+          motivo: document.getElementById('returnReason').value.trim(),
+          itens,
+        });
+        showToast(result.message);
+        renderTrocasTab();
+      } catch (error) { showToast(error.message, 'error'); }
+    });
+  } catch (error) {
+    content.innerHTML = `<p style="color:var(--danger)">${safeText(error.message)}</p>`;
   }
 }
 
@@ -396,6 +487,7 @@ function renderContaLogin() {
           <input type="email" id="loginEmail" placeholder="seu@email.com" />
           <label>Senha</label>
           <input type="password" id="loginSenha" placeholder="••••••••" />
+          <a href="recuperar-senha.html" style="align-self:flex-end;font-size:.85rem">Esqueci minha senha</a>
           <p id="loginError" class="auth-error" style="display:none"></p>
           <button class="btn btn--primary" id="btnLoginSubmit">Entrar</button>
         </div>

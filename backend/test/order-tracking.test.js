@@ -59,7 +59,10 @@ after(async () => {
 
 test('permite rastrear somente o pedido da própria conta e reduz a resposta', async () => {
   const tracking = await getTrackingForUser(String(orderId), owner);
-  assert.deepEqual(Object.keys(tracking).sort(), ['codigo_rastreio', 'created_at', 'id', 'status']);
+  assert.deepEqual(Object.keys(tracking).sort(), [
+    'codigo_rastreio', 'created_at', 'id', 'prazo_entrega_max', 'prazo_entrega_min',
+    'previsao_entrega', 'rastreio_url', 'status', 'transportadora',
+  ]);
   assert.equal(tracking.id, orderId);
   assert.equal(tracking.status, 'enviado');
   assert.equal(tracking.codigo_rastreio, 'TRACK-TEST-123');

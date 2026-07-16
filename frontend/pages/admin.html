@@ -54,6 +54,18 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
         Avaliações
       </a>
+      <a href="#" class="sidebar__link" data-tab="conteudo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        Conteúdo
+      </a>
+      <a href="#" class="sidebar__link" data-tab="trocas">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h13l-3-3m3 3-3 3"/><path d="M21 17H8l3 3m-3-3 3-3"/></svg>
+        Trocas
+      </a>
+      <a href="#" class="sidebar__link" data-tab="analytics">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
+        Analytics
+      </a>
       <a href="#" class="sidebar__link" data-tab="administradores">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
         Administradores
@@ -250,6 +262,68 @@
       </div>
     </div>
 
+    <div id="tabConteudo" class="tab-content">
+      <div class="perfil-card">
+        <h2>Banners da loja</h2>
+        <form id="formBanner" class="product-form">
+          <input type="hidden" id="bannerId" />
+          <div class="form-cols-2">
+            <div class="form-group"><label>Título</label><input id="bannerTitulo" maxlength="120" required /></div>
+            <div class="form-group"><label>Subtítulo</label><input id="bannerSubtitulo" maxlength="300" /></div>
+            <div class="form-group"><label>Imagem HTTPS</label><input id="bannerImagem" type="url" /></div>
+            <div class="form-group"><label>Link</label><input id="bannerLink" /></div>
+            <div class="form-group"><label>Posição</label><select id="bannerPosicao"><option value="home_hero">Hero da home</option><option value="home_secundario">Secundário</option></select></div>
+            <div class="form-group"><label>Status</label><select id="bannerStatus"><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select></div>
+            <div class="form-group"><label>Ordem</label><input id="bannerOrdem" type="number" min="0" value="0" /></div>
+          </div>
+          <button class="btn btn--primary" type="submit">Salvar banner</button>
+          <button class="btn btn--outline" type="button" id="btnLimparBanner">Novo</button>
+        </form>
+        <div class="table-wrap" id="tabelaBannersWrap"></div>
+      </div>
+      <div class="perfil-card">
+        <h2>Conteúdo institucional</h2>
+        <form id="formConteudoInstitucional" class="product-form">
+          <div class="form-group"><label>Chave</label><input id="conteudoChave" placeholder="sobre_loja" pattern="[a-z0-9_-]+" required /></div>
+          <div class="form-group"><label>Título</label><input id="conteudoTitulo" maxlength="160" required /></div>
+          <div class="form-group"><label>Conteúdo</label><textarea id="conteudoTexto" rows="6" maxlength="20000" required></textarea></div>
+          <div class="form-group"><label>Status</label><select id="conteudoStatus"><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select></div>
+          <button class="btn btn--primary" type="submit">Salvar conteúdo</button>
+        </form>
+        <div class="table-wrap" id="tabelaConteudosWrap"></div>
+      </div>
+    </div>
+
+    <div id="tabTrocas" class="tab-content">
+      <div class="prod-toolbar-top">
+        <div class="prod-toolbar-top__left">
+          <select id="filtroTrocasStatus" class="admin-filter-select">
+            <option value="">Todas</option>
+            <option value="solicitada">Solicitadas</option>
+            <option value="em_analise">Em análise</option>
+            <option value="aprovada">Aprovadas</option>
+            <option value="rejeitada">Rejeitadas</option>
+            <option value="concluida">Concluídas</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap" id="tabelaTrocasWrap"><div class="loading-state"><div class="spinner"></div><p>Carregando...</p></div></div>
+    </div>
+
+    <div id="tabAnalytics" class="tab-content">
+      <div class="prod-toolbar-top">
+        <div class="prod-toolbar-top__left">
+          <select id="analyticsPeriodo" class="admin-filter-select">
+            <option value="7">Últimos 7 dias</option>
+            <option value="30" selected>Últimos 30 dias</option>
+            <option value="90">Últimos 90 dias</option>
+          </select>
+        </div>
+      </div>
+      <div id="analyticsResumo" class="dash-kpi-grid"><div class="loading-state"><div class="spinner"></div><p>Carregando...</p></div></div>
+      <div class="table-wrap" id="analyticsEventosWrap"></div>
+    </div>
+
     <div id="tabAdministradores" class="tab-content">
       <div class="prod-toolbar-top">
         <div class="prod-toolbar-top__left">
@@ -409,6 +483,14 @@
               <label>Cores</label>
               <input type="text" id="pCores" placeholder="Vermelho, Preto, Branco" />
               <p class="form-hint">Separe com vírgula.</p>
+              <label class="checkbox-label" style="margin-top:.75rem"><input type="checkbox" id="pControlarEstoqueCor" /> Controlar estoque por combinação de tamanho e cor</label>
+              <div class="variant-stock-fields" id="colorVariantStockFields"></div>
+              <p class="form-hint">Quando ativado, cada combinação possui saldo e reserva independentes.</p>
+            </div>
+            <div class="form-group">
+              <label>Guia de tamanhos</label>
+              <textarea id="pGuiaTamanhos" rows="4" placeholder="P, 50, 70&#10;M, 53, 73&#10;G, 56, 76"></textarea>
+              <p class="form-hint">Uma linha por tamanho: tamanho, largura em cm, comprimento em cm.</p>
             </div>
           </div>
         </div>
