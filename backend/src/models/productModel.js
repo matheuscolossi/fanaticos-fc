@@ -159,6 +159,25 @@ function exists(productId) {
   return get('SELECT id FROM produtos WHERE id = ?', [productId]);
 }
 
+function findBySkus(skus, db = database) {
+  const normalized = [...new Set((skus || []).map((sku) => String(sku).trim().toLowerCase()).filter(Boolean))];
+  if (normalized.length === 0) return Promise.resolve([]);
+  return db.all(
+    `SELECT id, sku FROM produtos
+     WHERE LOWER(sku) IN (${normalized.map(() => '?').join(',')})`,
+    normalized
+  );
+}
+
+function findPricesByIds(ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return Promise.resolve([]);
+  return all(
+    `SELECT id, preco, preco_promocional FROM produtos
+     WHERE id IN (${ids.map(() => '?').join(',')})`,
+    ids
+  );
+}
+
 function create(p, db = database) {
   return db.run(
     `INSERT INTO produtos (
@@ -278,6 +297,10 @@ async function syncVariants(productId, variants, db = database) {
 async function duplicate(productId) {
   const original = await findById(productId);
   if (!original) return null;
+  const copySuffix = ' (cópia)';
+  const copyName = `${String(original.nome).slice(0, 200 - copySuffix.length)}${copySuffix}`;
+  const copySlug = original.slug ? `${original.slug.slice(0, 194)}-copia` : null;
+  const copySku = original.sku ? `${original.sku.slice(0, 98)}-C` : null;
   return run(
     `INSERT INTO produtos (
       nome, slug, sku, preco, preco_promocional, custo,
@@ -295,9 +318,9 @@ async function duplicate(productId) {
       ?, JSON_VALUE(?), ?, ?, ?, ?
     )`,
     [
-      `${original.nome} (cópia)`,
-      original.slug ? `${original.slug}-copia` : null,
-      original.sku ? `${original.sku}-C` : null,
+      copyName,
+      copySlug,
+      copySku,
       original.preco, original.preco_promocional, original.custo,
       original.categoria_id, original.descricao, original.descricao_curta,
       typeof original.imagens === 'string' ? original.imagens : JSON.stringify(original.imagens || []),
@@ -322,14 +345,20 @@ async function bulkUpdatePrice(ids, { tipo, valor }) {
 
   if (tipo === 'fixo') {
     return run(
-      `UPDATE produtos SET preco = ? WHERE id IN (${placeholders})`,
-      [Number(valor), ...sanitized]
+      `UPDATE produtos SET
+         preco_promocional = CASE WHEN preco_promocional > ? THEN NULL ELSE preco_promocional END,
+         preco = ?
+       WHERE id IN (${placeholders})`,
+      [Number(valor), Number(valor), ...sanitized]
     );
   }
   if (tipo === 'desconto_pct') {
     return run(
-      `UPDATE produtos SET preco_promocional = ROUND(preco * (1 - ? / 100.0), 2) WHERE id IN (${placeholders})`,
-      [Number(valor), ...sanitized]
+      `UPDATE produtos SET preco_promocional = CASE
+         WHEN ROUND(preco * (1 - ? / 100.0), 2) < 0.01 THEN 0.01
+         ELSE ROUND(preco * (1 - ? / 100.0), 2)
+       END WHERE id IN (${placeholders})`,
+      [Number(valor), Number(valor), ...sanitized]
     );
   }
   if (tipo === 'acrescimo_pct') {
@@ -360,6 +389,8 @@ module.exports = {
   create,
   duplicate,
   exists,
+  findBySkus,
+  findPricesByIds,
   findById,
   findPublicById,
   list,

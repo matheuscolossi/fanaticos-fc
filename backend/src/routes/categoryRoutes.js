@@ -2,14 +2,16 @@ const express = require('express');
 const controller = require('../controllers/categoriesController');
 const { asyncHandler } = require('../utils/http');
 
-module.exports = (adminMiddleware) => {
+module.exports = ({ perm }) => {
   const router = express.Router();
 
-  router.get('/', asyncHandler(controller.index));
-  router.post('/', adminMiddleware, asyncHandler(controller.store));
-  router.put('/:id', adminMiddleware, asyncHandler(controller.update));
-  router.patch('/:id/status', adminMiddleware, asyncHandler(controller.patchStatus));
-  router.delete('/:id', adminMiddleware, asyncHandler(controller.destroy));
+  // A vitrine continua pública, mas recebe apenas o DTO comercial de categorias ativas.
+  router.get('/', asyncHandler(controller.publicIndex));
+  router.get('/admin', perm('categorias.visualizar'), asyncHandler(controller.index));
+  router.post('/', perm('categorias.criar'), asyncHandler(controller.store));
+  router.put('/:id', perm('categorias.editar'), asyncHandler(controller.update));
+  router.patch('/:id/status', perm('categorias.editar'), asyncHandler(controller.patchStatus));
+  router.delete('/:id', perm('categorias.excluir'), asyncHandler(controller.destroy));
 
   return router;
 };

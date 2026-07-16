@@ -4,7 +4,8 @@ const BODY_LIMITS = Object.freeze({
   defaultJson: '100kb',
   productWithImages: '8mb',
   categoryWithImage: '3mb',
-  productCsvImport: '2mb',
+  // O envelope JSON acrescenta bytes ao texto; o serviço limita o CSV a 2 MB.
+  productCsvImport: '3mb',
   stripeWebhook: '1mb',
 });
 

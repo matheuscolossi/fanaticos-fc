@@ -33,7 +33,11 @@ function errorHandler(err, req, res, next) {
     });
   }
 
-  res.status(statusCode).json({ error: message, code });
+  res.status(statusCode).json({
+    error: message,
+    code,
+    ...(statusCode < 500 && err.details !== undefined ? { details: err.details } : {}),
+  });
 }
 
 module.exports = {

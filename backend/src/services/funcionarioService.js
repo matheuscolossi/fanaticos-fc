@@ -1,8 +1,9 @@
 const bcrypt = require('bcryptjs');
 const userModel = require('../models/userModel');
-const { validarForcaSenha } = require('./authService');
 const { PERMISSOES_KEYS } = require('../constants/permissions');
 const { createHttpError } = require('../utils/http');
+const { enumValue, requirePlainObject, stringValue } = require('../validation/commonSchemas');
+const { normalizeEmail, normalizeName, validatePassword } = require('../validation/userSchemas');
 
 function parsePermissoes(value) {
   if (Array.isArray(value)) return value;
@@ -26,14 +27,11 @@ async function listFuncionarios() {
 }
 
 async function createFuncionario(data) {
-  const nome = String(data.nome || '').trim();
-  const email = String(data.email || '').trim().toLowerCase();
-  if (!nome || !email) throw createHttpError(400, 'Nome e e-mail são obrigatórios.', 'VALIDATION_ERROR');
-  if (!data.cargo || !String(data.cargo).trim()) {
-    throw createHttpError(400, 'Cargo é obrigatório.', 'VALIDATION_ERROR');
-  }
-  if (!data.senha) throw createHttpError(400, 'Senha é obrigatória.', 'VALIDATION_ERROR');
-  validarForcaSenha(data.senha);
+  requirePlainObject(data, 'Funcionário');
+  const nome = normalizeName(data.nome);
+  const email = normalizeEmail(data.email);
+  const cargo = stringValue(data.cargo, 'cargo', { label: 'Cargo', min: 1, max: 100 });
+  validatePassword(data.senha);
 
   const existing = await userModel.findByEmail(email);
   if (existing) throw createHttpError(409, 'Já existe uma conta com esse e-mail.', 'EMAIL_ALREADY_EXISTS');
@@ -43,26 +41,26 @@ async function createFuncionario(data) {
     nome,
     email,
     senha: senhaHash,
-    cargo: String(data.cargo).trim(),
+    cargo,
     permissoes: sanitizePermissoes(data.permissoes),
-    status: STATUS_VALIDOS.includes(data.status) ? data.status : 'ativo',
+    status: enumValue(data.status, 'status', STATUS_VALIDOS, { label: 'Status', fallback: 'ativo' }),
   });
   return { id: result.lastID, message: 'Funcionário cadastrado.' };
 }
 
 async function updateFuncionario(id, data) {
+  requirePlainObject(data, 'Funcionário');
   const current = await userModel.findById(id);
   if (!current || current.perfil !== 'admin') {
     throw createHttpError(404, 'Funcionário não encontrado.', 'FUNCIONARIO_NOT_FOUND');
   }
 
-  const nome = String(data.nome || '').trim();
-  if (!nome) throw createHttpError(400, 'Nome é obrigatório.', 'VALIDATION_ERROR');
-  if (!data.cargo || !String(data.cargo).trim()) {
-    throw createHttpError(400, 'Cargo é obrigatório.', 'VALIDATION_ERROR');
-  }
+  const nome = normalizeName(data.nome);
+  const cargo = stringValue(data.cargo, 'cargo', { label: 'Cargo', min: 1, max: 100 });
 
-  const status = STATUS_VALIDOS.includes(data.status) ? data.status : current.status;
+  const status = enumValue(data.status, 'status', STATUS_VALIDOS, {
+    label: 'Status', fallback: current.status,
+  });
   if (status === 'inativo' && current.status === 'ativo') {
     const { c } = await userModel.countAdminsAtivos();
     if (Number(c) <= 1) {
@@ -72,13 +70,13 @@ async function updateFuncionario(id, data) {
 
   await userModel.updateFuncionario(id, {
     nome,
-    cargo: String(data.cargo).trim(),
+    cargo,
     permissoes: sanitizePermissoes(data.permissoes),
     status,
   });
 
   if (data.senha) {
-    validarForcaSenha(data.senha);
+    validatePassword(data.senha);
     await userModel.updateFuncionarioSenha(id, bcrypt.hashSync(data.senha, 10));
   }
 

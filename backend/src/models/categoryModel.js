@@ -12,6 +12,15 @@ function list() {
   `);
 }
 
+function listPublic() {
+  return all(`
+    SELECT id, nome, imagem, categoria_pai_id, ordem
+    FROM categorias
+    WHERE status = 'ativo' OR status IS NULL
+    ORDER BY ordem ASC, nome ASC
+  `);
+}
+
 function findById(id) {
   return get('SELECT * FROM categorias WHERE id = ?', [id]);
 }
@@ -66,6 +75,7 @@ module.exports = {
   findByNomeCI,
   findById,
   list,
+  listPublic,
   reassignProducts,
   remove,
   setStatus,

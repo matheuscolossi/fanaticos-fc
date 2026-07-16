@@ -35,6 +35,8 @@ async function apiFetch(path, options = {}) {
     }
     const error = new Error(err.error || `HTTP ${res.status}`);
     error.code = err.code;
+    error.status = res.status;
+    error.details = err.details;
     throw error;
   }
   if (res.status === 204) return null;

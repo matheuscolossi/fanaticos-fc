@@ -3,6 +3,12 @@ const { transaction } = require('../config/database');
 const { normalizeProductImages } = require('./imageService');
 const promocaoService = require('./promocaoService');
 const { createHttpError } = require('../utils/http');
+const {
+  MAX_PRICE,
+  validateBulkPrice,
+  validateProduct,
+  validateProductStatus,
+} = require('../validation/productSchemas');
 
 function parseJson(value, fallback) {
   if (Array.isArray(value) || (value && typeof value === 'object')) return value;
@@ -21,31 +27,6 @@ function normalizeSizes(value) {
   const sizes = parseJson(value, []);
   if (!Array.isArray(sizes)) return [];
   return [...new Set(sizes.map((size) => String(size || '').trim()).filter(Boolean))].slice(0, 30);
-}
-
-function normalizeVariants(value, sizes) {
-  if (value === undefined || value === null) return null;
-  if (!Array.isArray(value)) {
-    throw createHttpError(400, 'Variações devem ser enviadas como uma lista.', 'VARIANTS_INVALID');
-  }
-  const variants = value.map((variant) => ({
-    tamanho: String(variant?.tamanho || '').trim(),
-    estoque: Number(variant?.estoque),
-  }));
-  const uniqueSizes = new Set(variants.map((variant) => variant.tamanho));
-  if (
-    variants.some((variant) => !variant.tamanho || !Number.isSafeInteger(variant.estoque) || variant.estoque < 0) ||
-    uniqueSizes.size !== variants.length ||
-    variants.length !== sizes.length ||
-    sizes.some((size) => !uniqueSizes.has(size))
-  ) {
-    throw createHttpError(
-      400,
-      'Informe um estoque inteiro e não negativo para cada tamanho cadastrado.',
-      'VARIANT_STOCK_INVALID'
-    );
-  }
-  return variants;
 }
 
 async function attachVariants(products, { publicView }) {
@@ -83,65 +64,15 @@ function serializeProduct(product) {
 }
 
 async function normalizeProductPayload(body) {
-  const {
-    nome, slug, sku, preco, preco_promocional, custo,
-    categoria_id, descricao, descricao_curta,
-    imagens, estoque, estoque_minimo, destaque,
-    time, pais, competicao, temporada, tipo, marca, genero,
-    tamanhos, variantes, cores, status,
-    produto_novo, produto_promocional,
-    peso, dimensoes, info_lavagem,
-    keywords, meta_titulo, meta_descricao,
-  } = body;
-
-  const numericPrice = Number(preco);
-  const numericStock = Number(estoque ?? 0);
-  const normalizedSizes = normalizeSizes(tamanhos);
-  const normalizedVariants = normalizeVariants(variantes, normalizedSizes);
-  if (!nome || Number.isNaN(numericPrice)) {
-    throw createHttpError(400, 'Nome e preço são obrigatórios.', 'VALIDATION_ERROR');
-  }
-  if (!Number.isSafeInteger(numericStock) || numericStock < 0) {
-    throw createHttpError(400, 'Estoque deve ser um número inteiro maior ou igual a zero.', 'STOCK_INVALID');
-  }
-
-  const imageList = parseJson(imagens, []);
+  const product = validateProduct(body);
 
   return {
-    nome:               String(nome).trim(),
-    slug:               slug ? slugify(slug) : slugify(nome),
-    sku:                sku ? String(sku).trim() : null,
-    preco:              numericPrice,
-    preco_promocional:  preco_promocional != null && preco_promocional !== '' ? Number(preco_promocional) : null,
-    custo:              custo != null && custo !== '' ? Number(custo) : null,
-    categoria_id:       categoria_id || null,
-    descricao:          descricao || '',
-    descricao_curta:    descricao_curta || '',
-    imagens:            JSON.stringify(await normalizeProductImages(imageList)),
-    estoque:            normalizedVariants?.length
-      ? normalizedVariants.reduce((sum, variant) => sum + variant.estoque, 0)
-      : numericStock,
-    estoque_minimo:     Number(estoque_minimo) || 0,
-    destaque:           Boolean(destaque),
-    time:               time || null,
-    pais:               pais || null,
-    competicao:         competicao || null,
-    temporada:          temporada || null,
-    tipo:               tipo || 'torcedor',
-    marca:              marca || null,
-    genero:             genero || 'masculino',
-    tamanhos:           JSON.stringify(normalizedSizes),
-    variantes:          normalizedVariants,
-    cores:              JSON.stringify(parseJson(cores, [])),
-    status:             status || 'ativo',
-    produto_novo:       Boolean(produto_novo),
-    produto_promocional:Boolean(produto_promocional),
-    peso:               peso != null && peso !== '' ? Number(peso) : null,
-    dimensoes:          JSON.stringify(parseJson(dimensoes, {})),
-    info_lavagem:       info_lavagem || null,
-    keywords:           keywords || null,
-    meta_titulo:        meta_titulo || null,
-    meta_descricao:     meta_descricao || null,
+    ...product,
+    slug: product.slug ? slugify(product.slug) : slugify(product.nome),
+    imagens: JSON.stringify(await normalizeProductImages(product.imagens)),
+    tamanhos: JSON.stringify(product.tamanhos),
+    cores: JSON.stringify(product.cores),
+    dimensoes: JSON.stringify(product.dimensoes),
   };
 }
 
@@ -288,14 +219,26 @@ async function duplicateProduct(productId) {
 }
 
 async function bulkUpdatePrices(ids, priceData) {
-  if (!ids?.length) throw createHttpError(400, 'Nenhum produto selecionado.');
-  await productModel.bulkUpdatePrice(ids, priceData);
-  return { message: `${ids.length} produto(s) atualizados.` };
+  const validated = validateBulkPrice(ids, priceData);
+  const products = await productModel.findPricesByIds(validated.ids);
+  if (products.length !== validated.ids.length) {
+    throw createHttpError(404, 'Um ou mais produtos não foram encontrados.', 'PRODUCT_NOT_FOUND');
+  }
+  if (validated.tipo === 'acrescimo_pct') {
+    const multiplier = 1 + validated.valor / 100;
+    const exceedsLimit = products.some((product) => Number(product.preco) * multiplier > MAX_PRICE);
+    if (exceedsLimit) {
+      throw createHttpError(400, 'O reajuste ultrapassa o preço máximo permitido.', 'VALIDATION_ERROR');
+    }
+  }
+  await productModel.bulkUpdatePrice(validated.ids, validated);
+  return { message: `${validated.ids.length} produto(s) atualizados.` };
 }
 
 async function setProductStatus(productId, status) {
+  const normalizedStatus = validateProductStatus(status);
   await ensureProductExists(productId);
-  await productModel.setStatus(productId, status);
+  await productModel.setStatus(productId, normalizedStatus);
   return { message: 'Status atualizado.' };
 }
 
@@ -357,6 +300,7 @@ module.exports = {
   getProduct,
   listProducts,
   listProductsPaginated,
+  normalizeProductPayload,
   setProductDestaque,
   setProductStatus,
   updateProduct,

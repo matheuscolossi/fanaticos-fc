@@ -21,6 +21,10 @@ async function listCategories() {
   return categoryModel.list();
 }
 
+async function listPublicCategories() {
+  return categoryModel.listPublic();
+}
+
 async function createCategory(data) {
   await validatePayload(data);
   const imagem = await uploadCategoryImage(data.imagem);
@@ -84,6 +88,7 @@ module.exports = {
   createCategory,
   deleteCategory,
   listCategories,
+  listPublicCategories,
   setCategoryStatus,
   updateCategory,
 };

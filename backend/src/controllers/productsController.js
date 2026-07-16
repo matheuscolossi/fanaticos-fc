@@ -14,6 +14,7 @@ const {
 } = require('../services/productService');
 const categoryModel = require('../models/categoryModel');
 const logService = require('../services/logService');
+const { importProductsCsv } = require('../services/productCsvService');
 
 async function index(req, res) {
   if (req.query.admin === 'true') {
@@ -64,20 +65,31 @@ async function exportCsv(req, res) {
 }
 
 async function importCsv(req, res) {
-  const { produtos } = req.body;
-  if (!Array.isArray(produtos) || produtos.length === 0) {
-    return res.status(400).json({ error: 'Nenhum produto para importar.' });
+  const { csv, preview } = req.body || {};
+  if (typeof csv !== 'string' || typeof preview !== 'boolean') {
+    throw createHttpError(
+      400,
+      'Use o contrato { csv: string, preview: boolean }.',
+      'CSV_IMPORT_CONTRACT_INVALID'
+    );
   }
-  let created = 0, errors = 0;
-  for (const row of produtos) {
-    try {
-      await createProduct(row);
-      created++;
-    } catch {
-      errors++;
-    }
+  const report = await importProductsCsv({ csv, preview });
+  if (!preview && !report.canImport) {
+    return res.status(422).json({
+      error: 'O CSV contém linhas inválidas. Revise a pré-visualização.',
+      code: 'CSV_VALIDATION_FAILED',
+      details: report,
+    });
   }
-  res.json({ message: `Importados: ${created}. Erros: ${errors}.`, created, errors });
+  if (!preview) {
+    await logService.registrar(
+      req.staffUser,
+      'Produtos importados via CSV',
+      `${report.summary.imported} produto(s)`
+    );
+    return res.status(201).json(report);
+  }
+  return res.json(report);
 }
 
 async function patchStatus(req, res) {

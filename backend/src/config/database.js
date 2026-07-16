@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
+const { normalizeEmail } = require('../validation/userSchemas');
 
 require('dotenv').config({ path: path.join(__dirname, '../../.env'), quiet: true });
 
@@ -280,6 +281,12 @@ async function createPostgresSchema() {
       currency TEXT DEFAULT 'BRL',
       shipping_address JSONB,
       stock_status TEXT NOT NULL DEFAULT 'none',
+      cancelado_em TIMESTAMPTZ,
+      cancelado_por INTEGER,
+      motivo_cancelamento TEXT,
+      arquivado_em TIMESTAMPTZ,
+      arquivado_por INTEGER,
+      motivo_arquivamento TEXT,
       updated_at TIMESTAMPTZ DEFAULT now(),
       created_at TIMESTAMPTZ DEFAULT now()
     )
@@ -299,7 +306,7 @@ async function createPostgresSchema() {
   await run(`
     CREATE TABLE IF NOT EXISTS pedido_itens (
       id SERIAL PRIMARY KEY,
-      pedido_id INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE CASCADE,
+      pedido_id INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE RESTRICT,
       produto_id INTEGER,
       nome TEXT NOT NULL,
       preco_unitario NUMERIC(10,2) NOT NULL,
@@ -307,6 +314,22 @@ async function createPostgresSchema() {
       tamanho TEXT,
       variacao JSONB DEFAULT '{}'::jsonb,
       subtotal NUMERIC(10,2) NOT NULL
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS pedido_eventos (
+      id SERIAL PRIMARY KEY,
+      pedido_id INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE RESTRICT,
+      tipo TEXT NOT NULL,
+      status_anterior TEXT,
+      status_novo TEXT,
+      ator_id INTEGER,
+      ator_nome TEXT,
+      motivo TEXT,
+      detalhes JSONB DEFAULT '{}'::jsonb,
+      chave_idempotencia TEXT UNIQUE,
+      created_at TIMESTAMPTZ DEFAULT now()
     )
   `);
 
@@ -478,6 +501,12 @@ async function createSqliteSchema() {
     currency TEXT DEFAULT 'BRL',
     shipping_address TEXT,
     stock_status TEXT NOT NULL DEFAULT 'none',
+    cancelado_em DATETIME,
+    cancelado_por INTEGER,
+    motivo_cancelamento TEXT,
+    arquivado_em DATETIME,
+    arquivado_por INTEGER,
+    motivo_arquivamento TEXT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
@@ -502,7 +531,22 @@ async function createSqliteSchema() {
     tamanho TEXT,
     variacao TEXT DEFAULT '{}',
     subtotal REAL NOT NULL,
-    FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE
+    FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE RESTRICT
+  )`);
+
+  await run(`CREATE TABLE IF NOT EXISTS pedido_eventos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pedido_id INTEGER NOT NULL,
+    tipo TEXT NOT NULL,
+    status_anterior TEXT,
+    status_novo TEXT,
+    ator_id INTEGER,
+    ator_nome TEXT,
+    motivo TEXT,
+    detalhes TEXT DEFAULT '{}',
+    chave_idempotencia TEXT UNIQUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE RESTRICT
   )`);
 
   await run(`CREATE TABLE IF NOT EXISTS checkout_drafts (
@@ -602,6 +646,136 @@ async function runOptionalMigration(sql) {
   }
 }
 
+async function installPostgresValidationConstraints() {
+  // Canonicaliza registros legados antes de começar a exigir o formato novo.
+  await runOptionalMigration(`UPDATE usuarios SET email = LOWER(BTRIM(email))
+    WHERE email <> LOWER(BTRIM(email))
+      AND NOT EXISTS (
+        SELECT 1 FROM usuarios outro
+        WHERE outro.id <> usuarios.id AND LOWER(BTRIM(outro.email)) = LOWER(BTRIM(usuarios.email))
+      )`);
+  await runOptionalMigration(`UPDATE usuarios SET cpf = REGEXP_REPLACE(cpf, '[^0-9]', '', 'g')
+    WHERE cpf IS NOT NULL AND LENGTH(REGEXP_REPLACE(cpf, '[^0-9]', '', 'g')) = 11`);
+  await runOptionalMigration(`UPDATE usuarios SET telefone = REGEXP_REPLACE(telefone, '[^0-9]', '', 'g')
+    WHERE telefone IS NOT NULL AND LENGTH(REGEXP_REPLACE(telefone, '[^0-9]', '', 'g')) IN (10, 11)`);
+  await runOptionalMigration(`UPDATE usuarios SET cep = REGEXP_REPLACE(cep, '[^0-9]', '', 'g')
+    WHERE cep IS NOT NULL AND LENGTH(REGEXP_REPLACE(cep, '[^0-9]', '', 'g')) = 8`);
+
+  await run(`DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'produtos_dados_validos_ck') THEN
+      ALTER TABLE produtos ADD CONSTRAINT produtos_dados_validos_ck CHECK (
+        nome IS NOT NULL AND CHAR_LENGTH(BTRIM(nome)) BETWEEN 1 AND 200
+        AND preco IS NOT NULL AND preco BETWEEN 0.01 AND 99999999.99
+        AND (preco_promocional IS NULL OR preco_promocional BETWEEN 0.01 AND preco)
+        AND (custo IS NULL OR custo BETWEEN 0 AND 99999999.99)
+        AND estoque IS NOT NULL AND estoque BETWEEN 0 AND 1000000
+        AND estoque_minimo IS NOT NULL AND estoque_minimo BETWEEN 0 AND 1000000
+        AND estoque_reservado IS NOT NULL AND estoque_reservado BETWEEN 0 AND estoque
+        AND status IS NOT NULL AND status IN ('ativo', 'inativo')
+        AND tipo IS NOT NULL AND tipo IN ('torcedor', 'jogador', 'retro', 'infantil')
+        AND genero IS NOT NULL AND genero IN ('masculino', 'feminino', 'infantil', 'unissex')
+        AND (peso IS NULL OR peso BETWEEN 0 AND 10000)
+      ) NOT VALID;
+    END IF;
+  END $$`);
+  await run(`DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'produto_variantes_dados_validos_ck') THEN
+      ALTER TABLE produto_variantes ADD CONSTRAINT produto_variantes_dados_validos_ck CHECK (
+        CHAR_LENGTH(BTRIM(tamanho)) BETWEEN 1 AND 20
+        AND estoque BETWEEN 0 AND 1000000
+        AND estoque_reservado BETWEEN 0 AND estoque
+      ) NOT VALID;
+    END IF;
+  END $$`);
+  await run(`DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'usuarios_dados_canonicos_ck') THEN
+      ALTER TABLE usuarios ADD CONSTRAINT usuarios_dados_canonicos_ck CHECK (
+        CHAR_LENGTH(BTRIM(nome)) BETWEEN 2 AND 100
+        AND CHAR_LENGTH(email) BETWEEN 3 AND 254
+        AND email = LOWER(BTRIM(email))
+        AND email ~ '^[^[:space:]@<>"()]+@[^[:space:]@<>"()]+\\.[^[:space:]@<>"()]+$'
+        AND (cpf IS NULL OR cpf ~ '^[0-9]{11}$')
+        AND (telefone IS NULL OR telefone ~ '^[0-9]{10,11}$')
+        AND (cep IS NULL OR cep ~ '^[0-9]{8}$')
+        AND (endereco_rua IS NULL OR CHAR_LENGTH(endereco_rua) <= 200)
+        AND (cidade IS NULL OR CHAR_LENGTH(cidade) <= 100)
+      ) NOT VALID;
+    END IF;
+  END $$`);
+}
+
+async function installSqliteValidationTriggers() {
+  const stripFormatting = (column) =>
+    `REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(${column}, '.', ''), '-', ''), '(', ''), ')', ''), ' ', ''), '+', '')`;
+  await runOptionalMigration(`UPDATE usuarios SET email = LOWER(TRIM(email))
+    WHERE email <> LOWER(TRIM(email))
+      AND NOT EXISTS (
+        SELECT 1 FROM usuarios outro
+        WHERE outro.id <> usuarios.id AND LOWER(TRIM(outro.email)) = LOWER(TRIM(usuarios.email))
+      )`);
+  await runOptionalMigration(`UPDATE usuarios SET cpf = ${stripFormatting('cpf')}
+    WHERE cpf IS NOT NULL AND LENGTH(${stripFormatting('cpf')}) = 11`);
+  await runOptionalMigration(`UPDATE usuarios SET telefone = ${stripFormatting('telefone')}
+    WHERE telefone IS NOT NULL AND LENGTH(${stripFormatting('telefone')}) IN (10, 11)`);
+  await runOptionalMigration(`UPDATE usuarios SET cep = ${stripFormatting('cep')}
+    WHERE cep IS NOT NULL AND LENGTH(${stripFormatting('cep')}) = 8`);
+
+  const productRule = `
+    NEW.nome IS NULL OR LENGTH(TRIM(NEW.nome)) NOT BETWEEN 1 AND 200
+    OR NEW.preco IS NULL OR TYPEOF(NEW.preco) NOT IN ('integer', 'real') OR NEW.preco < 0.01 OR NEW.preco > 99999999.99
+    OR (NEW.preco_promocional IS NOT NULL AND (TYPEOF(NEW.preco_promocional) NOT IN ('integer', 'real') OR NEW.preco_promocional < 0.01 OR NEW.preco_promocional > NEW.preco))
+    OR (NEW.custo IS NOT NULL AND (TYPEOF(NEW.custo) NOT IN ('integer', 'real') OR NEW.custo < 0 OR NEW.custo > 99999999.99))
+    OR TYPEOF(NEW.estoque) <> 'integer' OR NEW.estoque < 0 OR NEW.estoque > 1000000
+    OR TYPEOF(NEW.estoque_minimo) <> 'integer' OR NEW.estoque_minimo < 0 OR NEW.estoque_minimo > 1000000
+    OR TYPEOF(NEW.estoque_reservado) <> 'integer' OR NEW.estoque_reservado < 0 OR NEW.estoque_reservado > NEW.estoque
+    OR NEW.status IS NULL OR NEW.status NOT IN ('ativo', 'inativo')
+    OR NEW.tipo IS NULL OR NEW.tipo NOT IN ('torcedor', 'jogador', 'retro', 'infantil')
+    OR NEW.genero IS NULL OR NEW.genero NOT IN ('masculino', 'feminino', 'infantil', 'unissex')
+    OR (NEW.peso IS NOT NULL AND (TYPEOF(NEW.peso) NOT IN ('integer', 'real') OR NEW.peso < 0 OR NEW.peso > 10000))`;
+  const userRule = `
+    NEW.nome IS NULL OR LENGTH(TRIM(NEW.nome)) NOT BETWEEN 2 AND 100
+    OR NEW.email IS NULL OR LENGTH(NEW.email) NOT BETWEEN 3 AND 254
+    OR NEW.email <> LOWER(TRIM(NEW.email)) OR NEW.email NOT LIKE '%_@_%._%'
+    OR (NEW.cpf IS NOT NULL AND (LENGTH(NEW.cpf) <> 11 OR NEW.cpf GLOB '*[^0-9]*'))
+    OR (NEW.telefone IS NOT NULL AND (LENGTH(NEW.telefone) NOT IN (10, 11) OR NEW.telefone GLOB '*[^0-9]*'))
+    OR (NEW.cep IS NOT NULL AND (LENGTH(NEW.cep) <> 8 OR NEW.cep GLOB '*[^0-9]*'))
+    OR (NEW.endereco_rua IS NOT NULL AND LENGTH(NEW.endereco_rua) > 200)
+    OR (NEW.cidade IS NOT NULL AND LENGTH(NEW.cidade) > 100)`;
+  const variantRule = `
+    NEW.tamanho IS NULL OR LENGTH(TRIM(NEW.tamanho)) NOT BETWEEN 1 AND 20
+    OR TYPEOF(NEW.estoque) <> 'integer' OR NEW.estoque < 0 OR NEW.estoque > 1000000
+    OR TYPEOF(NEW.estoque_reservado) <> 'integer' OR NEW.estoque_reservado < 0 OR NEW.estoque_reservado > NEW.estoque`;
+
+  for (const trigger of [
+    'produtos_validar_insert',
+    'produtos_validar_update',
+    'usuarios_validar_insert',
+    'usuarios_validar_update',
+    'produto_variantes_validar_insert',
+    'produto_variantes_validar_update',
+  ]) {
+    await run(`DROP TRIGGER IF EXISTS ${trigger}`);
+  }
+  await run(`CREATE TRIGGER IF NOT EXISTS produtos_validar_insert
+    BEFORE INSERT ON produtos WHEN ${productRule}
+    BEGIN SELECT RAISE(ABORT, 'produtos_dados_invalidos'); END`);
+  await run(`CREATE TRIGGER IF NOT EXISTS produtos_validar_update
+    BEFORE UPDATE ON produtos WHEN ${productRule}
+    BEGIN SELECT RAISE(ABORT, 'produtos_dados_invalidos'); END`);
+  await run(`CREATE TRIGGER IF NOT EXISTS usuarios_validar_insert
+    BEFORE INSERT ON usuarios WHEN ${userRule}
+    BEGIN SELECT RAISE(ABORT, 'usuarios_dados_invalidos'); END`);
+  await run(`CREATE TRIGGER IF NOT EXISTS usuarios_validar_update
+    BEFORE UPDATE OF nome, email, cpf, telefone, cep, endereco_rua, cidade ON usuarios WHEN ${userRule}
+    BEGIN SELECT RAISE(ABORT, 'usuarios_dados_invalidos'); END`);
+  await run(`CREATE TRIGGER IF NOT EXISTS produto_variantes_validar_insert
+    BEFORE INSERT ON produto_variantes WHEN ${variantRule}
+    BEGIN SELECT RAISE(ABORT, 'produto_variantes_dados_invalidos'); END`);
+  await run(`CREATE TRIGGER IF NOT EXISTS produto_variantes_validar_update
+    BEFORE UPDATE ON produto_variantes WHEN ${variantRule}
+    BEGIN SELECT RAISE(ABORT, 'produto_variantes_dados_invalidos'); END`);
+}
+
 async function runMigrations() {
   if (isPostgres) {
     await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS cpf TEXT');
@@ -687,6 +861,7 @@ async function runMigrations() {
     await runOptionalMigration("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permissoes JSONB DEFAULT '[]'::jsonb");
     await runOptionalMigration("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ativo'");
     await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ultimo_acesso TIMESTAMPTZ');
+    await installPostgresValidationConstraints();
     return;
   }
 
@@ -774,6 +949,7 @@ async function runMigrations() {
   await runOptionalMigration("ALTER TABLE usuarios ADD COLUMN permissoes TEXT DEFAULT '[]'");
   await runOptionalMigration("ALTER TABLE usuarios ADD COLUMN status TEXT DEFAULT 'ativo'");
   await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN ultimo_acesso DATETIME');
+  await installSqliteValidationTriggers();
 }
 
 async function seedDefaults() {
@@ -787,13 +963,14 @@ async function seedDefaults() {
 
   const admin = await get("SELECT COUNT(*) as c FROM usuarios WHERE perfil='admin'");
   if (Number(admin.c) === 0) {
-    const adminEmail = process.env.DEFAULT_ADMIN_EMAIL;
+    const configuredAdminEmail = process.env.DEFAULT_ADMIN_EMAIL;
     const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD;
-    if (!adminEmail || !adminPassword) {
+    if (!configuredAdminEmail || !adminPassword) {
       throw new Error(
         'DEFAULT_ADMIN_EMAIL e DEFAULT_ADMIN_PASSWORD são obrigatórias para provisionar o primeiro administrador.'
       );
     }
+    const adminEmail = normalizeEmail(configuredAdminEmail);
     const { PERMISSOES_KEYS } = require('../constants/permissions');
     const hash = bcrypt.hashSync(adminPassword, 10);
     await run(
@@ -825,6 +1002,53 @@ async function seedDefaults() {
       );
     }
     console.log(`[database] ${adminsLegados.length} admin(s) legado(s) migrado(s) com todas as permissões.`);
+  }
+
+  // A conta proprietária configurada no ambiente é a conta de recuperação do
+  // RBAC e deve acompanhar novas permissões para não perder acesso após deploys.
+  const bootstrapOwner = await get(
+    "SELECT id, permissoes FROM usuarios WHERE perfil = 'admin' AND LOWER(email) = LOWER(?)",
+    [process.env.DEFAULT_ADMIN_EMAIL]
+  );
+  if (bootstrapOwner) {
+    const { PERMISSOES_KEYS } = require('../constants/permissions');
+    let ownerPermissions = [];
+    try {
+      ownerPermissions = Array.isArray(bootstrapOwner.permissoes)
+        ? bootstrapOwner.permissoes
+        : JSON.parse(bootstrapOwner.permissoes || '[]');
+    } catch {}
+    if (PERMISSOES_KEYS.some((permission) => !ownerPermissions.includes(permission))) {
+      await run(
+        'UPDATE usuarios SET permissoes = JSON_VALUE(?) WHERE id = ?',
+        [JSON.stringify(PERMISSOES_KEYS), bootstrapOwner.id]
+      );
+      console.log('[database] Bootstrap administrator permissions synchronized.');
+    }
+  }
+
+  // Administradores que já podiam gerenciar outras contas poderiam conceder
+  // essas chaves a si mesmos. Mesclá-las no deploy evita lockout sem promover
+  // funcionários que possuíam somente a antiga permissão cupons.criar.
+  const administrators = await all("SELECT id, permissoes FROM usuarios WHERE perfil = 'admin'");
+  const { PERMISSOES_KEYS } = require('../constants/permissions');
+  const newResourcePermissions = PERMISSOES_KEYS.filter((permission) =>
+    /^(categorias|cupons|promocoes)\./.test(permission)
+  );
+  for (const administrator of administrators) {
+    let currentPermissions = [];
+    try {
+      currentPermissions = Array.isArray(administrator.permissoes)
+        ? administrator.permissoes
+        : JSON.parse(administrator.permissoes || '[]');
+    } catch {}
+    if (!currentPermissions.includes('administradores.gerenciar')) continue;
+    const mergedPermissions = [...new Set([...currentPermissions, ...newResourcePermissions])];
+    if (mergedPermissions.length === currentPermissions.length) continue;
+    await run(
+      'UPDATE usuarios SET permissoes = JSON_VALUE(?) WHERE id = ?',
+      [JSON.stringify(mergedPermissions), administrator.id]
+    );
   }
 
   const cupons = await get('SELECT COUNT(*) as c FROM cupons');

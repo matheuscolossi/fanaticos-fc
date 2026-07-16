@@ -766,7 +766,7 @@ function renderTabelaProdutos() {
 
 async function loadCategoriasAdmin() {
   try {
-    categoriasAdmin = await api.get('/categorias');
+    categoriasAdmin = await api.get('/categorias/admin');
     renderProdutoCategoriaSelect();
 
     const filtro = document.getElementById('adminFiltroCategoria');
@@ -1824,17 +1824,163 @@ async function exportarCSV() {
 
 async function importarCSV(file) {
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = async (ev) => {
-    try {
-      await api.post('/produtos/import', { csv: ev.target.result });
-      showToast('Importação concluída! Recarregando...');
-      await loadProdutosAdmin();
-    } catch(e) {
-      showToast(e.message, 'error');
+  if (!/\.csv$/i.test(file.name)) {
+    showToast('Selecione um arquivo com extensão .csv.', 'error');
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    showToast('O arquivo CSV deve ter no máximo 2 MB.', 'error');
+    return;
+  }
+  try {
+    const csv = await file.text();
+    const report = await api.post('/produtos/import', { csv, preview: true });
+    showCsvImportPreview(report, csv, file.name);
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function createCsvPreviewElement(tag, className, text) {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  if (text !== undefined) element.textContent = String(text);
+  return element;
+}
+
+function closeCsvImportPreview() {
+  document.getElementById('csvImportPreviewOverlay')?.remove();
+}
+
+function showCsvImportPreview(report, csv, fileName) {
+  closeCsvImportPreview();
+  const overlay = createCsvPreviewElement('div', 'modal-overlay');
+  overlay.id = 'csvImportPreviewOverlay';
+  overlay.style.display = 'flex';
+  overlay.addEventListener('click', (event) => {
+    if (event.target === overlay) closeCsvImportPreview();
+  });
+  overlay.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeCsvImportPreview();
+  });
+
+  const modal = createCsvPreviewElement('section', 'modal');
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-labelledby', 'csvImportPreviewTitle');
+  modal.style.width = 'min(960px, 94vw)';
+  modal.style.maxHeight = '90vh';
+  modal.style.overflow = 'hidden';
+  modal.style.display = 'flex';
+  modal.style.flexDirection = 'column';
+
+  const header = createCsvPreviewElement('div', 'modal__header');
+  const titleWrap = createCsvPreviewElement('div');
+  const title = createCsvPreviewElement('h2', '', 'Pré-visualização da importação');
+  title.id = 'csvImportPreviewTitle';
+  const fileLabel = createCsvPreviewElement('p', '', fileName);
+  fileLabel.style.color = 'var(--text-muted)';
+  fileLabel.style.fontSize = '.82rem';
+  titleWrap.append(title, fileLabel);
+  const closeButton = createCsvPreviewElement('button', 'modal__close', '×');
+  closeButton.type = 'button';
+  closeButton.setAttribute('aria-label', 'Fechar pré-visualização');
+  closeButton.addEventListener('click', closeCsvImportPreview);
+  header.append(titleWrap, closeButton);
+
+  const body = createCsvPreviewElement('div');
+  body.style.padding = '1rem 1.5rem';
+  body.style.overflow = 'auto';
+  const summary = report.summary || {};
+  const summaryText = createCsvPreviewElement(
+    'p',
+    '',
+    `${summary.totalRows || 0} linha(s): ${summary.validRows || 0} válida(s) e ${summary.invalidRows || 0} com erro.`
+  );
+  summaryText.style.marginBottom = '1rem';
+  summaryText.style.color = report.canImport ? 'var(--success)' : 'var(--danger)';
+  body.appendChild(summaryText);
+
+  const tableWrap = createCsvPreviewElement('div', 'table-wrap');
+  tableWrap.style.overflowX = 'auto';
+  const table = createCsvPreviewElement('table', 'admin-table');
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  for (const label of ['Linha', 'Produto', 'SKU', 'Preço', 'Categoria', 'Estoque', 'Resultado']) {
+    headerRow.appendChild(createCsvPreviewElement('th', '', label));
+  }
+  thead.appendChild(headerRow);
+  const tbody = document.createElement('tbody');
+  const reportRows = report.rows || [];
+  const invalidRows = reportRows.filter((row) => !row.valid);
+  const validRows = reportRows.filter((row) => row.valid);
+  const visibleRows = reportRows.length <= 250
+    ? reportRows
+    : [...invalidRows, ...validRows.slice(0, Math.max(0, 250 - invalidRows.length))]
+      .sort((a, b) => Number(a.line) - Number(b.line));
+  for (const row of visibleRows) {
+    const tr = document.createElement('tr');
+    const product = row.product || {};
+    const errorText = row.valid
+      ? 'Válida'
+      : (row.errors || []).map((error) => `${error.field}: ${error.message}`).join(' | ');
+    const values = [
+      row.line,
+      product.nome || '—',
+      product.sku || '—',
+      product.preco == null ? '—' : formatBRL(product.preco),
+      product.categoria || 'Sem categoria',
+      product.estoque ?? 0,
+      errorText,
+    ];
+    for (const [index, value] of values.entries()) {
+      const td = createCsvPreviewElement('td', '', value);
+      if (index === values.length - 1) td.style.color = row.valid ? 'var(--success)' : 'var(--danger)';
+      tr.appendChild(td);
     }
-  };
-  reader.readAsText(file, 'utf-8');
+    tbody.appendChild(tr);
+  }
+  table.append(thead, tbody);
+  tableWrap.appendChild(table);
+  body.appendChild(tableWrap);
+  if (reportRows.length > visibleRows.length) {
+    body.appendChild(createCsvPreviewElement(
+      'p',
+      '',
+      `Exibindo todas as linhas com erro e ${visibleRows.length - invalidRows.length} linha(s) válida(s) de ${reportRows.length}.`
+    ));
+  }
+
+  const actions = createCsvPreviewElement('div', 'form-actions');
+  actions.style.padding = '1rem 1.5rem';
+  const cancelButton = createCsvPreviewElement('button', 'btn btn--outline', 'Cancelar');
+  cancelButton.type = 'button';
+  cancelButton.addEventListener('click', closeCsvImportPreview);
+  const importButton = createCsvPreviewElement('button', 'btn btn--primary', 'Confirmar importação');
+  importButton.type = 'button';
+  importButton.disabled = !report.canImport;
+  importButton.title = report.canImport ? '' : 'Corrija todas as linhas inválidas antes de importar.';
+  importButton.addEventListener('click', async () => {
+    importButton.disabled = true;
+    importButton.textContent = 'Importando...';
+    try {
+      const result = await api.post('/produtos/import', { csv, preview: false });
+      closeCsvImportPreview();
+      await loadProdutosAdmin();
+      showToast(`${result.summary.imported} produto(s) importado(s) com sucesso.`);
+    } catch (error) {
+      if (error.details?.rows) showCsvImportPreview(error.details, csv, fileName);
+      showToast(error.message, 'error');
+    } finally {
+      importButton.disabled = false;
+      importButton.textContent = 'Confirmar importação';
+    }
+  });
+  actions.append(cancelButton, importButton);
+  modal.append(header, body, actions);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  closeButton.focus();
 }
 
 // ── Bulk Price ────────────────────────────────────────────────────────────────
@@ -2452,11 +2598,22 @@ const PERMISSOES = [
   { key: 'produtos.cadastrar',        label: 'Cadastrar produtos' },
   { key: 'produtos.editar',           label: 'Editar produtos' },
   { key: 'produtos.excluir',          label: 'Excluir produtos' },
+  { key: 'categorias.visualizar',     label: 'Visualizar categorias' },
+  { key: 'categorias.criar',          label: 'Criar categorias' },
+  { key: 'categorias.editar',         label: 'Editar categorias' },
+  { key: 'categorias.excluir',        label: 'Excluir categorias' },
   { key: 'estoque.gerenciar',         label: 'Gerenciar estoque' },
   { key: 'pedidos.visualizar',        label: 'Visualizar pedidos' },
   { key: 'pedidos.alterar',           label: 'Alterar pedidos' },
   { key: 'clientes.gerenciar',        label: 'Gerenciar clientes' },
+  { key: 'cupons.visualizar',         label: 'Visualizar cupons' },
   { key: 'cupons.criar',              label: 'Criar cupons' },
+  { key: 'cupons.editar',             label: 'Editar cupons' },
+  { key: 'cupons.excluir',            label: 'Excluir cupons' },
+  { key: 'promocoes.visualizar',      label: 'Visualizar promoções' },
+  { key: 'promocoes.criar',           label: 'Criar promoções' },
+  { key: 'promocoes.editar',          label: 'Editar promoções' },
+  { key: 'promocoes.excluir',         label: 'Excluir promoções' },
   { key: 'financeiro.visualizar',     label: 'Visualizar financeiro' },
   { key: 'configuracoes.acessar',     label: 'Acessar configurações' },
   { key: 'administradores.gerenciar', label: 'Gerenciar administradores' },

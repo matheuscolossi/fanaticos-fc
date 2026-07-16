@@ -394,6 +394,26 @@ Além das rotas acima (exigidas pelo trabalho), o site usa um conjunto mais comp
 
 Usuários administrativos são definidos pela flag `perfil = 'admin'` no registro do usuário (equivalente ao `isAdmin=true` citado no PDF).
 
+### Permissões administrativas granulares
+
+Categorias, cupons e promoções usam permissões independentes para cada ação: `*.visualizar` protege as consultas administrativas, `*.criar` protege cadastros e duplicações, `*.editar` protege alterações e ativação/inativação, e `*.excluir` protege remoções. O catálogo público `GET /api/categorias` permanece acessível apenas com categorias ativas e campos próprios da vitrine; a listagem administrativa completa usa `GET /api/categorias/admin` e exige `categorias.visualizar`.
+
+Ao atualizar uma instalação existente, as novas permissões são adicionadas somente à conta proprietária configurada e às contas que já possuem `administradores.gerenciar`. Funcionários com permissões restritas, inclusive quem possuía apenas `cupons.criar`, não recebem acesso adicional automaticamente.
+
+### Validação e canonicalização no backend
+
+Os contratos de produtos e usuários são validados por schemas centralizados antes de chegar aos models. Produtos rejeitam valores não finitos, preços negativos ou acima do limite, mais de duas casas decimais, estoque fracionário/negativo, enumerações desconhecidas e textos acima do tamanho permitido. E-mail é armazenado em minúsculas e sem espaços externos; CPF, telefone e CEP são armazenados somente com dígitos, depois da validação de formato (incluindo os dígitos verificadores do CPF).
+
+O banco mantém uma segunda barreira contra gravações que contornem os services: PostgreSQL usa `CHECK constraints` e SQLite usa triggers de validação equivalentes. A migração canonicaliza formatos legados válidos antes de ativar essa proteção.
+
+### Importação CSV de produtos
+
+`POST /api/produtos/import` usa um único contrato JSON: `{ "csv": "conteúdo do arquivo", "preview": true|false }`. O frontend sempre envia primeiro `preview: true`; nenhuma linha é gravada nessa etapa. A confirmação repete o mesmo conteúdo com `preview: false` e a importação ocorre em uma transação única, somente quando todas as linhas são válidas.
+
+O arquivo aceita vírgula, ponto-e-vírgula ou tabulação, campos entre aspas, BOM UTF-8 e a diretiva opcional `sep=;`. As colunas obrigatórias são `nome` e `preco`. As demais colunas aceitas são `id`, `sku`, `slug`, `preco_promocional`, `custo`, `categoria`, `categoria_id`, `time`, `pais`, `competicao`, `temporada`, `tipo`, `marca`, `genero`, `estoque`, `estoque_minimo`, `status`, `destaque`, `produto_novo`, `produto_promocional`, `peso`, `keywords` e `created_at`. `id` e `created_at` são informativos e não são importados.
+
+O limite é de 2 MB e 1.000 linhas. O relatório informa número da linha, dados reconhecidos e erros de coluna, incluindo categoria inexistente, SKU repetido, quantidade de colunas incorreta, número/booleano inválido e valores fora do intervalo.
+
 ## Fluxo de Arquitetura
 
 ```txt

@@ -5,6 +5,10 @@ async function index(req, res) {
   res.json(await categoryService.listCategories());
 }
 
+async function publicIndex(req, res) {
+  res.json(await categoryService.listPublicCategories());
+}
+
 async function store(req, res) {
   sendCreated(res, await categoryService.createCategory(req.body));
 }
@@ -21,4 +25,4 @@ async function destroy(req, res) {
   res.json(await categoryService.deleteCategory(req.params.id, req.body?.transferir_para));
 }
 
-module.exports = { destroy, index, patchStatus, store, update };
+module.exports = { destroy, index, patchStatus, publicIndex, store, update };

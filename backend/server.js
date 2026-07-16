@@ -101,7 +101,7 @@ app.use('/api', (req, res, next) => {
 app.use('/api', rateLimiters.api);
 
 app.use('/api/auth', authRoutes({ authMiddleware, jwtSecret: JWT_SECRET, rateLimiters }));
-app.use('/api/categorias', categoryRoutes(adminMiddleware));
+app.use('/api/categorias', categoryRoutes({ perm }));
 app.use('/api/produtos', productRoutes({ adminMiddleware, perm }));
 app.use('/api/pedidos', orderRoutes({
   adminMiddleware,
@@ -122,8 +122,8 @@ app.use('/api/payments', paymentRoutes({
 app.use('/api/config', configRoutes());
 app.use('/api/admin/usuarios', userRoutes({ adminMiddleware, perm }));
 app.use('/api/admin/dashboard', dashboardRoutes(perm('financeiro.visualizar')));
-app.use('/api/cupons', couponRoutes(perm('cupons.criar')));
-app.use('/api/promocoes', promocoesRoutes(adminMiddleware));
+app.use('/api/cupons', couponRoutes({ perm }));
+app.use('/api/promocoes', promocoesRoutes({ perm }));
 app.use('/api/admin/funcionarios', funcionariosRoutes(perm('administradores.gerenciar')));
 app.use('/api/admin/logs', logRoutes(perm('administradores.gerenciar')));
 
