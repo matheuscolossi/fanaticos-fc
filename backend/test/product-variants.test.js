@@ -57,6 +57,10 @@ before(async () => {
     `DELETE FROM checkout_drafts WHERE id IN (${draftIds.map(() => '?').join(',')})`,
     draftIds
   );
+  await database.run(
+    'DELETE FROM pedido_eventos WHERE pedido_id IN (SELECT id FROM pedidos WHERE stripe_session_id = ?)',
+    ['cs_variant_paid']
+  );
   await database.run('DELETE FROM pedidos WHERE stripe_session_id = ?', ['cs_variant_paid']);
   await database.run('DELETE FROM produtos WHERE sku = ?', ['variant-test-sku']);
   const category = await database.get('SELECT id FROM categorias ORDER BY id LIMIT 1');
@@ -76,6 +80,10 @@ after(async () => {
   await database.run(
     `DELETE FROM stripe_webhook_events WHERE id IN (${eventIds.map(() => '?').join(',')})`,
     eventIds
+  );
+  await database.run(
+    'DELETE FROM pedido_eventos WHERE pedido_id IN (SELECT id FROM pedidos WHERE stripe_session_id = ?)',
+    ['cs_variant_paid']
   );
   await database.run('DELETE FROM pedidos WHERE stripe_session_id = ?', ['cs_variant_paid']);
   await database.run(

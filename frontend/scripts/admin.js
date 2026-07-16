@@ -400,6 +400,7 @@ function setTab(name) {
     usuarios:   ['Usuários Cadastrados', 'Gerencie as contas de usuários'],
     cupons:     ['Gerenciar Cupons',     'Crie e administre cupons de desconto'],
     promocoes:  ['Gerenciar Promoções',  'Descontos por produto/categoria, combos e promoções por período'],
+    avaliacoes: ['Moderar Avaliações',   'Aprove ou rejeite avaliações vinculadas a compras confirmadas'],
     administradores: ['Administradores e Permissões', 'Cadastre funcionários, defina cargos e permissões individuais'],
   };
   document.getElementById('adminTabTitle').textContent = titles[name]?.[0] ?? name;
@@ -411,6 +412,7 @@ function setTab(name) {
   if (name === 'produtos' && allProdutosAdmin.length === 0) loadProdutosAdmin();
   if (name === 'cupons')   loadCuponsAdmin();
   if (name === 'promocoes') loadPromocoesAdmin();
+  if (name === 'avaliacoes') loadAvaliacoesAdmin();
   if (name === 'administradores') loadFuncionariosAdmin();
 }
 
@@ -1373,7 +1375,18 @@ const STATUS_PEDIDO = {
   'cancelado':            { label: 'Cancelado',             color: '#ff4444' },
 };
 
+const TRANSICOES_STATUS_PEDIDO = {
+  pendente: ['aguardando_pagamento', 'pago', 'cancelado'],
+  aguardando_pagamento: ['pago', 'cancelado'],
+  pago: ['em_separacao', 'cancelado'],
+  em_separacao: ['enviado', 'cancelado'],
+  enviado: ['entregue'],
+  entregue: [],
+  cancelado: [],
+};
+
 let pedidosCache = [];
+let mostrarPedidosArquivados = false;
 
 function getPedidosTotalPages() {
   return Math.max(1, Math.ceil(pedidosCache.length / ORDERS_PER_PAGE));
@@ -1398,6 +1411,21 @@ function verDetalhesPedido(id) {
       <span>${formatBRL(i.preco * i.qty)}</span>
     </div>`
   ).join('');
+  const historicoHtml = (p.historico || []).slice().reverse().map(evento => {
+    const status = evento.status_novo && STATUS_PEDIDO[evento.status_novo]
+      ? STATUS_PEDIDO[evento.status_novo].label
+      : evento.status_novo;
+    return `<div style="padding:.55rem 0;border-bottom:1px solid var(--border);font-size:.82rem">
+      <div style="display:flex;justify-content:space-between;gap:.75rem">
+        <strong>${safeText(evento.tipo.replace(/_/g, ' '))}</strong>
+        <span style="color:var(--text-dim);white-space:nowrap">${new Date(evento.created_at).toLocaleString('pt-BR')}</span>
+      </div>
+      <div style="color:var(--text-muted);margin-top:.2rem">
+        ${status ? `Status: ${safeText(status)} · ` : ''}${safeText(evento.ator_nome || 'Sistema')}
+        ${evento.motivo ? ` · ${safeText(evento.motivo)}` : ''}
+      </div>
+    </div>`;
+  }).join('');
 
   const overlay = document.createElement('div');
   overlay.id = '_pedidoDetailOverlay';
@@ -1455,6 +1483,11 @@ function verDetalhesPedido(id) {
           ${p.stripe_payment_intent_id ? `<div>Payment Intent: ${safeText(p.stripe_payment_intent_id)}</div>` : ''}
         </div>` : ''}
 
+        <div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:1rem;margin-top:1rem">
+          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:.5rem">Histórico imutável</div>
+          ${historicoHtml || '<div style="color:var(--text-muted);font-size:.85rem">Nenhum evento registrado.</div>'}
+        </div>
+
         <!-- Ações -->
       </div>
     </div>
@@ -1468,7 +1501,7 @@ function verDetalhesPedido(id) {
 async function loadPedidos() {
   const wrap = document.getElementById('tabelaPedidosWrap');
   try {
-    const pedidos = await api.get('/pedidos');
+    const pedidos = await api.get(mostrarPedidosArquivados ? '/pedidos?arquivados=true' : '/pedidos');
     pedidosCache = pedidos;
     pedidosPage = 1;
     renderPedidos();
@@ -1482,7 +1515,16 @@ function renderPedidos() {
   const pedidos = pedidosCache;
 
   if (pedidos.length === 0) {
-    wrap.innerHTML = '<div class="loading-state">Nenhum pedido registrado ainda.</div>';
+    wrap.innerHTML = `<div class="loading-state">
+      <div>${mostrarPedidosArquivados ? 'Nenhum pedido arquivado.' : 'Nenhum pedido ativo registrado.'}</div>
+      <button class="btn btn--outline btn--sm" id="btnAlternarPedidosArquivadosVazio" style="margin-top:.75rem">
+        ${mostrarPedidosArquivados ? 'Ver pedidos ativos' : 'Ver arquivados'}
+      </button>
+    </div>`;
+    document.getElementById('btnAlternarPedidosArquivadosVazio')?.addEventListener('click', async () => {
+      mostrarPedidosArquivados = !mostrarPedidosArquivados;
+      await loadPedidos();
+    });
     return;
   }
 
@@ -1512,7 +1554,12 @@ function renderPedidos() {
       </div>
       <div class="orders-toolbar">
         <span>Exibindo ${start + 1}-${Math.min(start + ORDERS_PER_PAGE, pedidos.length)} de ${pedidos.length} pedidos</span>
-        <span>Página ${pedidosPage} de ${totalPages}</span>
+        <div style="display:flex;align-items:center;gap:.75rem">
+          <span>Página ${pedidosPage} de ${totalPages}</span>
+          <button class="btn btn--outline btn--sm" id="btnAlternarPedidosArquivados">
+            ${mostrarPedidosArquivados ? 'Ver pedidos ativos' : 'Ver arquivados'}
+          </button>
+        </div>
       </div>
       <table class="pedidos-table">
         <thead>
@@ -1531,6 +1578,8 @@ function renderPedidos() {
         <tbody>
           ${pagePedidos.map(p => {
             const st = STATUS_PEDIDO[p.status] || { label: p.status, color: '#888' };
+            const arquivado = Boolean(p.arquivado_em);
+            const statusPermitidos = [p.status, ...(TRANSICOES_STATUS_PEDIDO[p.status] || [])];
             const metodoIcon = p.stripe_session_id || p.metodo_pagamento === 'stripe'
               ? 'Stripe (cartão ou PIX)'
               : 'Pagamento legado';
@@ -1550,25 +1599,29 @@ function renderPedidos() {
               <td><span style="font-size:.82rem">${metodoIcon}</span></td>
               <td>
                 <div style="margin-bottom:4px;font-size:.75rem;font-weight:600;color:${st.color}">${safeText(st.label)}</div>
-                <select class="pedido-status-select" data-id="${p.id}" onchange="salvarStatusPedido(${p.id})">
-                  ${Object.entries(STATUS_PEDIDO).map(([val, info]) =>
+                <select class="pedido-status-select" data-id="${p.id}" onchange="salvarStatusPedido(${p.id})" ${arquivado ? 'disabled' : ''}>
+                  ${Object.entries(STATUS_PEDIDO).filter(([val]) => statusPermitidos.includes(val)).map(([val, info]) =>
                     `<option value="${val}" ${p.status === val ? 'selected' : ''}>${info.label}</option>`
                   ).join('')}
                 </select>
+                ${arquivado ? '<div style="font-size:.72rem;color:var(--text-muted);margin-top:4px">Arquivado</div>' : ''}
               </td>
               <td>
                 <div style="display:flex;gap:4px;align-items:center">
                   <input type="text" class="pedido-rastreio-input" data-id="${p.id}"
                     value="${safeAttr(p.codigo_rastreio || '')}" placeholder="Cód. rastreio"
+                    ${arquivado ? 'disabled' : ''}
                     style="width:120px;font-size:.8rem;padding:4px 8px;background:var(--bg-card2);border:1px solid var(--border);color:var(--text);border-radius:6px" />
-                  <button class="btn btn--outline btn--sm" onclick="salvarRastreioPedido(${p.id})" title="Salvar rastreio">Salvar</button>
+                  <button class="btn btn--outline btn--sm" onclick="salvarRastreioPedido(${p.id})" title="Salvar rastreio" ${arquivado ? 'disabled' : ''}>Salvar</button>
                 </div>
               </td>
               <td style="color:var(--text-muted);font-size:.82rem;white-space:nowrap">${new Date(p.created_at).toLocaleString('pt-BR')}</td>
               <td>
                 <div style="display:flex;gap:4px;flex-wrap:wrap">
                   <button class="btn btn--outline btn--sm" onclick="verDetalhesPedido(${p.id})" title="Ver detalhes do pedido">Ver</button>
-                  <button class="btn btn--danger btn--sm" onclick="excluirPedido(${p.id})" title="Excluir pedido">Excluir</button>
+                  ${arquivado
+                    ? `<button class="btn btn--outline btn--sm" onclick="desarquivarPedido(${p.id})" title="Restaurar pedido arquivado">Desarquivar</button>`
+                    : `<button class="btn btn--danger btn--sm" onclick="arquivarPedido(${p.id})" title="Arquivar sem apagar o histórico">Arquivar</button>`}
                 </div>
               </td>
             </tr>
@@ -1584,16 +1637,33 @@ function renderPedidos() {
 
   document.getElementById('btnPedidosAnterior')?.addEventListener('click', () => setPedidosPage(pedidosPage - 1));
   document.getElementById('btnPedidosProximo')?.addEventListener('click', () => setPedidosPage(pedidosPage + 1));
+  document.getElementById('btnAlternarPedidosArquivados')?.addEventListener('click', async () => {
+    mostrarPedidosArquivados = !mostrarPedidosArquivados;
+    await loadPedidos();
+  });
 }
 
 async function salvarStatusPedido(id) {
   const select = document.querySelector(`.pedido-status-select[data-id="${id}"]`);
   if (!select) return;
+  const pedido = pedidosCache.find(item => String(item.id) === String(id));
+  const body = { status: select.value };
+  if (select.value === 'cancelado' && pedido?.status !== 'cancelado') {
+    const motivo = prompt('Informe o motivo do cancelamento (mínimo de 5 caracteres):');
+    if (motivo === null || motivo.trim().length < 5) {
+      select.value = pedido?.status || 'pago';
+      if (motivo !== null) showToast('Informe um motivo válido para cancelar.', 'error');
+      return;
+    }
+    body.motivo_cancelamento = motivo.trim();
+  }
   try {
-    await api.put(`/pedidos/${id}`, { status: select.value });
+    await api.put(`/pedidos/${id}`, body);
     showToast(`Status do pedido #${id} atualizado!`);
+    await loadPedidos();
   } catch(e) {
-    showToast('Erro ao atualizar status');
+    if (pedido) select.value = pedido.status;
+    showToast(e.message || 'Erro ao atualizar status', 'error');
   }
 }
 
@@ -1608,15 +1678,26 @@ async function salvarRastreioPedido(id) {
   }
 }
 
-async function excluirPedido(id) {
-  if (!confirm(`Excluir o pedido #${id}? Essa ação não pode ser desfeita.`)) return;
+async function arquivarPedido(id) {
+  if (!confirm(`Arquivar o pedido #${id}? Os itens, pagamento e histórico serão preservados.`)) return;
+  const motivo = prompt('Motivo do arquivamento (opcional):', 'Concluído administrativamente');
+  if (motivo === null) return;
   try {
-    await api.delete(`/pedidos/${id}`);
-    pedidosCache = pedidosCache.filter(p => String(p.id) !== String(id));
-    showToast(`Pedido #${id} excluído.`);
-    renderPedidos();
+    await api.patch(`/pedidos/${id}/arquivar`, { motivo: motivo.trim() || null });
+    showToast(`Pedido #${id} arquivado sem excluir o histórico.`);
+    await loadPedidos();
   } catch(e) {
-    showToast(e.message || 'Erro ao excluir pedido', 'error');
+    showToast(e.message || 'Erro ao arquivar pedido', 'error');
+  }
+}
+
+async function desarquivarPedido(id) {
+  try {
+    await api.patch(`/pedidos/${id}/desarquivar`, {});
+    showToast(`Pedido #${id} desarquivado.`);
+    await loadPedidos();
+  } catch(e) {
+    showToast(e.message || 'Erro ao desarquivar pedido', 'error');
   }
 }
 
@@ -2590,6 +2671,85 @@ async function doDeletePromocao() {
   }
 }
 
+// ── Avaliações ────────────────────────────────────────────────────────────
+let avaliacoesAdminCache = [];
+
+async function loadAvaliacoesAdmin() {
+  const wrap = document.getElementById('tabelaAvaliacoesWrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Carregando...</p></div>';
+  const status = document.getElementById('filtroAvaliacoesStatus')?.value || '';
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  try {
+    avaliacoesAdminCache = await api.get(`/avaliacoes/admin${query}`);
+    renderTabelaAvaliacoes();
+  } catch (error) {
+    wrap.innerHTML = `<div class="loading-state" style="color:var(--danger)">${safeText(error.message || 'Erro ao carregar avaliações.')}</div>`;
+  }
+}
+
+function renderTabelaAvaliacoes() {
+  const wrap = document.getElementById('tabelaAvaliacoesWrap');
+  if (!wrap) return;
+  if (!avaliacoesAdminCache.length) {
+    wrap.innerHTML = '<div class="loading-state">Nenhuma avaliação encontrada para este filtro.</div>';
+    return;
+  }
+
+  const statusLabel = { pendente: 'Pendente', aprovada: 'Aprovada', rejeitada: 'Rejeitada' };
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>Produto</th><th>Cliente</th><th>Nota</th><th>Avaliação</th><th>Status</th><th>Ações</th></tr></thead>
+      <tbody>
+        ${avaliacoesAdminCache.map((review) => {
+          const id = Number(review.id);
+          const createdAt = review.created_at ? new Date(review.created_at).toLocaleString('pt-BR') : '—';
+          const verified = review.compra_verificada
+            ? '<span class="td-badge">Compra confirmada</span>'
+            : '<span class="td-badge td-badge--off">Sem comprovação</span>';
+          const moderationReason = review.motivo_moderacao
+            ? `<div style="margin-top:.35rem;color:var(--text-muted);font-size:.78rem">Motivo: ${safeText(review.motivo_moderacao)}</div>`
+            : '';
+          return `<tr>
+            <td><strong>${safeText(review.produto_nome)}</strong><div style="font-size:.75rem;color:var(--text-muted)">ID ${Number(review.produto_id)}</div></td>
+            <td>${safeText(review.autor_nome)}<div style="margin-top:.35rem">${verified}</div></td>
+            <td style="white-space:nowrap;color:#f5b301">${'★'.repeat(Number(review.nota))}${'☆'.repeat(5 - Number(review.nota))}</td>
+            <td style="min-width:260px"><strong>${safeText(review.titulo || 'Sem título')}</strong><div style="margin-top:.35rem;white-space:normal">${safeText(review.comentario)}</div><div style="margin-top:.35rem;color:var(--text-muted);font-size:.75rem">${safeText(createdAt)}</div></td>
+            <td><span class="td-badge ${review.status === 'aprovada' ? '' : 'td-badge--off'}">${safeText(statusLabel[review.status] || review.status)}</span>${moderationReason}</td>
+            <td style="white-space:nowrap">
+              <button class="btn btn--outline btn--sm" onclick="moderarAvaliacao(${id},'aprovada')" ${review.status === 'aprovada' ? 'disabled' : ''}>Aprovar</button>
+              <button class="btn btn--danger btn--sm" onclick="moderarAvaliacao(${id},'rejeitada')" ${review.status === 'rejeitada' ? 'disabled' : ''}>Rejeitar</button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function moderarAvaliacao(id, status) {
+  if (!Number.isSafeInteger(Number(id)) || Number(id) < 1) return;
+  let motivo = null;
+  if (status === 'rejeitada') {
+    motivo = window.prompt('Informe ao cliente o motivo da rejeição (mínimo de 5 caracteres):');
+    if (motivo === null) return;
+    motivo = motivo.trim();
+    if (motivo.length < 5) {
+      showToast('Informe um motivo com pelo menos 5 caracteres.', 'error');
+      return;
+    }
+  } else if (!window.confirm('Aprovar e publicar esta avaliação?')) {
+    return;
+  }
+
+  try {
+    await api.patch(`/avaliacoes/${Number(id)}/moderar`, { status, motivo });
+    showToast(status === 'aprovada' ? 'Avaliação aprovada e publicada.' : 'Avaliação rejeitada.');
+    await loadAvaliacoesAdmin();
+  } catch (error) {
+    showToast(error.message || 'Não foi possível moderar a avaliação.', 'error');
+  }
+}
+
 // ── Administradores e Permissões ──────────────────────────────────────────
 let funcionariosCache = [];
 
@@ -2614,6 +2774,8 @@ const PERMISSOES = [
   { key: 'promocoes.criar',           label: 'Criar promoções' },
   { key: 'promocoes.editar',          label: 'Editar promoções' },
   { key: 'promocoes.excluir',         label: 'Excluir promoções' },
+  { key: 'avaliacoes.visualizar',      label: 'Visualizar avaliações' },
+  { key: 'avaliacoes.moderar',         label: 'Moderar avaliações' },
   { key: 'financeiro.visualizar',     label: 'Visualizar financeiro' },
   { key: 'configuracoes.acessar',     label: 'Acessar configurações' },
   { key: 'administradores.gerenciar', label: 'Gerenciar administradores' },
@@ -2896,6 +3058,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('adminFiltroTipo')?.addEventListener('change', applyAdminFilters);
   document.getElementById('adminFiltroCategoria')?.addEventListener('change', applyAdminFilters);
   document.getElementById('adminOrdem')?.addEventListener('change', applyAdminFilters);
+  document.getElementById('filtroAvaliacoesStatus')?.addEventListener('change', loadAvaliacoesAdmin);
   document.getElementById('pCategoriaBusca')?.addEventListener('input', () => renderProdutoCategoriaSelect());
 
   // Export / Import

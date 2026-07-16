@@ -20,11 +20,26 @@ let adminId;
 let clientOrderId;
 let adminOrderId;
 
+async function cleanupAuthorizationRecords() {
+  const orders = await database.all(
+    'SELECT id FROM pedidos WHERE email_cliente IN (?, ?)',
+    [clientEmail, adminEmail]
+  );
+  const orderIds = orders.map((order) => order.id);
+  if (orderIds.length) {
+    const placeholders = orderIds.map(() => '?').join(',');
+    await database.run(`DELETE FROM avaliacoes WHERE pedido_id IN (${placeholders})`, orderIds);
+    await database.run(`DELETE FROM pedido_eventos WHERE pedido_id IN (${placeholders})`, orderIds);
+    await database.run(`DELETE FROM pedido_itens WHERE pedido_id IN (${placeholders})`, orderIds);
+    await database.run(`DELETE FROM pedidos WHERE id IN (${placeholders})`, orderIds);
+  }
+  await database.run('DELETE FROM logs_acoes WHERE acao IN (?, ?)', [clientLogAction, adminLogAction]);
+  await database.run('DELETE FROM usuarios WHERE email IN (?, ?)', [clientEmail, adminEmail]);
+}
+
 before(async () => {
   await database.init();
-  await database.run('DELETE FROM logs_acoes WHERE acao IN (?, ?)', [clientLogAction, adminLogAction]);
-  await database.run('DELETE FROM pedidos WHERE email_cliente IN (?, ?)', [clientEmail, adminEmail]);
-  await database.run('DELETE FROM usuarios WHERE email IN (?, ?)', [clientEmail, adminEmail]);
+  await cleanupAuthorizationRecords();
 
   const client = await database.run(
     "INSERT INTO usuarios (nome, email, senha, perfil, email_verificado) VALUES (?, ?, ?, 'cliente', ?)",
@@ -67,9 +82,7 @@ before(async () => {
 });
 
 after(async () => {
-  await database.run('DELETE FROM logs_acoes WHERE acao IN (?, ?)', [clientLogAction, adminLogAction]);
-  await database.run('DELETE FROM pedidos WHERE id IN (?, ?)', [clientOrderId, adminOrderId]);
-  await database.run('DELETE FROM usuarios WHERE id IN (?, ?)', [clientId, adminId]);
+  await cleanupAuthorizationRecords();
   await database.close();
 });
 

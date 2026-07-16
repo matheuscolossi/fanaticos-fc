@@ -20,6 +20,8 @@ const PERMISSOES = [
   { key: 'promocoes.criar',             label: 'Criar promoções' },
   { key: 'promocoes.editar',            label: 'Editar promoções' },
   { key: 'promocoes.excluir',           label: 'Excluir promoções' },
+  { key: 'avaliacoes.visualizar',       label: 'Visualizar avaliações' },
+  { key: 'avaliacoes.moderar',          label: 'Moderar avaliações' },
   { key: 'financeiro.visualizar',       label: 'Visualizar financeiro' },
   { key: 'configuracoes.acessar',       label: 'Acessar configurações' },
   { key: 'administradores.gerenciar',   label: 'Gerenciar administradores' },

@@ -1,11 +1,13 @@
 const { sendCreated } = require('../utils/http');
 const logService = require('../services/logService');
 const {
+  archiveOrder,
   createOrder,
   deleteOrder,
   getTrackingForUser,
   listOrders,
   listOrdersByUser,
+  unarchiveOrder,
   updateOrder,
 } = require('../services/orderService');
 
@@ -14,7 +16,10 @@ async function store(req, res) {
 }
 
 async function index(req, res) {
-  res.json(await listOrders());
+  const archiveMode = req.query.arquivados === 'true'
+    ? 'archived'
+    : req.query.todos === 'true' ? 'all' : 'active';
+  res.json(await listOrders(archiveMode));
 }
 
 async function myOrders(req, res) {
@@ -39,22 +44,35 @@ async function tracking(req, res) {
 }
 
 async function update(req, res) {
-  const result = await updateOrder(req.params.id, req.body);
+  const result = await updateOrder(req.params.id, req.body, req.staffUser);
   await logService.registrar(req.staffUser, 'Pedido alterado', `ID ${req.params.id}`);
   res.json(result);
 }
 
+async function archive(req, res) {
+  const result = await archiveOrder(req.params.id, req.body, req.staffUser);
+  await logService.registrar(req.staffUser, 'Pedido arquivado', `ID ${req.params.id}`);
+  res.json(result);
+}
+
+async function unarchive(req, res) {
+  const result = await unarchiveOrder(req.params.id, req.staffUser);
+  await logService.registrar(req.staffUser, 'Pedido desarquivado', `ID ${req.params.id}`);
+  res.json(result);
+}
+
 async function destroy(req, res) {
-  const result = await deleteOrder(req.params.id);
-  await logService.registrar(req.staffUser, 'Pedido excluído', `ID ${req.params.id}`);
+  const result = await deleteOrder(req.params.id, req.staffUser);
   res.json(result);
 }
 
 module.exports = {
+  archive,
   destroy,
   index,
   myOrders,
   store,
   tracking,
+  unarchive,
   update,
 };

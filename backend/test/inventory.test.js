@@ -82,6 +82,12 @@ before(async () => {
   const draftPlaceholders = draftIds.map(() => '?').join(',');
   const sessionPlaceholders = sessionIds.map(() => '?').join(',');
   await database.run(`DELETE FROM stripe_webhook_events WHERE id IN (${eventPlaceholders})`, eventIds);
+  await database.run(
+    `DELETE FROM pedido_eventos WHERE pedido_id IN (
+       SELECT id FROM pedidos WHERE stripe_session_id IN (${sessionPlaceholders})
+     )`,
+    sessionIds
+  );
   await database.run(`DELETE FROM pedidos WHERE stripe_session_id IN (${sessionPlaceholders})`, sessionIds);
   await database.run(`DELETE FROM checkout_drafts WHERE id IN (${draftPlaceholders})`, draftIds);
   await database.run('DELETE FROM produtos WHERE sku = ?', ['inventory-test-sku']);
@@ -99,6 +105,12 @@ after(async () => {
   const draftPlaceholders = draftIds.map(() => '?').join(',');
   const sessionPlaceholders = sessionIds.map(() => '?').join(',');
   await database.run(`DELETE FROM stripe_webhook_events WHERE id IN (${eventPlaceholders})`, eventIds);
+  await database.run(
+    `DELETE FROM pedido_eventos WHERE pedido_id IN (
+       SELECT id FROM pedidos WHERE stripe_session_id IN (${sessionPlaceholders})
+     )`,
+    sessionIds
+  );
   await database.run(`DELETE FROM pedidos WHERE stripe_session_id IN (${sessionPlaceholders})`, sessionIds);
   await database.run(`DELETE FROM checkout_drafts WHERE id IN (${draftPlaceholders})`, draftIds);
   await database.run('DELETE FROM produtos WHERE id = ?', [productId]);
@@ -237,7 +249,11 @@ test('cancelamento administrativo devolve estoque de forma idempotente', async (
   const order = await database.get('SELECT id FROM pedidos WHERE stripe_session_id = ?', ['cs_inventory_cancelled']);
   assert.deepEqual(await stock(), { estoque: 9, estoque_reservado: 0 });
 
-  await orderService.updateOrder(order.id, { status: 'cancelado' });
-  await orderService.updateOrder(order.id, { status: 'cancelado' });
+  await orderService.updateOrder(
+    order.id,
+    { status: 'cancelado', motivo_cancelamento: 'Cancelamento administrativo de teste' },
+    { id: 1, nome: 'Administrador de teste' }
+  );
+  await orderService.updateOrder(order.id, { status: 'cancelado' }, { id: 1, nome: 'Administrador de teste' });
   assert.deepEqual(await stock(), { estoque: 10, estoque_reservado: 0 });
 });

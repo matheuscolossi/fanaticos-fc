@@ -234,21 +234,57 @@
   color: var(--accent);
   letter-spacing: .08em;
 }
+.produto-comment__top > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+.produto-review-verified {
+  display: inline-flex;
+  color: var(--green) !important;
+  background: color-mix(in srgb, var(--green) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--green) 35%, transparent);
+  border-radius: 999px;
+  padding: .16rem .5rem;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: 0 !important;
+}
+.produto-comment h3 {
+  margin: .35rem 0;
+  font-size: .95rem;
+}
 .produto-comment p {
   color: var(--text-muted);
   font-size: .9rem;
   line-height: 1.6;
 }
+.produto-comment time {
+  display: block;
+  margin-top: .55rem;
+  color: var(--text-dim);
+  font-size: .75rem;
+}
+.produto-comments__empty {
+  color: var(--text-muted);
+  padding: 1rem 0;
+}
 .produto-comment-form {
   display: grid;
-  grid-template-columns: 1fr 160px;
+  grid-template-columns: 1fr;
   gap: .75rem;
   margin-top: 1rem;
   border-top: 1px solid var(--border);
   padding-top: 1rem;
 }
-.produto-comment-form textarea,
-.produto-comment-form .btn { grid-column: 1 / -1; }
+.produto-comment-form label {
+  margin-bottom: -.4rem;
+  font-size: .82rem;
+  font-weight: 600;
+}
+.produto-comment-form label span,
+.produto-review-status { color: var(--text-muted); font-weight: 400; }
 .cart-page__item-details {
   color: var(--text-muted);
   font-size: .78rem;

@@ -24,6 +24,10 @@ const eventIds = ['evt_test_duplicate', 'evt_test_rollback', 'evt_test_paid'];
 before(async () => {
   await database.init();
   await database.run('DELETE FROM stripe_webhook_events WHERE id IN (?, ?, ?)', eventIds);
+  await database.run(
+    'DELETE FROM pedido_eventos WHERE pedido_id IN (SELECT id FROM pedidos WHERE stripe_session_id = ?)',
+    ['cs_test_paid']
+  );
   await database.run('DELETE FROM pedidos WHERE stripe_session_id = ?', ['cs_test_paid']);
   await database.run('DELETE FROM checkout_drafts WHERE id = ?', ['checkout_test_paid']);
   await database.run('DELETE FROM produtos WHERE sku = ?', ['stripe-test-sku']);
@@ -38,6 +42,10 @@ before(async () => {
 
 after(async () => {
   await database.run('DELETE FROM stripe_webhook_events WHERE id IN (?, ?, ?)', eventIds);
+  await database.run(
+    'DELETE FROM pedido_eventos WHERE pedido_id IN (SELECT id FROM pedidos WHERE stripe_session_id = ?)',
+    ['cs_test_paid']
+  );
   await database.run('DELETE FROM pedidos WHERE stripe_session_id = ?', ['cs_test_paid']);
   await database.run('DELETE FROM checkout_drafts WHERE id = ?', ['checkout_test_paid']);
   await database.run('DELETE FROM produtos WHERE id = ?', [productId]);

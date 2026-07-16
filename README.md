@@ -406,6 +406,12 @@ Os contratos de produtos e usuários são validados por schemas centralizados an
 
 O banco mantém uma segunda barreira contra gravações que contornem os services: PostgreSQL usa `CHECK constraints` e SQLite usa triggers de validação equivalentes. A migração canonicaliza formatos legados válidos antes de ativar essa proteção.
 
+### Retenção e auditoria de pedidos
+
+Pedidos não possuem mais operação de exclusão física. `DELETE /api/pedidos/:id` responde `405 ORDER_DELETION_FORBIDDEN`; o painel usa `PATCH /api/pedidos/:id/arquivar` e `PATCH /api/pedidos/:id/desarquivar`. O arquivamento não altera o estado financeiro, não devolve estoque e não remove os itens. Cancelamentos são mudanças explícitas de status, exigem motivo e mantêm a situação do pagamento separada.
+
+Cada criação paga, mudança de status, cancelamento, alteração de rastreio, arquivamento, desarquivamento e evento financeiro relevante acrescenta um registro em `pedido_eventos`. Essa tabela é append-only em produção. PostgreSQL e SQLite também bloqueiam `DELETE` direto em `pedidos`; a relação com `pedido_itens` usa retenção, e pedidos legados recebem um evento inicial durante a migração.
+
 ### Importação CSV de produtos
 
 `POST /api/produtos/import` usa um único contrato JSON: `{ "csv": "conteúdo do arquivo", "preview": true|false }`. O frontend sempre envia primeiro `preview: true`; nenhuma linha é gravada nessa etapa. A confirmação repete o mesmo conteúdo com `preview: false` e a importação ocorre em uma transação única, somente quando todas as linhas são válidas.
@@ -413,6 +419,20 @@ O banco mantém uma segunda barreira contra gravações que contornem os service
 O arquivo aceita vírgula, ponto-e-vírgula ou tabulação, campos entre aspas, BOM UTF-8 e a diretiva opcional `sep=;`. As colunas obrigatórias são `nome` e `preco`. As demais colunas aceitas são `id`, `sku`, `slug`, `preco_promocional`, `custo`, `categoria`, `categoria_id`, `time`, `pais`, `competicao`, `temporada`, `tipo`, `marca`, `genero`, `estoque`, `estoque_minimo`, `status`, `destaque`, `produto_novo`, `produto_promocional`, `peso`, `keywords` e `created_at`. `id` e `created_at` são informativos e não são importados.
 
 O limite é de 2 MB e 1.000 linhas. O relatório informa número da linha, dados reconhecidos e erros de coluna, incluindo categoria inexistente, SKU repetido, quantidade de colunas incorreta, número/booleano inválido e valores fora do intervalo.
+
+## Avaliações verificadas e moderadas
+
+As avaliações de produtos são persistidas na tabela `avaliacoes`; o navegador não usa `localStorage` para depoimentos. Somente uma conta com e-mail confirmado e um pedido pago contendo o produto pode enviar uma avaliação. A API vincula internamente cada registro ao pedido e ao item comprado, usa o nome atual da conta e ignora alegações de autor, aprovação ou compra verificada enviadas pelo cliente.
+
+Novas avaliações e edições ficam com status `pendente`. Apenas registros `aprovados` e com prova referencial de compra aparecem na página pública. Administradores precisam das permissões independentes `avaliacoes.visualizar` e `avaliacoes.moderar` para consultar a fila e aprovar ou rejeitar conteúdo; rejeições exigem um motivo, que fica disponível ao autor para correção e reenvio.
+
+Rotas principais:
+
+- `GET /api/avaliacoes/produto/:produtoId`: lista somente avaliações públicas e, quando há sessão, informa a elegibilidade e a avaliação do próprio cliente.
+- `POST /api/avaliacoes/produto/:produtoId`: cria uma avaliação de comprador elegível.
+- `PUT /api/avaliacoes/:id`: edita somente a avaliação do próprio usuário e reabre a moderação.
+- `GET /api/avaliacoes/admin`: fila administrativa filtrável por status.
+- `PATCH /api/avaliacoes/:id/moderar`: aprova ou rejeita com permissão específica.
 
 ## Fluxo de Arquitetura
 

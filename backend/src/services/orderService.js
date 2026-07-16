@@ -1,6 +1,7 @@
 const orderModel = require('../models/orderModel');
 const { transaction } = require('../config/database');
 const { createHttpError } = require('../utils/http');
+const { validateArchiveReason, validateOrderUpdate } = require('../validation/orderSchemas');
 
 function parseOrderItems(order) {
   const itens = Array.isArray(order.itens) ? order.itens : JSON.parse(order.itens || '[]');
@@ -64,9 +65,23 @@ async function createPaidOrderFromStripe(data, db) {
   return { message: 'Order created.', id: result.lastID, total };
 }
 
-async function listOrders() {
-  const orders = await orderModel.list();
-  return orders.map(parseOrderItems);
+async function listOrders(archiveMode = 'active') {
+  const orders = await orderModel.list(archiveMode);
+  const events = await orderModel.listEvents(orders.map((order) => order.id));
+  const groupedEvents = new Map();
+  for (const event of events) {
+    const list = groupedEvents.get(String(event.pedido_id)) || [];
+    let details = event.detalhes;
+    if (typeof details === 'string') {
+      try { details = JSON.parse(details); } catch { details = {}; }
+    }
+    list.push({ ...event, detalhes: details || {} });
+    groupedEvents.set(String(event.pedido_id), list);
+  }
+  return orders.map((order) => ({
+    ...parseOrderItems(order),
+    historico: groupedEvents.get(String(order.id)) || [],
+  }));
 }
 
 async function listOrdersByUser(user) {
@@ -93,34 +108,120 @@ async function getTrackingForUser(orderId, user) {
   };
 }
 
-async function updateOrder(orderId, data) {
+function eventActor(actor) {
+  return {
+    ator_id: Number(actor?.id) || null,
+    ator_nome: actor?.nome || actor?.email || 'Administrador',
+  };
+}
+
+async function updateOrder(orderId, data, actor) {
   await transaction(async (db) => {
     const existingOrder = await orderModel.exists(orderId, db);
     if (!existingOrder) throw createHttpError(404, 'Order not found.', 'ORDER_NOT_FOUND');
-    if (data.status === 'cancelado') {
+    if (existingOrder.arquivado_em) {
+      throw createHttpError(409, 'Desarquive o pedido antes de alterá-lo.', 'ORDER_ARCHIVED');
+    }
+    const normalized = validateOrderUpdate(existingOrder.status, data);
+    if (normalized.status === 'cancelado' && existingOrder.status !== 'cancelado') {
       await orderModel.restoreStockForOrder(orderId, null, 'cancelado', db);
     }
-    await orderModel.updateTracking(orderId, data, db);
+    await orderModel.updateTracking(orderId, {
+      ...normalized,
+      cancelado_por: actor?.id,
+    }, db);
+
+    if (normalized.status && normalized.status !== existingOrder.status) {
+      await orderModel.recordEvent(orderId, {
+        tipo: normalized.status === 'cancelado' ? 'pedido_cancelado' : 'status_alterado',
+        status_anterior: existingOrder.status,
+        status_novo: normalized.status,
+        ...eventActor(actor),
+        motivo: normalized.motivo_cancelamento,
+        detalhes: { payment_status: existingOrder.payment_status },
+      }, db);
+    }
+    if (
+      normalized.codigo_rastreio !== undefined &&
+      normalized.codigo_rastreio !== existingOrder.codigo_rastreio
+    ) {
+      await orderModel.recordEvent(orderId, {
+        tipo: 'rastreio_alterado',
+        status_anterior: existingOrder.status,
+        status_novo: normalized.status || existingOrder.status,
+        ...eventActor(actor),
+        detalhes: { codigo_rastreio: normalized.codigo_rastreio },
+      }, db);
+    }
   });
   return { message: 'Order updated.' };
 }
 
-async function deleteOrder(orderId) {
+async function archiveOrder(orderId, data, actor) {
+  const reason = validateArchiveReason(data?.motivo);
   await transaction(async (db) => {
     const existingOrder = await orderModel.exists(orderId, db);
     if (!existingOrder) throw createHttpError(404, 'Order not found.', 'ORDER_NOT_FOUND');
-    await orderModel.restoreStockForOrder(orderId, null, 'cancelado', db);
-    await orderModel.remove(orderId, db);
+    if (existingOrder.arquivado_em) {
+      throw createHttpError(409, 'Pedido já está arquivado.', 'ORDER_ALREADY_ARCHIVED');
+    }
+    await orderModel.setArchived(orderId, { actorId: actor?.id, reason }, db);
+    await orderModel.recordEvent(orderId, {
+      tipo: 'pedido_arquivado',
+      status_anterior: existingOrder.status,
+      status_novo: existingOrder.status,
+      ...eventActor(actor),
+      motivo: reason,
+    }, db);
   });
-  return { message: 'Order deleted.' };
+  return { message: 'Pedido arquivado sem remover o histórico.' };
+}
+
+async function unarchiveOrder(orderId, actor) {
+  await transaction(async (db) => {
+    const existingOrder = await orderModel.exists(orderId, db);
+    if (!existingOrder) throw createHttpError(404, 'Order not found.', 'ORDER_NOT_FOUND');
+    if (!existingOrder.arquivado_em) {
+      throw createHttpError(409, 'Pedido não está arquivado.', 'ORDER_NOT_ARCHIVED');
+    }
+    await orderModel.clearArchived(orderId, db);
+    await orderModel.recordEvent(orderId, {
+      tipo: 'pedido_desarquivado',
+      status_anterior: existingOrder.status,
+      status_novo: existingOrder.status,
+      ...eventActor(actor),
+    }, db);
+  });
+  return { message: 'Pedido desarquivado.' };
+}
+
+async function deleteOrder(orderId, actor) {
+  await transaction(async (db) => {
+    const existingOrder = await orderModel.exists(orderId, db);
+    if (!existingOrder) throw createHttpError(404, 'Order not found.', 'ORDER_NOT_FOUND');
+    await orderModel.recordEvent(orderId, {
+      tipo: 'exclusao_fisica_bloqueada',
+      status_anterior: existingOrder.status,
+      status_novo: existingOrder.status,
+      ...eventActor(actor),
+      motivo: 'Tentativa bloqueada; utilize o arquivamento',
+    }, db);
+  });
+  throw createHttpError(
+    405,
+    'Pedidos não podem ser excluídos fisicamente. Use o arquivamento.',
+    'ORDER_DELETION_FORBIDDEN'
+  );
 }
 
 module.exports = {
+  archiveOrder,
   createOrder,
   createPaidOrderFromStripe,
   deleteOrder,
   getTrackingForUser,
   listOrders,
   listOrdersByUser,
+  unarchiveOrder,
   updateOrder,
 };

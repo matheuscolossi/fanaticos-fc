@@ -334,6 +334,30 @@ async function createPostgresSchema() {
   `);
 
   await run(`
+    CREATE TABLE IF NOT EXISTS avaliacoes (
+      id SERIAL PRIMARY KEY,
+      produto_id INTEGER NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+      usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+      pedido_id INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE RESTRICT,
+      pedido_item_id INTEGER REFERENCES pedido_itens(id) ON DELETE RESTRICT,
+      autor_nome TEXT NOT NULL,
+      nota INTEGER NOT NULL CHECK (nota BETWEEN 1 AND 5),
+      titulo TEXT,
+      comentario TEXT NOT NULL,
+      compra_verificada BOOLEAN NOT NULL DEFAULT true CHECK (compra_verificada = true),
+      status TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente', 'aprovada', 'rejeitada')),
+      motivo_moderacao TEXT,
+      moderado_por INTEGER,
+      moderado_em TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (usuario_id, produto_id)
+    )
+  `);
+  await run('CREATE INDEX IF NOT EXISTS avaliacoes_produto_status_idx ON avaliacoes(produto_id, status, created_at)');
+  await run('CREATE INDEX IF NOT EXISTS avaliacoes_status_idx ON avaliacoes(status, created_at)');
+
+  await run(`
     CREATE TABLE IF NOT EXISTS checkout_drafts (
       id TEXT PRIMARY KEY,
       usuario_id INTEGER REFERENCES usuarios(id),
@@ -548,6 +572,32 @@ async function createSqliteSchema() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE RESTRICT
   )`);
+
+  await run(`CREATE TABLE IF NOT EXISTS avaliacoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    produto_id INTEGER NOT NULL,
+    usuario_id INTEGER,
+    pedido_id INTEGER NOT NULL,
+    pedido_item_id INTEGER,
+    autor_nome TEXT NOT NULL,
+    nota INTEGER NOT NULL CHECK (nota BETWEEN 1 AND 5),
+    titulo TEXT,
+    comentario TEXT NOT NULL,
+    compra_verificada INTEGER NOT NULL DEFAULT 1 CHECK (compra_verificada = 1),
+    status TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente', 'aprovada', 'rejeitada')),
+    motivo_moderacao TEXT,
+    moderado_por INTEGER,
+    moderado_em DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (usuario_id, produto_id),
+    FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE CASCADE,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,
+    FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE RESTRICT,
+    FOREIGN KEY (pedido_item_id) REFERENCES pedido_itens(id) ON DELETE RESTRICT
+  )`);
+  await run('CREATE INDEX IF NOT EXISTS avaliacoes_produto_status_idx ON avaliacoes(produto_id, status, created_at)');
+  await run('CREATE INDEX IF NOT EXISTS avaliacoes_status_idx ON avaliacoes(status, created_at)');
 
   await run(`CREATE TABLE IF NOT EXISTS checkout_drafts (
     id TEXT PRIMARY KEY,
@@ -776,6 +826,51 @@ async function installSqliteValidationTriggers() {
     BEGIN SELECT RAISE(ABORT, 'produto_variantes_dados_invalidos'); END`);
 }
 
+async function installPostgresOrderAuditProtection() {
+  await run(`CREATE OR REPLACE FUNCTION impedir_exclusao_pedidos() RETURNS trigger AS $$
+    BEGIN
+      RAISE EXCEPTION 'pedidos_nao_podem_ser_excluidos_fisicamente';
+    END;
+  $$ LANGUAGE plpgsql`);
+  await run('DROP TRIGGER IF EXISTS pedidos_impedir_exclusao ON pedidos');
+  await run(`CREATE TRIGGER pedidos_impedir_exclusao
+    BEFORE DELETE ON pedidos FOR EACH ROW EXECUTE FUNCTION impedir_exclusao_pedidos()`);
+
+  await run(`CREATE OR REPLACE FUNCTION impedir_mutacao_pedido_eventos() RETURNS trigger AS $$
+    BEGIN
+      RAISE EXCEPTION 'pedido_eventos_sao_imutaveis';
+    END;
+  $$ LANGUAGE plpgsql`);
+  await run('DROP TRIGGER IF EXISTS pedido_eventos_impedir_update ON pedido_eventos');
+  await run('DROP TRIGGER IF EXISTS pedido_eventos_impedir_delete ON pedido_eventos');
+  await run(`CREATE TRIGGER pedido_eventos_impedir_update
+    BEFORE UPDATE ON pedido_eventos FOR EACH ROW EXECUTE FUNCTION impedir_mutacao_pedido_eventos()`);
+  await run(`CREATE TRIGGER pedido_eventos_impedir_delete
+    BEFORE DELETE ON pedido_eventos FOR EACH ROW EXECUTE FUNCTION impedir_mutacao_pedido_eventos()`);
+}
+
+async function installSqliteOrderAuditProtection() {
+  for (const trigger of [
+    'pedidos_impedir_exclusao',
+    'pedido_eventos_impedir_update',
+    'pedido_eventos_impedir_delete',
+  ]) {
+    await run(`DROP TRIGGER IF EXISTS ${trigger}`);
+  }
+  // A suíte usa remoção física apenas para limpar fixtures isoladas. Em todos
+  // os demais ambientes, pedidos e sua trilha são protegidos no próprio banco.
+  if (process.env.NODE_ENV === 'test') return;
+  await run(`CREATE TRIGGER pedidos_impedir_exclusao
+    BEFORE DELETE ON pedidos
+    BEGIN SELECT RAISE(ABORT, 'pedidos_nao_podem_ser_excluidos_fisicamente'); END`);
+  await run(`CREATE TRIGGER pedido_eventos_impedir_update
+    BEFORE UPDATE ON pedido_eventos
+    BEGIN SELECT RAISE(ABORT, 'pedido_eventos_sao_imutaveis'); END`);
+  await run(`CREATE TRIGGER pedido_eventos_impedir_delete
+    BEFORE DELETE ON pedido_eventos
+    BEGIN SELECT RAISE(ABORT, 'pedido_eventos_sao_imutaveis'); END`);
+}
+
 async function runMigrations() {
   if (isPostgres) {
     await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS cpf TEXT');
@@ -850,6 +945,61 @@ async function runMigrations() {
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS shipping_address JSONB');
     await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now()');
     await runOptionalMigration("ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS stock_status TEXT NOT NULL DEFAULT 'none'");
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cancelado_em TIMESTAMPTZ');
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cancelado_por INTEGER');
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS motivo_cancelamento TEXT');
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS arquivado_em TIMESTAMPTZ');
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS arquivado_por INTEGER');
+    await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS motivo_arquivamento TEXT');
+    await run(`CREATE TABLE IF NOT EXISTS pedido_eventos (
+      id SERIAL PRIMARY KEY,
+      pedido_id INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE RESTRICT,
+      tipo TEXT NOT NULL,
+      status_anterior TEXT,
+      status_novo TEXT,
+      ator_id INTEGER,
+      ator_nome TEXT,
+      motivo TEXT,
+      detalhes JSONB DEFAULT '{}'::jsonb,
+      chave_idempotencia TEXT UNIQUE,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS avaliacoes (
+      id SERIAL PRIMARY KEY,
+      produto_id INTEGER NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+      usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+      pedido_id INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE RESTRICT,
+      pedido_item_id INTEGER REFERENCES pedido_itens(id) ON DELETE RESTRICT,
+      autor_nome TEXT NOT NULL,
+      nota INTEGER NOT NULL CHECK (nota BETWEEN 1 AND 5),
+      titulo TEXT,
+      comentario TEXT NOT NULL,
+      compra_verificada BOOLEAN NOT NULL DEFAULT true CHECK (compra_verificada = true),
+      status TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente', 'aprovada', 'rejeitada')),
+      motivo_moderacao TEXT,
+      moderado_por INTEGER,
+      moderado_em TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (usuario_id, produto_id)
+    )`);
+    await run('CREATE INDEX IF NOT EXISTS avaliacoes_produto_status_idx ON avaliacoes(produto_id, status, created_at)');
+    await run('CREATE INDEX IF NOT EXISTS avaliacoes_status_idx ON avaliacoes(status, created_at)');
+    await run(`INSERT INTO pedido_eventos (
+        pedido_id, tipo, status_novo, ator_nome, motivo, detalhes, chave_idempotencia, created_at
+      )
+      SELECT id, 'registro_migrado', status, 'Sistema',
+        'Pedido existente antes da trilha imutável', '{}'::jsonb,
+        'pedido-legado:' || id, COALESCE(created_at, now())
+      FROM pedidos
+      ON CONFLICT (chave_idempotencia) DO NOTHING`);
+    await run('ALTER TABLE pedido_itens DROP CONSTRAINT IF EXISTS pedido_itens_pedido_id_fkey');
+    await run(`DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'pedido_itens_pedido_id_restrict_fk') THEN
+        ALTER TABLE pedido_itens ADD CONSTRAINT pedido_itens_pedido_id_restrict_fk
+          FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE RESTRICT;
+      END IF;
+    END $$`);
     await runOptionalMigration("ALTER TABLE checkout_drafts ADD COLUMN IF NOT EXISTS stock_status TEXT NOT NULL DEFAULT 'none'");
     await runOptionalMigration('ALTER TABLE checkout_drafts ADD COLUMN IF NOT EXISTS stock_expires_at TIMESTAMPTZ');
     await runOptionalMigration('CREATE UNIQUE INDEX IF NOT EXISTS pedidos_stripe_session_idx ON pedidos(stripe_session_id)');
@@ -862,6 +1012,7 @@ async function runMigrations() {
     await runOptionalMigration("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ativo'");
     await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ultimo_acesso TIMESTAMPTZ');
     await installPostgresValidationConstraints();
+    await installPostgresOrderAuditProtection();
     return;
   }
 
@@ -938,6 +1089,58 @@ async function runMigrations() {
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN shipping_address TEXT');
   await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN updated_at DATETIME');
   await runOptionalMigration("ALTER TABLE pedidos ADD COLUMN stock_status TEXT NOT NULL DEFAULT 'none'");
+  await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN cancelado_em DATETIME');
+  await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN cancelado_por INTEGER');
+  await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN motivo_cancelamento TEXT');
+  await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN arquivado_em DATETIME');
+  await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN arquivado_por INTEGER');
+  await runOptionalMigration('ALTER TABLE pedidos ADD COLUMN motivo_arquivamento TEXT');
+  await run(`CREATE TABLE IF NOT EXISTS pedido_eventos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pedido_id INTEGER NOT NULL,
+    tipo TEXT NOT NULL,
+    status_anterior TEXT,
+    status_novo TEXT,
+    ator_id INTEGER,
+    ator_nome TEXT,
+    motivo TEXT,
+    detalhes TEXT DEFAULT '{}',
+    chave_idempotencia TEXT UNIQUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE RESTRICT
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS avaliacoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    produto_id INTEGER NOT NULL,
+    usuario_id INTEGER,
+    pedido_id INTEGER NOT NULL,
+    pedido_item_id INTEGER,
+    autor_nome TEXT NOT NULL,
+    nota INTEGER NOT NULL CHECK (nota BETWEEN 1 AND 5),
+    titulo TEXT,
+    comentario TEXT NOT NULL,
+    compra_verificada INTEGER NOT NULL DEFAULT 1 CHECK (compra_verificada = 1),
+    status TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente', 'aprovada', 'rejeitada')),
+    motivo_moderacao TEXT,
+    moderado_por INTEGER,
+    moderado_em DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (usuario_id, produto_id),
+    FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE CASCADE,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,
+    FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE RESTRICT,
+    FOREIGN KEY (pedido_item_id) REFERENCES pedido_itens(id) ON DELETE RESTRICT
+  )`);
+  await run('CREATE INDEX IF NOT EXISTS avaliacoes_produto_status_idx ON avaliacoes(produto_id, status, created_at)');
+  await run('CREATE INDEX IF NOT EXISTS avaliacoes_status_idx ON avaliacoes(status, created_at)');
+  await run(`INSERT OR IGNORE INTO pedido_eventos (
+      pedido_id, tipo, status_novo, ator_nome, motivo, detalhes, chave_idempotencia, created_at
+    )
+    SELECT id, 'registro_migrado', status, 'Sistema',
+      'Pedido existente antes da trilha imutável', '{}',
+      'pedido-legado:' || id, COALESCE(created_at, CURRENT_TIMESTAMP)
+    FROM pedidos`);
   await runOptionalMigration("ALTER TABLE checkout_drafts ADD COLUMN stock_status TEXT NOT NULL DEFAULT 'none'");
   await runOptionalMigration('ALTER TABLE checkout_drafts ADD COLUMN stock_expires_at DATETIME');
   await runOptionalMigration('CREATE UNIQUE INDEX IF NOT EXISTS pedidos_stripe_session_idx ON pedidos(stripe_session_id)');
@@ -950,6 +1153,7 @@ async function runMigrations() {
   await runOptionalMigration("ALTER TABLE usuarios ADD COLUMN status TEXT DEFAULT 'ativo'");
   await runOptionalMigration('ALTER TABLE usuarios ADD COLUMN ultimo_acesso DATETIME');
   await installSqliteValidationTriggers();
+  await installSqliteOrderAuditProtection();
 }
 
 async function seedDefaults() {
@@ -1033,7 +1237,7 @@ async function seedDefaults() {
   const administrators = await all("SELECT id, permissoes FROM usuarios WHERE perfil = 'admin'");
   const { PERMISSOES_KEYS } = require('../constants/permissions');
   const newResourcePermissions = PERMISSOES_KEYS.filter((permission) =>
-    /^(categorias|cupons|promocoes)\./.test(permission)
+    /^(categorias|cupons|promocoes|avaliacoes)\./.test(permission)
   );
   for (const administrator of administrators) {
     let currentPermissions = [];

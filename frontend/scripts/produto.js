@@ -1,5 +1,6 @@
 let produtoAtual = null;
 let imagemAtual = 0;
+let avaliacoesState = null;
 
 function productSizes(product) {
   let sizes = product?.tamanhos;
@@ -59,28 +60,9 @@ function getProductPlaceholderLabel() {
   return 'Imagem indisponível';
 }
 
-function getComentariosKey() {
-  return `fc_comments_produto_${produtoAtual?.id || produtoIdFromUrl()}`;
-}
-
-function getComentarios() {
-  const fallback = [
-    { nome: 'Cliente verificado', nota: 5, texto: 'Camisa chegou muito bem embalada e com ótimo acabamento.' },
-    { nome: 'Torcedor Fanáticos FC', nota: 5, texto: 'Tecido leve, tamanho ficou certo e a personalização veio como pedi.' },
-  ];
-  try {
-    return JSON.parse(localStorage.getItem(getComentariosKey()) || 'null') || fallback;
-  } catch (_) {
-    return fallback;
-  }
-}
-
-function saveComentarios(comentarios) {
-  localStorage.setItem(getComentariosKey(), JSON.stringify(comentarios));
-}
-
 function renderStars(nota) {
-  return `${Number(nota || 5)}/5`;
+  const value = Math.min(5, Math.max(1, Number(nota) || 1));
+  return `${'★'.repeat(value)}${'☆'.repeat(5 - value)}`;
 }
 
 function renderProduto(p) {
@@ -185,7 +167,7 @@ function renderProduto(p) {
     attachCountdown(content.querySelector('.produto-page__countdown'), p.promocao_fim);
   }
 
-  renderComentarios();
+  loadAvaliacoesProduto();
 }
 
 function addProdutoSelecionado() {
@@ -211,58 +193,118 @@ function addProdutoSelecionado() {
   });
 }
 
-function renderComentarios() {
+function reviewStatusMessage(review) {
+  if (!review) return '';
+  if (review.status === 'pendente') return 'Sua avaliação está aguardando moderação.';
+  if (review.status === 'rejeitada') {
+    return `Sua avaliação precisa ser revisada${review.motivo_moderacao ? `: ${review.motivo_moderacao}` : '.'}`;
+  }
+  return 'Sua avaliação foi aprovada e está publicada.';
+}
+
+function renderFormularioAvaliacao(state) {
+  const review = state.minha_avaliacao;
+  if (!state.autenticado) {
+    return `<div class="produto-comment-form">
+      <p>Entre na sua conta para avaliar uma compra realizada.</p>
+      <a class="btn btn--outline" href="/pages/conta.html">Entrar na conta</a>
+    </div>`;
+  }
+  if (!state.pode_avaliar) {
+    return `<div class="produto-comment-form">
+      <p>A avaliação é liberada somente para contas com pagamento confirmado deste produto.</p>
+    </div>`;
+  }
+  return `<form class="produto-comment-form" id="produtoReviewForm">
+    ${review ? `<p class="produto-review-status">${safeText(reviewStatusMessage(review))}</p>` : ''}
+    <label for="reviewNota">Nota</label>
+    <select id="reviewNota" required>
+      ${[5, 4, 3, 2, 1].map(nota =>
+        `<option value="${nota}" ${Number(review?.nota || 5) === nota ? 'selected' : ''}>${nota} estrela${nota > 1 ? 's' : ''}</option>`
+      ).join('')}
+    </select>
+    <label for="reviewTitulo">Título <span>(opcional)</span></label>
+    <input type="text" id="reviewTitulo" maxlength="100" value="${safeAttr(review?.titulo || '')}" placeholder="Resuma sua experiência" />
+    <label for="reviewComentario">Sua avaliação</label>
+    <textarea id="reviewComentario" rows="4" minlength="20" maxlength="2000" placeholder="Conte como foi sua experiência com o produto" required>${safeText(review?.comentario || '')}</textarea>
+    <button class="btn btn--primary" type="submit">${review ? 'Reenviar para moderação' : 'Enviar para moderação'}</button>
+  </form>`;
+}
+
+function renderAvaliacoes(state) {
   const section = document.getElementById('produtoComments');
-  const comentarios = getComentarios();
-  const media = comentarios.length
-    ? (comentarios.reduce((sum, c) => sum + Number(c.nota || 5), 0) / comentarios.length).toFixed(1)
-    : '0.0';
+  const reviews = state.avaliacoes || [];
+  const summary = state.resumo || { total: 0, media: 0 };
   section.style.display = 'block';
   section.innerHTML = `
     <div class="produto-comments__header">
       <div>
-        <h2>Comentários sobre o produto</h2>
-        <p>${comentarios.length} avaliação${comentarios.length !== 1 ? 'ões' : ''} de clientes</p>
+        <h2>Avaliações de compradores</h2>
+        <p>${summary.total} avaliação${summary.total !== 1 ? 'ões' : ''} aprovada${summary.total !== 1 ? 's' : ''}</p>
       </div>
-      <span class="produto-comments__score">${media}</span>
+      <span class="produto-comments__score">${Number(summary.media || 0).toFixed(1)}</span>
     </div>
     <div class="produto-comments__list">
-      ${comentarios.map(c => `
+      ${reviews.length ? reviews.map(review => `
         <article class="produto-comment">
           <div class="produto-comment__top">
-            <strong>${safeText(c.nome)}</strong>
-            <span>${renderStars(c.nota || 5)}</span>
+            <div>
+              <strong>${safeText(review.autor_nome)}</strong>
+              ${review.compra_verificada ? '<span class="produto-review-verified">Compra verificada</span>' : ''}
+            </div>
+            <span aria-label="${Number(review.nota)} de 5 estrelas">${renderStars(review.nota)}</span>
           </div>
-          <p>${safeText(c.texto)}</p>
+          ${review.titulo ? `<h3>${safeText(review.titulo)}</h3>` : ''}
+          <p>${safeText(review.comentario)}</p>
+          <time datetime="${safeAttr(review.created_at)}">${new Date(review.created_at).toLocaleDateString('pt-BR')}</time>
         </article>
-      `).join('')}
+      `).join('') : '<p class="produto-comments__empty">Ainda não há avaliações publicadas para este produto.</p>'}
     </div>
-    <form class="produto-comment-form" id="produtoCommentForm">
-      <input type="text" id="commentNome" placeholder="Seu nome" required />
-      <select id="commentNota" required>
-        <option value="5">5 estrelas</option>
-        <option value="4">4 estrelas</option>
-        <option value="3">3 estrelas</option>
-        <option value="2">2 estrelas</option>
-        <option value="1">1 estrela</option>
-      </select>
-      <textarea id="commentTexto" rows="3" placeholder="Escreva seu comentário" required></textarea>
-      <button class="btn btn--primary" type="submit">Enviar comentário</button>
-    </form>
+    ${renderFormularioAvaliacao(state)}
   `;
 
-  document.getElementById('produtoCommentForm')?.addEventListener('submit', (event) => {
+  document.getElementById('produtoReviewForm')?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const novo = {
-      nome: document.getElementById('commentNome').value.trim(),
-      nota: Number(document.getElementById('commentNota').value),
-      texto: document.getElementById('commentTexto').value.trim(),
+    const button = event.currentTarget.querySelector('button[type="submit"]');
+    const payload = {
+      nota: Number(document.getElementById('reviewNota').value),
+      titulo: document.getElementById('reviewTitulo').value.trim() || null,
+      comentario: document.getElementById('reviewComentario').value.trim(),
     };
-    if (!novo.nome || !novo.texto) return;
-    saveComentarios([novo, ...comentarios]);
-    showToast('Comentário publicado.');
-    renderComentarios();
+    if (payload.comentario.length < 20) {
+      showToast('A avaliação deve ter pelo menos 20 caracteres.', 'error');
+      return;
+    }
+    button.disabled = true;
+    button.textContent = 'Enviando...';
+    try {
+      const result = state.minha_avaliacao
+        ? await api.put(`/avaliacoes/${state.minha_avaliacao.id}`, payload)
+        : await api.post(`/avaliacoes/produto/${produtoAtual.id}`, payload);
+      showToast(result.message);
+      await loadAvaliacoesProduto();
+    } catch (error) {
+      showToast(error.message, 'error');
+      button.disabled = false;
+      button.textContent = state.minha_avaliacao ? 'Reenviar para moderação' : 'Enviar para moderação';
+    }
   });
+}
+
+async function loadAvaliacoesProduto() {
+  if (!produtoAtual?.id) return;
+  const requestedProductId = String(produtoAtual.id);
+  const section = document.getElementById('produtoComments');
+  section.style.display = 'block';
+  section.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Carregando avaliações...</p></div>';
+  try {
+    const state = await api.get(`/avaliacoes/produto/${requestedProductId}`);
+    if (String(produtoAtual?.id) !== requestedProductId) return;
+    avaliacoesState = state;
+    renderAvaliacoes(state);
+  } catch (error) {
+    section.innerHTML = '<div class="loading-state" style="color:var(--danger)">Não foi possível carregar as avaliações.</div>';
+  }
 }
 
 async function loadProdutoPage() {

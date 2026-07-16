@@ -71,6 +71,18 @@ async function createPaidFromStripe(order, db = database) {
     );
   }
 
+  await recordEvent(orderId, {
+    tipo: 'pedido_pago_criado',
+    status_novo: 'pago',
+    ator_nome: 'Stripe',
+    motivo: 'Pagamento confirmado pelo webhook',
+    detalhes: {
+      stripe_event_id: order.stripe_event_id,
+      payment_status: 'paid',
+    },
+    chave_idempotencia: `stripe-pedido:${order.stripe_event_id}`,
+  }, db);
+
   return { ...result, id: orderId };
 }
 
@@ -96,13 +108,33 @@ function findPaymentStatusForUser(sessionId, userId, db = database) {
   );
 }
 
-function updatePaymentStatusByPaymentIntent(paymentIntentId, paymentStatus, orderStatus, db = database) {
-  return db.run(
+async function updatePaymentStatusByPaymentIntent(
+  paymentIntentId,
+  paymentStatus,
+  orderStatus,
+  db = database,
+  audit = {}
+) {
+  const order = await findByStripePaymentIntent(paymentIntentId, db);
+  if (!order) return null;
+  const result = await db.run(
     `UPDATE pedidos
      SET payment_status = ?, status = COALESCE(?, status), updated_at = CURRENT_TIMESTAMP
      WHERE stripe_payment_intent_id = ? AND payment_status <> 'refunded'`,
     [paymentStatus, orderStatus || null, paymentIntentId]
   );
+  if (Number(result.changes) === 1) {
+    await recordEvent(order.id, {
+      tipo: audit.tipo || 'pagamento_atualizado',
+      status_anterior: order.status,
+      status_novo: orderStatus || order.status,
+      ator_nome: 'Stripe',
+      motivo: audit.motivo || null,
+      detalhes: { payment_status: paymentStatus },
+      chave_idempotencia: audit.eventId ? `stripe-evento:${audit.eventId}` : null,
+    }, db);
+  }
+  return result;
 }
 
 async function restoreStockForOrder(orderId, paymentStatus, orderStatus, db) {
@@ -146,14 +178,27 @@ async function restoreStockForOrder(orderId, paymentStatus, orderStatus, db) {
   return order;
 }
 
-async function restoreStockByPaymentIntent(paymentIntentId, paymentStatus, orderStatus, db) {
+async function restoreStockByPaymentIntent(paymentIntentId, paymentStatus, orderStatus, db, audit = {}) {
   const order = await findByStripePaymentIntent(paymentIntentId, db);
   if (!order) return null;
-  return restoreStockForOrder(order.id, paymentStatus, orderStatus, db);
+  const restored = await restoreStockForOrder(order.id, paymentStatus, orderStatus, db);
+  await recordEvent(order.id, {
+    tipo: audit.tipo || 'pagamento_cancelado',
+    status_anterior: order.status,
+    status_novo: orderStatus || order.status,
+    ator_nome: 'Stripe',
+    motivo: audit.motivo || null,
+    detalhes: { payment_status: paymentStatus },
+    chave_idempotencia: audit.eventId ? `stripe-evento:${audit.eventId}` : null,
+  }, db);
+  return restored;
 }
 
-function list() {
-  return all('SELECT * FROM pedidos ORDER BY created_at DESC');
+function list(archiveMode = 'active') {
+  const where = archiveMode === 'archived'
+    ? 'WHERE arquivado_em IS NOT NULL'
+    : archiveMode === 'all' ? '' : 'WHERE arquivado_em IS NULL';
+  return all(`SELECT * FROM pedidos ${where} ORDER BY created_at DESC`);
 }
 
 function listByUser(user) {
@@ -177,23 +222,100 @@ function findTrackingForUser(orderId, user) {
 }
 
 function exists(orderId, db = database) {
-  return db.get('SELECT id FROM pedidos WHERE id = ?', [orderId]);
-}
-
-function updateTracking(orderId, { status, codigo_rastreio }, db = database) {
-  return db.run(
-    'UPDATE pedidos SET status = COALESCE(?, status), codigo_rastreio = COALESCE(?, codigo_rastreio) WHERE id = ?',
-    [status || null, codigo_rastreio !== undefined ? codigo_rastreio : null, orderId]
+  return db.get(
+    `SELECT id, status, payment_status, stock_status, arquivado_em,
+            codigo_rastreio, motivo_cancelamento
+     FROM pedidos WHERE id = ?`,
+    [orderId]
   );
 }
 
-function remove(orderId, db = database) {
-  return db.run('DELETE FROM pedidos WHERE id = ?', [orderId]);
+function updateTracking(orderId, {
+  status,
+  codigo_rastreio,
+  motivo_cancelamento,
+  cancelado_por,
+}, db = database) {
+  const changesTracking = codigo_rastreio !== undefined;
+  return db.run(
+    `UPDATE pedidos SET
+       status = COALESCE(?, status),
+       codigo_rastreio = CASE WHEN ? THEN ? ELSE codigo_rastreio END,
+       cancelado_em = CASE WHEN ? = 'cancelado' THEN COALESCE(cancelado_em, CURRENT_TIMESTAMP) ELSE cancelado_em END,
+       cancelado_por = CASE WHEN ? = 'cancelado' THEN COALESCE(cancelado_por, ?) ELSE cancelado_por END,
+       motivo_cancelamento = CASE WHEN ? = 'cancelado' THEN COALESCE(motivo_cancelamento, ?) ELSE motivo_cancelamento END,
+       updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    [
+      status || null,
+      changesTracking ? 1 : 0,
+      codigo_rastreio ?? null,
+      status || null,
+      status || null,
+      cancelado_por || null,
+      status || null,
+      motivo_cancelamento || null,
+      orderId,
+    ]
+  );
+}
+
+function setArchived(orderId, { actorId, reason }, db = database) {
+  return db.run(
+    `UPDATE pedidos SET arquivado_em = CURRENT_TIMESTAMP, arquivado_por = ?,
+       motivo_arquivamento = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND arquivado_em IS NULL`,
+    [actorId || null, reason || null, orderId]
+  );
+}
+
+function clearArchived(orderId, db = database) {
+  return db.run(
+    `UPDATE pedidos SET arquivado_em = NULL, arquivado_por = NULL,
+       motivo_arquivamento = NULL, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND arquivado_em IS NOT NULL`,
+    [orderId]
+  );
+}
+
+function recordEvent(orderId, event, db = database) {
+  return db.run(
+    `INSERT INTO pedido_eventos (
+       pedido_id, tipo, status_anterior, status_novo, ator_id, ator_nome,
+       motivo, detalhes, chave_idempotencia
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, JSON_VALUE(?), ?)
+     ON CONFLICT(chave_idempotencia) DO NOTHING`,
+    [
+      orderId,
+      event.tipo,
+      event.status_anterior || null,
+      event.status_novo || null,
+      event.ator_id || null,
+      event.ator_nome || null,
+      event.motivo || null,
+      JSON.stringify(event.detalhes || {}),
+      event.chave_idempotencia || null,
+    ]
+  );
+}
+
+function listEvents(orderIds, db = database) {
+  const ids = [...new Set((orderIds || []).map(Number).filter(Number.isSafeInteger))];
+  if (ids.length === 0) return Promise.resolve([]);
+  return db.all(
+    `SELECT id, pedido_id, tipo, status_anterior, status_novo,
+            ator_id, ator_nome, motivo, detalhes, created_at
+     FROM pedido_eventos
+     WHERE pedido_id IN (${ids.map(() => '?').join(',')})
+     ORDER BY created_at ASC, id ASC`,
+    ids
+  );
 }
 
 module.exports = {
   create,
   createPaidFromStripe,
+  clearArchived,
   exists,
   findByStripePaymentIntent,
   findByStripeSession,
@@ -201,9 +323,11 @@ module.exports = {
   findTrackingForUser,
   list,
   listByUser,
-  remove,
+  listEvents,
+  recordEvent,
   restoreStockByPaymentIntent,
   restoreStockForOrder,
+  setArchived,
   updatePaymentStatusByPaymentIntent,
   updateTracking,
 };

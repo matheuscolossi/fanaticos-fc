@@ -319,7 +319,11 @@ async function processWebhookEvent(event) {
         break;
       }
       case 'payment_intent.payment_failed':
-        await orderModel.restoreStockByPaymentIntent(object.id, 'failed', 'cancelado', db);
+        await orderModel.restoreStockByPaymentIntent(object.id, 'failed', 'cancelado', db, {
+          eventId: event.id,
+          tipo: 'pagamento_falhou',
+          motivo: 'Falha de pagamento informada pelo Stripe',
+        });
         break;
       case 'charge.refunded': {
         const paymentIntentId = typeof object.payment_intent === 'string'
@@ -327,9 +331,23 @@ async function processWebhookEvent(event) {
           : object.payment_intent?.id || null;
         if (paymentIntentId) {
           if (object.refunded === true) {
-            await orderModel.restoreStockByPaymentIntent(paymentIntentId, 'refunded', 'cancelado', db);
+            await orderModel.restoreStockByPaymentIntent(paymentIntentId, 'refunded', 'cancelado', db, {
+              eventId: event.id,
+              tipo: 'pagamento_reembolsado',
+              motivo: 'Reembolso integral informado pelo Stripe',
+            });
           } else {
-            await orderModel.updatePaymentStatusByPaymentIntent(paymentIntentId, 'partially_refunded', null, db);
+            await orderModel.updatePaymentStatusByPaymentIntent(
+              paymentIntentId,
+              'partially_refunded',
+              null,
+              db,
+              {
+                eventId: event.id,
+                tipo: 'pagamento_reembolsado_parcialmente',
+                motivo: 'Reembolso parcial informado pelo Stripe',
+              }
+            );
           }
         }
         break;

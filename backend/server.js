@@ -29,6 +29,7 @@ const configRoutes = require('./src/routes/configRoutes');
 const promocoesRoutes = require('./src/routes/promocoesRoutes');
 const funcionariosRoutes = require('./src/routes/funcionariosRoutes');
 const logRoutes = require('./src/routes/logRoutes');
+const reviewRoutes = require('./src/routes/reviewRoutes');
 const specRoutes = require('./src/routes/specRoutes');
 
 const app = express();
@@ -124,6 +125,11 @@ app.use('/api/admin/usuarios', userRoutes({ adminMiddleware, perm }));
 app.use('/api/admin/dashboard', dashboardRoutes(perm('financeiro.visualizar')));
 app.use('/api/cupons', couponRoutes({ perm }));
 app.use('/api/promocoes', promocoesRoutes({ perm }));
+app.use('/api/avaliacoes', reviewRoutes({
+  optionalAuthMiddleware,
+  perm,
+  verifiedEmailMiddleware,
+}));
 app.use('/api/admin/funcionarios', funcionariosRoutes(perm('administradores.gerenciar')));
 app.use('/api/admin/logs', logRoutes(perm('administradores.gerenciar')));
 
