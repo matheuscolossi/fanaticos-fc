@@ -202,7 +202,9 @@ Definidas em `backend/.env` (modelo em `backend/.env.example`):
 | `EMAIL_CODE_TTL_MINUTES` / `EMAIL_CODE_MAX_ATTEMPTS` | Validade do código e máximo de tentativas antes da invalidação. |
 | `EMAIL_RESEND_COOLDOWN_SECONDS` / `EMAIL_RESEND_WINDOW_MINUTES` / `EMAIL_RESEND_MAX_PER_WINDOW` | Cooldown e limite persistente de reenvios por conta. |
 | `RATE_LIMIT_SECRET` | Chave opcional usada para transformar IPs e contas em HMAC antes de persistir os contadores. Se omitida, usa `JWT_SECRET`. |
-| `RATE_LIMIT_*_IP` / `RATE_LIMIT_*_ACCOUNT` | Limites por janela para cadastro, login, verificação, reenvio, rastreio, carrinho e checkout. |
+| `RATE_LIMIT_*_IP` / `RATE_LIMIT_*_ACCOUNT` | Limites por janela para toda a API, leituras públicas, cadastro, login, verificação, reenvio, rastreio, carrinho, checkout e mutações acadêmicas. |
+
+O backend limita JSON comum a 100 KB. Somente cadastro/edição de produtos e categorias possuem limites maiores para imagens em base64; importação CSV e webhooks Stripe também usam limites próprios. O carrinho aceita no máximo 50 linhas diferentes, com até 99 unidades por linha e sempre respeitando o estoque.
 
 ## Documentação da API (Swagger/OpenAPI)
 

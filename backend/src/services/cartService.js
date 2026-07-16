@@ -7,6 +7,7 @@ const { createHttpError } = require('../utils/http');
 // Sul/RS). Sem CEP informado, cai no valor padrão (mesma regra usada antes,
 // que é também o que o endpoint /cart do trabalho da faculdade espera).
 const FRETE_PADRAO = 25;
+const MAX_CART_ITEMS = 50;
 const FRETE_POR_UF = {
   RS: 15, SC: 15, PR: 15, // Sul — mais próximo da loja
   SP: 25, RJ: 25, MG: 25, ES: 25, MT: 25, MS: 25, GO: 25, DF: 25, // Sudeste/Centro-Oeste
@@ -35,6 +36,13 @@ function calculateFreightCents(subtotalCents, uf) {
 async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
   if (!Array.isArray(items) || items.length === 0) {
     throw createHttpError(400, 'Informe ao menos um item no carrinho (items: [{productId, qty}]).', 'CART_ITEMS_REQUIRED');
+  }
+  if (items.length > MAX_CART_ITEMS) {
+    throw createHttpError(
+      400,
+      `O carrinho aceita no máximo ${MAX_CART_ITEMS} itens diferentes.`,
+      'CART_ITEMS_LIMIT_EXCEEDED'
+    );
   }
 
   const promocoesAtivas = await promocaoService.getPromocoesAtivas();
@@ -141,6 +149,7 @@ async function buildCartSummary({ items, cupomCode, usuarioId, uf }) {
 }
 
 module.exports = {
+  MAX_CART_ITEMS,
   buildCartSummary,
   centsToMoney,
   moneyToCents,

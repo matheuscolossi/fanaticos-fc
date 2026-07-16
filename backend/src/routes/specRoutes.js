@@ -21,7 +21,7 @@ function identifyAcademicActor(req, res, next) {
 // As consultas acadêmicas compatíveis com a loja permanecem públicas. As
 // mutações só são registradas quando a feature está explicitamente habilitada
 // e nunca respondem no host comercial.
-module.exports = ({ academicApi, cartRateLimit, isDbReady, optionalAuthMiddleware }) => {
+module.exports = ({ academicApi, cartRateLimit, isDbReady, optionalAuthMiddleware, publicRateLimit }) => {
   const router = express.Router();
 
   router.get('/health', (req, res) => {
@@ -44,8 +44,8 @@ module.exports = ({ academicApi, cartRateLimit, isDbReady, optionalAuthMiddlewar
     router.post('/products', ...mutationMiddleware, asyncHandler(controller.store));
     router.delete('/product/:id', ...mutationMiddleware, asyncHandler(controller.destroy));
   }
-  router.get('/product/:id', asyncHandler(controller.show));
-  router.get('/search', asyncHandler(controller.search));
+  router.get('/product/:id', publicRateLimit, asyncHandler(controller.show));
+  router.get('/search', publicRateLimit, asyncHandler(controller.search));
   router.post('/cart', optionalAuthMiddleware, cartRateLimit, asyncHandler(cartController.summary));
 
   return router;

@@ -148,13 +148,17 @@ test('todas as rotas sensíveis aplicam o middleware correspondente', () => {
   assert.equal(routeMiddleware(orderRouter, '/:id/rastreio', 'get')[1], trackingRateLimit);
 
   const cartRateLimit = function cartRate(req, res, next) { next(); };
+  const publicRateLimit = function publicReadRate(req, res, next) { next(); };
   const specRouter = buildSpecRoutes({
     academicApi: { enabled: false },
     cartRateLimit,
     isDbReady: () => true,
     optionalAuthMiddleware: pass,
+    publicRateLimit,
   });
   assert.equal(routeMiddleware(specRouter, '/cart')[1], cartRateLimit);
+  assert.equal(routeMiddleware(specRouter, '/product/:id', 'get')[0], publicRateLimit);
+  assert.equal(routeMiddleware(specRouter, '/search', 'get')[0], publicRateLimit);
 
   const checkoutRateLimit = function checkoutRate(req, res, next) { next(); };
   const paymentRouter = buildPaymentRoutes({

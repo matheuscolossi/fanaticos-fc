@@ -18,6 +18,7 @@ function buildRouter(academicApi) {
     cartRateLimit: pass,
     isDbReady: () => true,
     optionalAuthMiddleware: pass,
+    publicRateLimit: pass,
   });
 }
 

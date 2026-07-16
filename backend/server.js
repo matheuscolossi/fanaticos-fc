@@ -13,6 +13,8 @@ const {
   buildVerifiedEmailMiddleware,
 } = require('./src/middleware/auth');
 const { buildSecurityRateLimiters } = require('./src/middleware/rateLimit');
+const { buildHttpSecurityHeaders } = require('./src/middleware/httpSecurity');
+const { configureRequestBodyParsers } = require('./src/middleware/requestBody');
 const { loadSecurityConfig } = require('./src/config/security');
 const { errorHandler } = require('./src/utils/http');
 const authRoutes = require('./src/routes/authRoutes');
@@ -30,6 +32,7 @@ const logRoutes = require('./src/routes/logRoutes');
 const specRoutes = require('./src/routes/specRoutes');
 
 const app = express();
+app.disable('x-powered-by');
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 let academicApiConfig;
@@ -65,29 +68,9 @@ app.use(cors({
   credentials: true,
 }));
 
-// Cabeçalhos de defesa em profundidade para a API. A CSP principal do frontend
-// é enviada pelo Vercel (frontend/vercel.json).
-app.use((req, res, next) => {
-  if (req.path.startsWith('/docs')) {
-    res.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'");
-    return next();
-  }
-  res.set({
-    'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
-    'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'X-Content-Type-Options': 'nosniff',
-    'X-Frame-Options': 'DENY',
-  });
-  next();
-});
-
-// O Stripe exige o corpo exatamente como recebido para validar a assinatura.
-// Este parser precisa ficar antes do express.json() global.
-app.use('/api/pagamentos/stripe/webhook', express.raw({ type: 'application/json' }));
-app.use('/api/pagamentos/webhook', express.raw({ type: 'application/json' }));
-app.use('/api/payments/stripe/webhook', express.raw({ type: 'application/json' }));
-app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
-app.use(express.json({ limit: '10mb' }));
+// A CSP principal do frontend é enviada pelo Vercel (frontend/vercel.json).
+app.use(buildHttpSecurityHeaders());
+configureRequestBodyParsers(app);
 
 // Sessões em cookie SameSite=None precisam de proteção explícita contra CSRF.
 // Requisições mutáveis do site enviam este cabeçalho e só origens permitidas passam.
@@ -115,6 +98,7 @@ app.use('/api', (req, res, next) => {
   if (!dbReady) return res.status(503).json({ error: 'Servidor iniciando, tente novamente em instantes.' });
   next();
 });
+app.use('/api', rateLimiters.api);
 
 app.use('/api/auth', authRoutes({ authMiddleware, jwtSecret: JWT_SECRET, rateLimiters }));
 app.use('/api/categorias', categoryRoutes(adminMiddleware));
@@ -154,6 +138,7 @@ app.use('/', specRoutes({
   cartRateLimit: rateLimiters.cart,
   isDbReady: () => dbReady,
   optionalAuthMiddleware,
+  publicRateLimit: rateLimiters.publicRead,
 }));
 
 app.use(errorHandler);

@@ -83,6 +83,16 @@ function userPolicy(limit, windowMs) {
 
 function buildSecurityRateLimiters(secret) {
   return {
+    api: createRateLimiter({
+      secret,
+      scope: 'api-global',
+      policies: [ipPolicy(configuredLimit('RATE_LIMIT_API_IP', 600), 5 * MINUTE_MS)],
+    }),
+    publicRead: createRateLimiter({
+      secret,
+      scope: 'public-read',
+      policies: [ipPolicy(configuredLimit('RATE_LIMIT_PUBLIC_READ_IP', 180), 5 * MINUTE_MS)],
+    }),
     register: createRateLimiter({
       secret,
       scope: 'auth-register',

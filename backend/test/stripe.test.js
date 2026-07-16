@@ -199,6 +199,17 @@ test('recusa quantidade inválida', async () => {
   );
 });
 
+test('recusa carrinho acima do limite antes de consultar produtos', async () => {
+  const items = Array.from(
+    { length: cartService.MAX_CART_ITEMS + 1 },
+    (_, index) => ({ productId: index + 1, qty: 1 })
+  );
+  await assert.rejects(
+    () => cartService.buildCartSummary({ items }),
+    (error) => error.code === 'CART_ITEMS_LIMIT_EXCEEDED'
+  );
+});
+
 test('recusa produto inexistente', async () => {
   await assert.rejects(
     () => cartService.buildCartSummary({ items: [{ productId: 999999999, qty: 1 }] }),

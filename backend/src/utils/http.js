@@ -14,9 +14,15 @@ function createHttpError(statusCode, message, code = 'REQUEST_ERROR') {
 }
 
 function errorHandler(err, req, res, next) {
-  const statusCode = err.statusCode || 500;
-  const code = err.code || 'INTERNAL_SERVER_ERROR';
-  const message = statusCode >= 500 ? 'Unexpected server error.' : err.message;
+  const payloadTooLarge = err.type === 'entity.too.large';
+  const invalidJson = err.type === 'entity.parse.failed';
+  const statusCode = payloadTooLarge ? 413 : (invalidJson ? 400 : (err.statusCode || err.status || 500));
+  const code = payloadTooLarge
+    ? 'PAYLOAD_TOO_LARGE'
+    : (invalidJson ? 'INVALID_JSON' : (err.code || 'INTERNAL_SERVER_ERROR'));
+  const message = payloadTooLarge
+    ? 'O corpo da requisição excede o limite permitido para esta rota.'
+    : (invalidJson ? 'O corpo JSON da requisição é inválido.' : (statusCode >= 500 ? 'Unexpected server error.' : err.message));
 
   if (statusCode >= 500) {
     console.error('[api:error]', {
