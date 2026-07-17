@@ -32,6 +32,7 @@ const logRoutes = require('./src/routes/logRoutes');
 const reviewRoutes = require('./src/routes/reviewRoutes');
 const commerceFeaturesRoutes = require('./src/routes/commerceFeaturesRoutes');
 const { processAbandonedCarts, processRestockAlerts } = require('./src/services/commerceFeaturesService');
+const paymentModel = require('./src/models/paymentModel');
 const specRoutes = require('./src/routes/specRoutes');
 
 const app = express();
@@ -180,6 +181,8 @@ async function connectWithRetry(delaySec = 30) {
     if (process.env.NODE_ENV === 'production') {
       processAbandonedCarts().catch((error) => console.error('[cart:abandonment:error]', error.message));
       processRestockAlerts().catch((error) => console.error('[restock:error]', error.message));
+      paymentModel.releaseExpiredReservations()
+        .catch((error) => console.error('[checkout:reservation-cleanup:error]', error.message));
     }
   } catch (err) {
     console.error(`[api:init:error] ${err.message} — retrying in ${delaySec}s`);
@@ -190,6 +193,11 @@ async function connectWithRetry(delaySec = 30) {
 connectWithRetry();
 
 if (process.env.NODE_ENV === 'production') {
+  setInterval(() => {
+    if (dbReady) paymentModel.releaseExpiredReservations()
+      .catch((error) => console.error('[checkout:reservation-cleanup:error]', error.message));
+  }, 5 * 60 * 1000).unref();
+
   setInterval(() => {
     if (dbReady) processAbandonedCarts().catch((error) => console.error('[cart:abandonment:error]', error.message));
     if (dbReady) processRestockAlerts().catch((error) => console.error('[restock:error]', error.message));

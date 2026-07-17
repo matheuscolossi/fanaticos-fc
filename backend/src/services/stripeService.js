@@ -48,6 +48,17 @@ function getFrontendBaseUrl() {
   return (process.env.FRONTEND_URL || process.env.CLIENT_BASE_URL || 'http://localhost:5500').replace(/\/$/, '');
 }
 
+function paymentProviderUnavailable(cause) {
+  const error = createHttpError(
+    503,
+    'O pagamento está temporariamente indisponível. Seu pedido não foi criado; tente novamente em instantes.',
+    'PAYMENT_PROVIDER_UNAVAILABLE'
+  );
+  error.expose = true;
+  error.cause = cause;
+  return error;
+}
+
 function formatShippingAddress(shippingDetails) {
   const address = shippingDetails?.address || {};
   return [
@@ -150,6 +161,28 @@ async function createStripeSession(sessionParams, pricing, summary, cupomCodigo,
   });
 }
 
+function buildCheckoutSessionParams({ pricing, customer, checkoutId, userId, expiresAtUnix }) {
+  return {
+    mode: 'payment',
+    line_items: pricing.lineItems,
+    success_url: `${getFrontendBaseUrl()}/pages/pagamento-sucesso.html?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${getFrontendBaseUrl()}/pages/pagamento-cancelado.html?session_id={CHECKOUT_SESSION_ID}`,
+    client_reference_id: checkoutId,
+    customer_creation: 'always',
+    ...(customer?.email ? { customer_email: cleanText(customer.email, 180) } : {}),
+    // Sem uma lista fixa, o Checkout exibe apenas os meios realmente
+    // habilitados e elegíveis na conta Stripe para esta compra.
+    shipping_address_collection: { allowed_countries: ['BR'] },
+    phone_number_collection: { enabled: true },
+    billing_address_collection: 'required',
+    expires_at: expiresAtUnix,
+    metadata: {
+      checkout_id: checkoutId,
+      user_id: String(userId),
+    },
+  };
+}
+
 async function releaseCheckoutAfterStripeFailure(checkoutId, session) {
   let canRelease = !session?.id;
   if (session?.id) {
@@ -169,7 +202,7 @@ async function releaseCheckoutAfterStripeFailure(checkoutId, session) {
 }
 
 async function createCheckoutSession({ items, customer, cupomCodigo, uf, userId }) {
-  if (!stripe) throw createHttpError(500, 'Stripe não está configurado.', 'STRIPE_NOT_CONFIGURED');
+  if (!stripe) throw paymentProviderUnavailable();
   if (!Number.isInteger(Number(userId)) || Number(userId) < 1) {
     throw createHttpError(401, 'Faça login para finalizar a compra.', 'AUTH_REQUIRED');
   }
@@ -227,26 +260,13 @@ async function createCheckoutSession({ items, customer, cupomCodigo, uf, userId 
     transportadora: summary.deliveryEstimate?.carrier,
   }, new Date(expiresAtUnix * 1000).toISOString());
 
-  const sessionParams = {
-    mode: 'payment',
-    line_items: pricing.lineItems,
-    success_url: `${getFrontendBaseUrl()}/pages/pagamento-sucesso.html?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${getFrontendBaseUrl()}/pages/pagamento-cancelado.html?session_id={CHECKOUT_SESSION_ID}`,
-    client_reference_id: checkoutId,
-    customer_creation: 'always',
-    ...(customer?.email ? { customer_email: cleanText(customer.email, 180) } : {}),
-    // O Checkout hospedado exibe os métodos habilitados na conta. Mantemos
-    // somente cartão e Pix; ambos são confirmados pelo webhook Stripe.
-    payment_method_types: ['card', 'pix'],
-    shipping_address_collection: { allowed_countries: ['BR'] },
-    phone_number_collection: { enabled: true },
-    billing_address_collection: 'required',
-    expires_at: expiresAtUnix,
-    metadata: {
-      checkout_id: checkoutId,
-      user_id: String(userId),
-    },
-  };
+  const sessionParams = buildCheckoutSessionParams({
+    pricing,
+    customer,
+    checkoutId,
+    userId,
+    expiresAtUnix,
+  });
 
   let session;
   try {
@@ -257,7 +277,13 @@ async function createCheckoutSession({ items, customer, cupomCodigo, uf, userId 
     await releaseCheckoutAfterStripeFailure(checkoutId, session).catch((releaseError) => {
       console.error('[stripe] Falha ao liberar reserva após erro no Checkout.', { checkoutId });
     });
-    throw error;
+    console.error('[stripe:checkout:create:error]', {
+      checkoutId,
+      type: error.type || null,
+      code: error.code || null,
+      message: error.message,
+    });
+    throw paymentProviderUnavailable(error);
   }
 }
 
@@ -449,6 +475,7 @@ async function getCheckoutStatus(sessionId, userId) {
 }
 
 module.exports = {
+  buildCheckoutSessionParams,
   buildCheckoutPricing,
   createCheckoutSession,
   getCheckoutStatus,

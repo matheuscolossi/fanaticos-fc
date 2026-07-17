@@ -299,7 +299,7 @@ async function renderCheckoutStep1() {
         <div class="co-payment-opt co-payment-opt--selected">
           <div class="co-payment-card">
             <span class="co-payment-icon"></span>
-            <div><strong>Stripe</strong><small>Cartão ou PIX com confirmação automática</small></div>
+            <div><strong>Pagamento seguro</strong><small>As formas disponíveis serão exibidas no checkout</small></div>
           </div>
         </div>
       </div>

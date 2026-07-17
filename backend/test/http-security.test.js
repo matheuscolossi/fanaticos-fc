@@ -8,7 +8,7 @@ const { after, before, test } = require('node:test');
 const express = require('express');
 const { buildHttpSecurityHeaders, HSTS } = require('../src/middleware/httpSecurity');
 const { configureRequestBodyParsers } = require('../src/middleware/requestBody');
-const { errorHandler } = require('../src/utils/http');
+const { createHttpError, errorHandler } = require('../src/utils/http');
 
 function responseMock() {
   const headers = new Map();
@@ -57,6 +57,11 @@ before(() => {
   app.post('/normal', (req, res) => res.json({ length: req.body.data.length }));
   app.post('/api/produtos', (req, res) => res.json({ length: req.body.data.length }));
   app.post('/api/pagamentos/stripe/webhook', (req, res) => res.json({ length: req.body.length }));
+  app.post('/payment-unavailable', () => {
+    const error = createHttpError(503, 'Pagamento temporariamente indisponível.', 'PAYMENT_PROVIDER_UNAVAILABLE');
+    error.expose = true;
+    throw error;
+  });
   app.use(errorHandler);
   server = app.listen(0, '127.0.0.1');
 });
@@ -76,6 +81,14 @@ test('backend envia CSP, anti-frame, MIME, referrer e HSTS em produção', () =>
   assert.equal(res.headers.get('x-frame-options'), 'DENY');
   assert.equal(res.headers.get('referrer-policy'), 'no-referrer');
   assert.match(res.headers.get('permissions-policy'), /camera=\(\)/);
+});
+
+test('indisponibilidade de pagamento retorna mensagem pública sem expor erro interno', async () => {
+  const response = await request(server, { body: '{}', path: '/payment-unavailable' });
+
+  assert.equal(response.status, 503);
+  assert.equal(response.body.code, 'PAYMENT_PROVIDER_UNAVAILABLE');
+  assert.equal(response.body.error, 'Pagamento temporariamente indisponível.');
 });
 
 test('Swagger recebe CSP própria sem permitir enquadramento', () => {

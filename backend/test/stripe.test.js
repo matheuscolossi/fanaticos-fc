@@ -66,6 +66,19 @@ test('normaliza apenas IDs, quantidades e variações permitidas', () => {
   });
 });
 
+test('Checkout deixa a Stripe escolher somente meios de pagamento disponíveis', () => {
+  const params = stripeService.buildCheckoutSessionParams({
+    pricing: { lineItems: [] },
+    customer: { email: 'cliente@example.test' },
+    checkoutId: 'checkout_dynamic_methods',
+    userId: 10,
+    expiresAtUnix: Math.floor(Date.now() / 1000) + 1800,
+  });
+
+  assert.equal(Object.hasOwn(params, 'payment_method_types'), false);
+  assert.equal(params.customer_email, 'cliente@example.test');
+});
+
 test('recalcula o preço pelo banco e ignora preço adulterado no navegador', async () => {
   const summary = await cartService.buildCartSummary({
     items: [{ productId, qty: 2, price: 0 }],

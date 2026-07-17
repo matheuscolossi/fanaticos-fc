@@ -67,6 +67,10 @@ async function releaseDraftStock(checkoutId, status, db) {
 }
 
 async function releaseExpiredReservations(db, now = new Date()) {
+  if (!db) {
+    return database.transaction((tx) => releaseExpiredReservations(tx, now));
+  }
+
   const expired = await db.all(
     `SELECT id FROM checkout_drafts
      WHERE stock_status = 'reserved' AND stock_expires_at IS NOT NULL AND stock_expires_at <= ?`,
@@ -75,6 +79,7 @@ async function releaseExpiredReservations(db, now = new Date()) {
   for (const draft of expired) {
     await releaseDraftStock(draft.id, 'expired', db);
   }
+  return expired.length;
 }
 
 function createReservedCheckoutDraft(draft, expiresAt) {
@@ -172,5 +177,6 @@ module.exports = {
   findDraftBySessionForUser,
   findWebhookEvent,
   releaseDraftStock,
+  releaseExpiredReservations,
   updateDraftStatus,
 };

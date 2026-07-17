@@ -22,7 +22,9 @@ function errorHandler(err, req, res, next) {
     : (invalidJson ? 'INVALID_JSON' : (err.code || 'INTERNAL_SERVER_ERROR'));
   const message = payloadTooLarge
     ? 'O corpo da requisição excede o limite permitido para esta rota.'
-    : (invalidJson ? 'O corpo JSON da requisição é inválido.' : (statusCode >= 500 ? 'Unexpected server error.' : err.message));
+    : (invalidJson
+      ? 'O corpo JSON da requisição é inválido.'
+      : (statusCode >= 500 && !err.expose ? 'Unexpected server error.' : err.message));
 
   if (statusCode >= 500) {
     console.error('[api:error]', {

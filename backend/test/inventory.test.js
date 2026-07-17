@@ -19,6 +19,7 @@ const draftIds = [
   'inventory_concurrent_a',
   'inventory_concurrent_b',
   'inventory_expired',
+  'inventory_expired_cleanup',
   'inventory_async_failed',
   'inventory_paid',
   'inventory_cancelled',
@@ -164,6 +165,21 @@ test('sessão expirada libera a reserva uma única vez', async () => {
 
   assert.equal(first.duplicate, false);
   assert.equal(second.duplicate, true);
+  assert.equal(savedDraft.stock_status, 'released');
+  assert.equal(savedDraft.status, 'expired');
+  assert.deepEqual(await stock(), { estoque: 10, estoque_reservado: 0 });
+});
+
+test('limpeza periódica libera reserva vencida mesmo sem webhook ou novo checkout', async () => {
+  await paymentModel.createReservedCheckoutDraft(
+    draft('inventory_expired_cleanup', 4),
+    new Date(Date.now() - 60_000).toISOString()
+  );
+
+  const released = await paymentModel.releaseExpiredReservations();
+  const savedDraft = await paymentModel.findDraftById('inventory_expired_cleanup');
+
+  assert.ok(released >= 1);
   assert.equal(savedDraft.stock_status, 'released');
   assert.equal(savedDraft.status, 'expired');
   assert.deepEqual(await stock(), { estoque: 10, estoque_reservado: 0 });
