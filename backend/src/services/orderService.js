@@ -125,6 +125,21 @@ function eventActor(actor) {
   };
 }
 
+function assertOrderCanEnterFulfillment(order, nextStatus, {
+  production = process.env.NODE_ENV === 'production',
+} = {}) {
+  if (!['em_separacao', 'enviado', 'entregue'].includes(nextStatus)) return;
+  const paid = order?.payment_status === 'paid';
+  const testSession = String(order?.stripe_session_id || '').startsWith('cs_test_');
+  if (!paid || (production && testSession)) {
+    throw createHttpError(
+      409,
+      'Pedido sem pagamento live confirmado não pode entrar em separação ou envio.',
+      'ORDER_LIVE_PAYMENT_REQUIRED'
+    );
+  }
+}
+
 async function updateOrder(orderId, data, actor) {
   let notificationType = null;
   await transaction(async (db) => {
@@ -134,6 +149,7 @@ async function updateOrder(orderId, data, actor) {
       throw createHttpError(409, 'Desarquive o pedido antes de alterá-lo.', 'ORDER_ARCHIVED');
     }
     const normalized = validateOrderUpdate(existingOrder.status, data);
+    assertOrderCanEnterFulfillment(existingOrder, normalized.status);
     if (normalized.status === 'cancelado' && existingOrder.status !== 'cancelado') {
       await orderModel.restoreStockForOrder(orderId, null, 'cancelado', db);
     }
@@ -240,6 +256,7 @@ async function deleteOrder(orderId, actor) {
 }
 
 module.exports = {
+  assertOrderCanEnterFulfillment,
   archiveOrder,
   createOrder,
   createPaidOrderFromStripe,

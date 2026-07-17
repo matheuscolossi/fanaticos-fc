@@ -245,7 +245,7 @@ function findTrackingForUser(orderId, user) {
 
 function exists(orderId, db = database) {
   return db.get(
-    `SELECT id, status, payment_status, stock_status, arquivado_em,
+    `SELECT id, status, payment_status, stripe_session_id, stock_status, arquivado_em,
             codigo_rastreio, transportadora, rastreio_url, prazo_entrega_min,
             prazo_entrega_max, previsao_entrega, motivo_cancelamento
      FROM pedidos WHERE id = ?`,

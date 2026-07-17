@@ -1457,8 +1457,8 @@ const STATUS_PEDIDO = {
 };
 
 const TRANSICOES_STATUS_PEDIDO = {
-  pendente: ['aguardando_pagamento', 'pago', 'cancelado'],
-  aguardando_pagamento: ['pago', 'cancelado'],
+  pendente: ['aguardando_pagamento', 'cancelado'],
+  aguardando_pagamento: ['cancelado'],
   pago: ['em_separacao', 'cancelado'],
   em_separacao: ['enviado', 'cancelado'],
   enviado: ['entregue'],
@@ -1468,6 +1468,15 @@ const TRANSICOES_STATUS_PEDIDO = {
 
 let pedidosCache = [];
 let mostrarPedidosArquivados = false;
+
+function isPagamentoLiveConfirmado(pedido) {
+  return pedido?.payment_status === 'paid'
+    && String(pedido?.stripe_session_id || '').startsWith('cs_live_');
+}
+
+function isPagamentoStripeTeste(pedido) {
+  return String(pedido?.stripe_session_id || '').startsWith('cs_test_');
+}
 
 function getPedidosTotalPages() {
   return Math.max(1, Math.ceil(pedidosCache.length / ORDERS_PER_PAGE));
@@ -1483,9 +1492,11 @@ function verDetalhesPedido(id) {
   if (!p) return;
 
   const st = STATUS_PEDIDO[p.status] || { label: p.status, color: '#888' };
-  const metodo = p.stripe_session_id || p.metodo_pagamento === 'stripe'
-    ? 'Stripe (cartão ou PIX)'
-    : 'Pagamento legado';
+  const metodo = isPagamentoStripeTeste(p)
+    ? 'Stripe TESTE (sem cobrança real)'
+    : p.stripe_session_id || p.metodo_pagamento === 'stripe'
+      ? 'Stripe (cartão ou PIX)'
+      : 'Pagamento legado';
   const itensHtml = p.itens.map(i =>
     `<div style="display:flex;justify-content:space-between;padding:.35rem 0;border-bottom:1px solid var(--border)">
       <span>${safeText(i.nome)} <em style="color:var(--text-muted)">x${Number(i.qty) || 0}</em></span>
@@ -1519,6 +1530,10 @@ function verDetalhesPedido(id) {
       </div>
 
       <div style="padding:0 1.25rem 1.25rem">
+        ${isPagamentoStripeTeste(p) ? `
+        <div style="background:#ff525218;border:1px solid #ff5252;color:#ff8a80;border-radius:10px;padding:.85rem 1rem;margin-bottom:1rem;font-weight:700">
+          AMBIENTE DE TESTE — nenhum dinheiro foi recebido. Não envie este pedido.
+        </div>` : ''}
         <!-- Status -->
         <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:1.25rem">
           <span style="background:${st.color}22;color:${st.color};padding:.3rem .75rem;border-radius:20px;font-size:.82rem;font-weight:600">${safeText(st.label)}</span>
@@ -1613,9 +1628,8 @@ function renderPedidos() {
   pedidosPage = Math.min(pedidosPage, totalPages);
   const start = (pedidosPage - 1) * ORDERS_PER_PAGE;
   const pagePedidos = pedidos.slice(start, start + ORDERS_PER_PAGE);
-  const STATUS_EXCLUIDOS_RECEITA = ['pendente', 'aguardando_pagamento', 'cancelado'];
   const totalGeral = pedidos
-    .filter(p => !STATUS_EXCLUIDOS_RECEITA.includes(p.status))
+    .filter(isPagamentoLiveConfirmado)
     .reduce((s, p) => s + (Number(p.total) || 0), 0);
   const pendentes = pedidos.filter(p => p.status === 'aguardando_pagamento' || p.status === 'pendente').length;
   wrap.innerHTML = `
@@ -1658,12 +1672,20 @@ function renderPedidos() {
         </thead>
         <tbody>
           ${pagePedidos.map(p => {
-            const st = STATUS_PEDIDO[p.status] || { label: p.status, color: '#888' };
+            const pagamentoTeste = isPagamentoStripeTeste(p);
+            const st = pagamentoTeste
+              ? { label: 'TESTE — NÃO RECEBIDO', color: '#ff5252' }
+              : STATUS_PEDIDO[p.status] || { label: p.status, color: '#888' };
             const arquivado = Boolean(p.arquivado_em);
-            const statusPermitidos = [p.status, ...(TRANSICOES_STATUS_PEDIDO[p.status] || [])];
-            const metodoIcon = p.stripe_session_id || p.metodo_pagamento === 'stripe'
-              ? 'Stripe (cartão ou PIX)'
-              : 'Pagamento legado';
+            const proximosStatus = pagamentoTeste
+              ? ['cancelado']
+              : (TRANSICOES_STATUS_PEDIDO[p.status] || []);
+            const statusPermitidos = [p.status, ...proximosStatus];
+            const metodoIcon = pagamentoTeste
+              ? '<strong style="color:#ff5252">Stripe TESTE — sem cobrança real</strong>'
+              : p.stripe_session_id || p.metodo_pagamento === 'stripe'
+                ? 'Stripe (cartão ou PIX)'
+                : 'Pagamento legado';
             return `
             <tr id="pedido-row-${p.id}">
               <td><strong>#${p.id}</strong></td>

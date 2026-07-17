@@ -17,8 +17,10 @@ const ORDER_STATUSES = [
 ];
 
 const STATUS_TRANSITIONS = {
-  pendente: ['aguardando_pagamento', 'pago', 'cancelado'],
-  aguardando_pagamento: ['pago', 'cancelado'],
+  // "pago" é um estado financeiro: somente o webhook assinado da Stripe
+  // pode confirmá-lo. O painel controla apenas logística e cancelamento.
+  pendente: ['aguardando_pagamento', 'cancelado'],
+  aguardando_pagamento: ['cancelado'],
   pago: ['em_separacao', 'cancelado'],
   em_separacao: ['enviado', 'cancelado'],
   enviado: ['entregue'],

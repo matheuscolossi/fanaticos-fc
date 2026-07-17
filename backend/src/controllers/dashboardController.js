@@ -33,6 +33,11 @@ function getDateRange(periodo) {
   return { start: fmt(start), end: fmt(end) };
 }
 
+function isConfirmedLivePayment(order) {
+  return order?.payment_status === 'paid'
+    && String(order?.stripe_session_id || '').startsWith('cs_live_');
+}
+
 async function dashboard(req, res, next) {
   try {
     const periodo = req.query.periodo || '30d';
@@ -40,7 +45,7 @@ async function dashboard(req, res, next) {
 
     // All orders in the period — compute all derived stats in JS
     const periodOrders = await all(
-      `SELECT id, itens, total, status, nome_cliente, created_at
+      `SELECT id, itens, total, status, payment_status, stripe_session_id, nome_cliente, created_at
        FROM pedidos WHERE created_at >= ? AND created_at <= ?
        ORDER BY created_at`,
       [start, end]
@@ -53,14 +58,14 @@ async function dashboard(req, res, next) {
     const dayMap = new Map();
     const prodMap = new Map();
 
-    const STATUS_EXCLUIDOS_RECEITA = ['cancelado', 'pendente', 'aguardando_pagamento'];
-
     for (const order of periodOrders) {
       const status = order.status || 'pendente';
       por_status[status] = (por_status[status] || 0) + 1;
 
       const total = Number(order.total) || 0;
-      const contaReceita = !STATUS_EXCLUIDOS_RECEITA.includes(status);
+      // O status logístico não comprova recebimento. Receita só entra quando
+      // uma sessão Stripe live foi confirmada financeiramente pelo webhook.
+      const contaReceita = isConfirmedLivePayment(order);
 
       if (contaReceita) {
         receita += total;
@@ -141,4 +146,4 @@ async function dashboard(req, res, next) {
   }
 }
 
-module.exports = { dashboard };
+module.exports = { dashboard, isConfirmedLivePayment };

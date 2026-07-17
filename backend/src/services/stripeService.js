@@ -18,6 +18,63 @@ const CHECKOUT_RESERVATION_MINUTES = Math.min(
   24 * 60
 );
 
+function getStripeKeyMode(secret = '') {
+  const value = String(secret);
+  if (/^(sk|rk)_live_/.test(value)) return 'live';
+  if (/^(sk|rk)_test_/.test(value)) return 'test';
+  return 'invalid';
+}
+
+function stripeLiveModeRequired() {
+  const error = createHttpError(
+    503,
+    'Pagamentos estão temporariamente desabilitados até a loja configurar a Stripe em modo de produção.',
+    'STRIPE_LIVE_MODE_REQUIRED'
+  );
+  error.expose = true;
+  return error;
+}
+
+function assertStripeRuntimeMode({
+  nodeEnv = process.env.NODE_ENV,
+  secret = stripeSecret,
+} = {}) {
+  if (nodeEnv === 'production' && getStripeKeyMode(secret) !== 'live') {
+    throw stripeLiveModeRequired();
+  }
+}
+
+function assertStripeEventMode(event, {
+  nodeEnv = process.env.NODE_ENV,
+  secret = stripeSecret,
+} = {}) {
+  const keyMode = getStripeKeyMode(secret);
+  const eventLiveMode = event?.livemode;
+  const objectLiveMode = event?.data?.object?.livemode;
+
+  if (nodeEnv === 'production') {
+    if (keyMode !== 'live') throw stripeLiveModeRequired();
+    if (eventLiveMode !== true || objectLiveMode !== true) {
+      throw createHttpError(
+        400,
+        'Evento Stripe de teste rejeitado no ambiente de produção.',
+        'STRIPE_TEST_EVENT_REJECTED'
+      );
+    }
+  }
+
+  if (typeof eventLiveMode === 'boolean' && ['live', 'test'].includes(keyMode)) {
+    const expectedLiveMode = keyMode === 'live';
+    if (eventLiveMode !== expectedLiveMode) {
+      throw createHttpError(400, 'O modo do evento Stripe não corresponde à chave configurada.', 'STRIPE_MODE_MISMATCH');
+    }
+  }
+}
+
+if (process.env.NODE_ENV === 'production' && getStripeKeyMode(stripeSecret) !== 'live') {
+  console.error('[stripe:security] Checkout bloqueado: configure uma chave Stripe live no ambiente de produção.');
+}
+
 if (!stripeSecret) {
   console.warn('[stripeService] STRIPE_SECRET_KEY não configurado.');
 }
@@ -202,6 +259,7 @@ async function releaseCheckoutAfterStripeFailure(checkoutId, session) {
 }
 
 async function createCheckoutSession({ items, customer, cupomCodigo, uf, userId }) {
+  assertStripeRuntimeMode();
   if (!stripe) throw paymentProviderUnavailable();
   if (!Number.isInteger(Number(userId)) || Number(userId) < 1) {
     throw createHttpError(401, 'Faça login para finalizar a compra.', 'AUTH_REQUIRED');
@@ -328,6 +386,7 @@ async function fulfillCheckoutSession(session, eventId, db) {
 }
 
 async function processWebhookEvent(event) {
+  assertStripeEventMode(event);
   let notification = null;
   const result = await transaction(async (db) => {
     const alreadyProcessed = await paymentModel.findWebhookEvent(event.id, db);
@@ -475,9 +534,12 @@ async function getCheckoutStatus(sessionId, userId) {
 }
 
 module.exports = {
+  assertStripeEventMode,
+  assertStripeRuntimeMode,
   buildCheckoutSessionParams,
   buildCheckoutPricing,
   createCheckoutSession,
+  getStripeKeyMode,
   getCheckoutStatus,
   handleWebhook,
   normalizeCartItems,
