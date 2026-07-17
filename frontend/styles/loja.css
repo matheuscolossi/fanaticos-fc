@@ -298,7 +298,7 @@
 
 .modal-overlay--checkout {
   align-items: flex-start;
-  padding: 1rem;
+  padding: max(1rem, env(safe-area-inset-top, 0px)) 1rem max(1rem, env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
 }
 
@@ -307,7 +307,9 @@
   max-width: 640px;
   margin: auto;
   padding: 0;
-  max-height: none;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--bg-card);
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -688,9 +690,11 @@
 }
 
 @media (max-width: 500px) {
-  .modal-overlay--checkout { padding: .75rem; }
+  .modal-overlay--checkout {
+    padding: max(.5rem, env(safe-area-inset-top, 0px)) .5rem max(.5rem, env(safe-area-inset-bottom, 0px));
+  }
   .modal--checkout,
-  .modal--tracking { max-width: 100%; }
+  .modal--tracking { max-width: 100%; max-height: calc(100dvh - 1rem); }
   .co-header { padding: 1rem 1.1rem .85rem; }
   .co-header h2 { font-size: 1.1rem; padding-right: 2rem; }
   .co-resumo,
@@ -700,6 +704,7 @@
   .modal--tracking .co-header,
   .modal--tracking .co-form { padding-left: 1rem; padding-right: 1rem; }
   .co-form-row { flex-direction: column; }
+  .co-form-group input { font-size: 16px; min-height: 46px; }
   .co-payment-opts { flex-direction: column; }
   .co-payment-card { padding: .8rem; }
   .pix-qr-img { width: min(220px, 72vw); height: min(220px, 72vw); }
@@ -891,7 +896,7 @@
   .produto-page__info,
   .produto-comments { border-radius: var(--radius-sm); }
   .produto-page__main-img,
-  .produto-page__placeholder { min-height: 320px; }
+  .produto-page__placeholder { min-height: min(320px, 85vw); }
   .produto-page__title { font-size: 1.45rem; }
   .produto-page__price { font-size: 2.35rem; }
   .produto-size-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -933,6 +938,14 @@
   }
   .cart-page__item { position: relative; }
   .cart-page__summary { padding: 1.1rem; }
+}
+
+@media (max-width: 420px) {
+  .cart-page__cupom { flex-direction: column; }
+  .cart-page__cupom .btn { width: 100%; }
+  .cart-page__header .btn { width: 100%; }
+  .produto-size-guide { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .produto-size-guide table { min-width: 420px; }
 }
 
 /* ══════════════════════════════════════════════
@@ -1189,14 +1202,27 @@
   padding: 1rem 1.2rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--surface);
+  background: var(--bg-card);
   color: var(--text);
   box-shadow: 0 18px 60px rgba(0,0,0,.35);
 }
 .privacy-consent p { margin: 0; line-height: 1.5; }
 .privacy-consent > div { display: flex; gap: .65rem; flex: 0 0 auto; }
 .privacy-consent__preferences { align-items: flex-start; flex-direction: column; font-size: .86rem; }
-.privacy-consent__preferences label { cursor: pointer; white-space: nowrap; }
+.privacy-consent__preferences label {
+  display: flex;
+  align-items: flex-start;
+  gap: .45rem;
+  cursor: pointer;
+  white-space: normal;
+}
+.privacy-consent__preferences input {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  margin-top: .15rem;
+  accent-color: var(--green);
+}
 .privacy-settings {
   position: fixed; z-index: 9999; left: .75rem; bottom: .75rem;
   border: 1px solid var(--border); border-radius: 999px; padding: .4rem .7rem;
@@ -1205,11 +1231,24 @@
 
 @media (max-width: 800px) {
   .produto-related-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .privacy-consent { align-items: stretch; flex-direction: column; }
-  .privacy-consent > div { flex-wrap: wrap; }
+  .privacy-consent {
+    left: .75rem;
+    right: .75rem;
+    bottom: max(.75rem, env(safe-area-inset-bottom, 0px));
+    max-height: min(70dvh, 560px);
+    overflow-y: auto;
+    align-items: stretch;
+    flex-direction: column;
+    gap: .85rem;
+    padding: 1rem;
+  }
+  .privacy-consent > div { width: 100%; flex-wrap: wrap; }
+  .privacy-consent > div:last-child { display: grid; grid-template-columns: 1fr 1fr; }
+  .privacy-consent > div .btn { width: 100%; }
 }
 
 @media (max-width: 420px) {
   .produto-related-grid { grid-template-columns: 1fr; }
-  .privacy-consent > div .btn { flex: 1 1 100%; }
+  .privacy-consent { left: .5rem; right: .5rem; bottom: max(.5rem, env(safe-area-inset-bottom, 0px)); }
+  .privacy-consent > div:last-child { grid-template-columns: 1fr; }
 }

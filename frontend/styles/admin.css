@@ -4,7 +4,7 @@
 
 .admin-body {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 240px minmax(0, 1fr);
   min-height: 100vh;
   background: #080808;
 }
@@ -13,6 +13,7 @@
 .sidebar {
   background: #111;
   border-right: 1px solid var(--border);
+  min-width: 0;
 }
 .sidebar__inner {
   display: flex; flex-direction: column;
@@ -46,6 +47,7 @@
   overflow-x: hidden;
   padding: 2rem;
   min-height: 100vh;
+  min-width: 0;
 }
 .admin-topbar {
   display: flex; align-items: flex-start; justify-content: space-between;
@@ -614,7 +616,7 @@ td { padding: .85rem 1rem; color: var(--text); vertical-align: middle; }
 [data-theme="light"] .dash-period-btn:hover { background: #f0f0f0; color: #111; }
 
 @media (max-width: 900px) {
-  .admin-body { grid-template-columns: 1fr; }
+  .admin-body { grid-template-columns: minmax(0, 1fr); }
   .sidebar {
     min-height: auto;
     border-right: none;
@@ -638,6 +640,7 @@ td { padding: .85rem 1rem; color: var(--text); vertical-align: middle; }
     overflow-x: auto;
     padding: .6rem .75rem;
     scrollbar-width: none;
+    overscroll-behavior-inline: contain;
   }
   .sidebar__nav::-webkit-scrollbar,
   .sidebar__bottom::-webkit-scrollbar { display: none; }
@@ -672,6 +675,7 @@ td { padding: .85rem 1rem; color: var(--text); vertical-align: middle; }
     border-radius: var(--radius-sm);
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    max-width: 100%;
   }
   table { min-width: 760px; }
   .ligas-view table { min-width: 680px; }
@@ -687,6 +691,12 @@ td { padding: .85rem 1rem; color: var(--text); vertical-align: middle; }
   .modal--form { max-width: calc(100vw - 1.5rem); }
   .product-form,
   .modal__header { padding: 1rem; }
+  .product-form input,
+  .product-form textarea,
+  .product-form select,
+  .admin-main input,
+  .admin-main textarea,
+  .admin-main select { font-size: 16px; }
   .form-row {
     grid-template-columns: 1fr;
     gap: .85rem;
@@ -901,4 +911,8 @@ td { padding: .85rem 1rem; color: var(--text); vertical-align: middle; }
     width: 64px;
     height: 64px;
   }
+  .dash-kpi-grid { grid-template-columns: 1fr; }
+  .orders-toolbar { align-items: stretch; flex-direction: column; }
+  .orders-pagination { justify-content: stretch; }
+  .orders-pagination .btn { width: 100%; }
 }

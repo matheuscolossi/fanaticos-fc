@@ -93,7 +93,13 @@ const CART_ROOT_BASE = API_BASE.replace(/\/api\/?$/, '');
 async function fetchCartSummary(items, cupomCode, uf) {
   const res = await fetch(`${CART_ROOT_BASE}/cart`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    // /cart tambem passa pela protecao CSRF global do backend. Sem este
+    // cabecalho, clientes autenticados recebiam 403 e o carrinho ocultava a
+    // falha usando o calculo local, que nunca aplica cupons.
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-Protection': '1',
+    },
     credentials: 'include',
     body: JSON.stringify({ items, cupomCode, uf }),
   });

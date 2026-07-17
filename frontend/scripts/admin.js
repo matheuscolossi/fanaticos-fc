@@ -2389,6 +2389,13 @@ function _selectedValues(selectId) {
   return Array.from(document.getElementById(selectId)?.selectedOptions || []).map(o => Number(o.value));
 }
 
+function _couponDateToIso(inputId) {
+  const value = document.getElementById(inputId)?.value;
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 async function saveCupom(e) {
   e.preventDefault();
   const id = document.getElementById('cupomId').value;
@@ -2400,8 +2407,10 @@ async function saveCupom(e) {
     valor: Number(document.getElementById('cpValor').value),
     valor_minimo_compra: Number(document.getElementById('cpValorMinimo').value) || 0,
     desconto_maximo: document.getElementById('cpDescontoMaximo').value ? Number(document.getElementById('cpDescontoMaximo').value) : null,
-    data_inicio: document.getElementById('cpDataInicio').value || null,
-    data_fim: document.getElementById('cpDataFim').value || null,
+    // datetime-local nao inclui fuso. Enviar ISO evita que o PostgreSQL trate
+    // o horario de Brasilia como UTC e deixe um cupom recem-criado indisponivel.
+    data_inicio: _couponDateToIso('cpDataInicio'),
+    data_fim: _couponDateToIso('cpDataFim'),
     limite_uso_total: document.getElementById('cpLimiteTotal').value ? Number(document.getElementById('cpLimiteTotal').value) : null,
     limite_uso_por_usuario: document.getElementById('cpLimitePorUsuario').value ? Number(document.getElementById('cpLimitePorUsuario').value) : null,
     frete_gratis: document.getElementById('cpFreteGratis').checked,
