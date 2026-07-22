@@ -162,7 +162,7 @@ async function renderPedidosTab() {
               </div>
 
               <div class="pedido-conta-card__meta">
-                <span>${pedido.stripe_session_id || pedido.metodo_pagamento === 'stripe' ? 'Stripe (cartão ou PIX)' : 'Pagamento legado'}</span>
+                <span>${pedido.metodo_pagamento === 'whatsapp' ? 'Pagamento pelo WhatsApp' : pedido.stripe_session_id || pedido.metodo_pagamento === 'stripe' ? 'Stripe (legado)' : 'Pagamento legado'}</span>
                 ${pedido.endereco ? `<span>${safeText(pedido.endereco)}</span>` : ''}
                 <strong class="pedido-conta-card__total">${formatBRL(pedido.total)}</strong>
               </div>

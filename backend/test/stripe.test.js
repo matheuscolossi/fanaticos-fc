@@ -246,10 +246,10 @@ test('exige usuário autenticado para criar checkout', async () => {
   );
 });
 
-test('bloqueia o endpoint antigo de pedidos fora do Checkout Stripe', async () => {
+test('o endpoint manual aceita somente o checkout pelo WhatsApp', async () => {
   await assert.rejects(
-    () => orderService.createOrder({ metodo_pagamento: 'whatsapp' }),
-    (error) => error.code === 'STRIPE_CHECKOUT_REQUIRED'
+    () => orderService.createOrder({ metodo_pagamento: 'stripe' }),
+    (error) => error.code === 'WHATSAPP_CHECKOUT_ONLY'
   );
 });
 

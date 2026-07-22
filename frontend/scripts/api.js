@@ -5,7 +5,8 @@ const DEFAULT_API_BASE = IS_LOCAL_FRONTEND
   ? 'http://localhost:3001/api'
   : (window.location.protocol === 'file:' ? 'https://fanaticos-fc.onrender.com/api' : '/api');
 const API_BASE = window.FANATICOS_API_BASE || DEFAULT_API_BASE;
-let STRIPE_PUBLISHABLE_KEY = window.FANATICOS_STRIPE_PUBLISHABLE || '';
+let WHATSAPP_NUMBER = String(window.FANATICOS_WHATSAPP_NUMBER || '5554991138217').replace(/\D/g, '');
+let whatsappConfigPromise = null;
 
 // Remove tokens legados assim que qualquer página carrega. Sessões antigas
 // precisarão autenticar uma vez para receber o novo cookie HttpOnly.
@@ -112,15 +113,24 @@ async function fetchCartSummary(items, cupomCode, uf) {
   return res.json();
 }
 
-async function loadStripeConfig() {
-  if (STRIPE_PUBLISHABLE_KEY) return STRIPE_PUBLISHABLE_KEY;
-  try {
-    const config = await api.get('/config');
-    STRIPE_PUBLISHABLE_KEY = config.stripePublishableKey || '';
-    return STRIPE_PUBLISHABLE_KEY;
-  } catch (err) {
-    return '';
+async function loadWhatsAppConfig() {
+  if (!whatsappConfigPromise) {
+    whatsappConfigPromise = (async () => {
+      try {
+        const config = await api.get('/config');
+        const configuredNumber = String(config.whatsappNumber || '').replace(/\D/g, '');
+        if (configuredNumber) WHATSAPP_NUMBER = configuredNumber;
+      } catch (_) {}
+      return WHATSAPP_NUMBER;
+    })();
   }
+  return whatsappConfigPromise;
+}
+
+function whatsappUrl(message, number = WHATSAPP_NUMBER) {
+  const normalizedNumber = String(number || '').replace(/\D/g, '');
+  if (!normalizedNumber) throw new Error('O número de WhatsApp da loja não está configurado.');
+  return `https://wa.me/${normalizedNumber}?text=${encodeURIComponent(message)}`;
 }
 
 function showToast(msg, type = 'success') {
@@ -242,6 +252,11 @@ function renderPrivacySettingsButton() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  loadWhatsAppConfig().then((number) => {
+    document.querySelectorAll('[data-whatsapp-link]').forEach((link) => {
+      link.href = `https://wa.me/${number}`;
+    });
+  });
   renderPrivacyConsent();
   renderPrivacySettingsButton();
   if (localStorage.getItem('fc_privacy_consent') === 'accepted') {

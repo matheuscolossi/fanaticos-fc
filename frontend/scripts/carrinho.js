@@ -102,8 +102,8 @@ function renderCartPage() {
           <span>Total</span>
           <strong id="cartTotalFinal">${formatBRL(subtotal)}</strong>
         </div>
-        <button class="btn btn--primary cart-page__checkout-btn" id="btnCartCheckout">
-          Finalizar Pedido →
+        <button class="btn btn--whatsapp cart-page__checkout-btn" id="btnCartCheckout">
+          Finalizar pelo WhatsApp →
         </button>
         <a href="../index.html" class="btn btn--outline cart-page__back-btn">← Continuar comprando</a>
       </aside>

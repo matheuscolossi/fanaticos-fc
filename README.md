@@ -128,6 +128,8 @@ fanaticos-fc/
 
 O carrinho é mantido no `LocalStorage` do navegador e sincronizado com os dados atualizados do banco via `POST /api/cart` / `POST /cart` a cada visita à página.
 
+No checkout atual, o backend recalcula preços, promoções, cupom, frete e estoque, registra o pedido como `aguardando_pagamento` e abre o WhatsApp da loja com o resumo preenchido. O administrador confirma o recebimento no painel antes de liberar a separação e o envio.
+
 ## Instalação e Execução Local
 
 Clone o repositório:
@@ -193,7 +195,8 @@ Definidas em `backend/.env` (modelo em `backend/.env.example`):
 | `DB_SSL` | `true` para exigir SSL na conexão PostgreSQL (ex.: Neon, Render). |
 | `JWT_SECRET` | Chave usada para assinar/validar os tokens JWT. Obrigatória. |
 | `CORS_ORIGIN` | Lista de origens permitidas, separadas por vírgula. |
-| `FRONTEND_URL` | URL pública HTTPS usada em recuperação de senha, carrinho abandonado, alerta de reposição e retornos do Stripe. |
+| `FRONTEND_URL` | URL pública HTTPS usada em recuperação de senha, carrinho abandonado e alerta de reposição. |
+| `WHATSAPP_NUMBER` | Número público do checkout (país + DDD + número, somente dígitos). |
 | `SHIPPING_PROVIDER` | Nome da modalidade/transportadora mostrado na estimativa local. Cotações externas exigem a API e as credenciais do provedor escolhido. |
 | `DEFAULT_ADMIN_EMAIL` / `DEFAULT_ADMIN_PASSWORD` | Credenciais obrigatórias para provisionar o primeiro administrador quando o banco está vazio. Não possuem fallback. |
 | `ENABLE_ACADEMIC_API` | Feature flag das mutações acadêmicas. O padrão seguro é `false`; nesse estado as rotas não são registradas. |
@@ -385,7 +388,7 @@ Além das rotas acima (exigidas pelo trabalho), o site usa um conjunto mais comp
 | POST `/duplicar`, PATCH `/status`, `/destaque`, POST `/bulk-price`, GET `/export`, POST `/import` | `/api/produtos/...` | JWT admin | Operações administrativas extras |
 | GET/POST/PUT/PATCH/DELETE | `/api/categorias[/:id]` | leitura pública, escrita admin | CRUD de categorias |
 | GET/POST/PUT/PATCH/DELETE | `/api/cupons[/:id]` | JWT admin | CRUD de cupons de desconto |
-| POST | `/api/pedidos` | JWT | Cria pedido a partir do carrinho |
+| POST | `/api/pedidos` | JWT | Cria pedido seguro a partir do carrinho e inicia a finalização pelo WhatsApp |
 | GET | `/api/pedidos` | JWT admin | Lista todos os pedidos |
 | GET | `/api/pedidos/meus` | JWT | Lista pedidos do cliente logado |
 | GET | `/api/pedidos/:id/rastreio` | — | Rastreio público do pedido |
@@ -412,7 +415,7 @@ O banco mantém uma segunda barreira contra gravações que contornem os service
 
 Pedidos não possuem mais operação de exclusão física. `DELETE /api/pedidos/:id` responde `405 ORDER_DELETION_FORBIDDEN`; o painel usa `PATCH /api/pedidos/:id/arquivar` e `PATCH /api/pedidos/:id/desarquivar`. O arquivamento não altera o estado financeiro, não devolve estoque e não remove os itens. Cancelamentos são mudanças explícitas de status, exigem motivo e mantêm a situação do pagamento separada.
 
-Cada criação paga, mudança de status, cancelamento, alteração de rastreio, arquivamento, desarquivamento e evento financeiro relevante acrescenta um registro em `pedido_eventos`. Essa tabela é append-only em produção. PostgreSQL e SQLite também bloqueiam `DELETE` direto em `pedidos`; a relação com `pedido_itens` usa retenção, e pedidos legados recebem um evento inicial durante a migração.
+Cada criação de pedido pelo WhatsApp, confirmação de pagamento, mudança de status, cancelamento, alteração de rastreio, arquivamento, desarquivamento e evento financeiro relevante acrescenta um registro em `pedido_eventos`. Essa tabela é append-only em produção. PostgreSQL e SQLite também bloqueiam `DELETE` direto em `pedidos`; a relação com `pedido_itens` usa retenção, e pedidos legados recebem um evento inicial durante a migração.
 
 ### Importação CSV de produtos
 

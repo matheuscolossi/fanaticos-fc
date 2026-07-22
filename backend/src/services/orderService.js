@@ -1,6 +1,11 @@
 const orderModel = require('../models/orderModel');
+const inventoryModel = require('../models/inventoryModel');
+const userModel = require('../models/userModel');
 const { transaction } = require('../config/database');
 const { createHttpError } = require('../utils/http');
+const { buildCartSummary } = require('./cartService');
+const { normalizePhone } = require('../validation/userSchemas');
+const { requirePlainObject, stringValue, validationError } = require('../validation/commonSchemas');
 const { validateArchiveReason, validateOrderUpdate } = require('../validation/orderSchemas');
 const emailService = require('./emailService');
 
@@ -13,16 +18,108 @@ function parseOrderItems(order) {
       id: item.id ?? item.productId,
       nome: item.nome ?? item.name,
       preco: Number(item.preco ?? item.price ?? 0),
+      imagem: item.imagem ?? item.image ?? null,
     })),
   };
 }
 
-async function createOrder() {
-  throw createHttpError(
-    410,
-    'Pedidos devem ser finalizados exclusivamente pelo Checkout Stripe.',
-    'STRIPE_CHECKOUT_REQUIRED'
-  );
+function normalizeWhatsappOrder(data, user) {
+  requirePlainObject(data, 'Pedido');
+  if (data.metodo_pagamento && data.metodo_pagamento !== 'whatsapp') {
+    throw createHttpError(
+      400,
+      'O checkout disponível no momento é pelo WhatsApp.',
+      'WHATSAPP_CHECKOUT_ONLY'
+    );
+  }
+
+  const uf = stringValue(data.uf, 'uf', {
+    label: 'UF', required: false, nullable: true, max: 2,
+  })?.toUpperCase() || null;
+  if (uf && !/^[A-Z]{2}$/.test(uf)) throw validationError('uf', 'UF inválida.');
+
+  return {
+    itens: data.itens,
+    nome_cliente: stringValue(data.nome_cliente || user.nome, 'nome_cliente', {
+      label: 'Nome', min: 2, max: 120, collapseWhitespace: true,
+    }),
+    email_cliente: user.email,
+    telefone_cliente: normalizePhone(data.telefone_cliente),
+    endereco: stringValue(data.endereco, 'endereco', {
+      label: 'Endereço', min: 8, max: 500, collapseWhitespace: true,
+    }),
+    uf,
+    cupom_codigo: stringValue(data.cupom_codigo, 'cupom_codigo', {
+      label: 'Cupom', required: false, nullable: true, max: 50,
+      collapseWhitespace: true,
+    })?.toUpperCase() || null,
+  };
+}
+
+async function createOrder(data) {
+  if (data?.metodo_pagamento && data.metodo_pagamento !== 'whatsapp') {
+    throw createHttpError(
+      400,
+      'O checkout disponível no momento é pelo WhatsApp.',
+      'WHATSAPP_CHECKOUT_ONLY'
+    );
+  }
+
+  const user = await userModel.findPublicById(Number(data?.usuario_id));
+  if (!user) throw createHttpError(401, 'Faça login para finalizar a compra.', 'AUTH_REQUIRED');
+  if (user.status === 'inativo') throw createHttpError(403, 'Seu acesso foi desativado.', 'ACCESS_DISABLED');
+  if (!user.email_verificado) {
+    throw createHttpError(403, 'Confirme seu e-mail antes de finalizar uma compra.', 'EMAIL_NOT_VERIFIED');
+  }
+
+  const order = normalizeWhatsappOrder(data, user);
+  const summary = await buildCartSummary({
+    items: order.itens,
+    cupomCode: order.cupom_codigo,
+    usuarioId: user.id,
+    uf: order.uf,
+  });
+  if (order.cupom_codigo && summary.cupomErro) {
+    throw createHttpError(400, summary.cupomErro, 'COUPON_INVALID');
+  }
+  if (summary.total <= 0) {
+    throw createHttpError(400, 'O valor do pedido deve ser maior que zero.', 'INVALID_ORDER_TOTAL');
+  }
+
+  return transaction(async (db) => {
+    await inventoryModel.commit(summary.items, db, { reserved: false });
+    const result = await orderModel.createWhatsApp({
+      usuario_id: user.id,
+      itens: summary.items,
+      total: summary.total,
+      nome_cliente: order.nome_cliente,
+      email_cliente: order.email_cliente,
+      telefone_cliente: order.telefone_cliente,
+      endereco: order.endereco,
+      cupom_codigo: order.cupom_codigo,
+      cupom_desconto: Number(summary.discount || 0),
+      prazo_entrega_min: summary.deliveryEstimate?.minBusinessDays,
+      prazo_entrega_max: summary.deliveryEstimate?.maxBusinessDays,
+      previsao_entrega: summary.deliveryEstimate?.estimatedDate,
+      transportadora: summary.deliveryEstimate?.carrier,
+    }, db);
+    await orderModel.recordEvent(result.id, {
+      tipo: 'pedido_whatsapp_criado',
+      status_novo: 'aguardando_pagamento',
+      ator_id: user.id,
+      ator_nome: user.nome,
+      motivo: 'Pagamento será combinado pelo WhatsApp',
+      detalhes: { payment_status: 'unpaid', metodo_pagamento: 'whatsapp' },
+    }, db);
+    return {
+      message: 'Pedido criado. Continue pelo WhatsApp para combinar o pagamento.',
+      id: result.id,
+      total: summary.total,
+      subtotal: summary.subtotal,
+      freight: summary.freight,
+      discount: summary.discount,
+    };
+  });
 }
 
 async function createPaidOrderFromStripe(data, db) {
@@ -134,8 +231,8 @@ function assertOrderCanEnterFulfillment(order, nextStatus, {
   if (!paid || (production && testSession)) {
     throw createHttpError(
       409,
-      'Pedido sem pagamento live confirmado não pode entrar em separação ou envio.',
-      'ORDER_LIVE_PAYMENT_REQUIRED'
+      'Pedido sem pagamento confirmado não pode entrar em separação ou envio.',
+      'ORDER_PAYMENT_REQUIRED'
     );
   }
 }
@@ -149,6 +246,14 @@ async function updateOrder(orderId, data, actor) {
       throw createHttpError(409, 'Desarquive o pedido antes de alterá-lo.', 'ORDER_ARCHIVED');
     }
     const normalized = validateOrderUpdate(existingOrder.status, data);
+    if (normalized.status === 'pago' && existingOrder.metodo_pagamento !== 'whatsapp') {
+      throw createHttpError(
+        409,
+        'Somente pedidos do WhatsApp podem ter o pagamento confirmado manualmente.',
+        'MANUAL_PAYMENT_NOT_ALLOWED'
+      );
+    }
+    if (normalized.status === 'pago') normalized.payment_status = 'paid';
     assertOrderCanEnterFulfillment(existingOrder, normalized.status);
     if (normalized.status === 'cancelado' && existingOrder.status !== 'cancelado') {
       await orderModel.restoreStockForOrder(orderId, null, 'cancelado', db);
@@ -159,6 +264,7 @@ async function updateOrder(orderId, data, actor) {
     }, db);
 
     if (normalized.status && normalized.status !== existingOrder.status) {
+      if (normalized.status === 'pago') notificationType = 'confirmado';
       if (normalized.status === 'enviado') notificationType = 'enviado';
       if (normalized.status === 'cancelado') notificationType = 'cancelado';
       await orderModel.recordEvent(orderId, {
@@ -167,7 +273,7 @@ async function updateOrder(orderId, data, actor) {
         status_novo: normalized.status,
         ...eventActor(actor),
         motivo: normalized.motivo_cancelamento,
-        detalhes: { payment_status: existingOrder.payment_status },
+        detalhes: { payment_status: normalized.payment_status || existingOrder.payment_status },
       }, db);
     }
     if (

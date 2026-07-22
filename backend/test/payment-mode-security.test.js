@@ -33,36 +33,35 @@ test('producao rejeita webhook de teste mesmo quando ele informa pagamento como 
   );
 });
 
-test('receita considera apenas sessao live com pagamento confirmado', () => {
+test('receita considera Stripe live legado e WhatsApp com pagamento confirmado', () => {
   assert.equal(isConfirmedLivePayment({ payment_status: 'paid', stripe_session_id: 'cs_live_123' }), true);
   assert.equal(isConfirmedLivePayment({ payment_status: 'paid', stripe_session_id: 'cs_test_123' }), false);
   assert.equal(isConfirmedLivePayment({ payment_status: 'unpaid', stripe_session_id: 'cs_live_123' }), false);
+  assert.equal(isConfirmedLivePayment({ payment_status: 'paid', metodo_pagamento: 'whatsapp' }), true);
+  assert.equal(isConfirmedLivePayment({ payment_status: 'unpaid', metodo_pagamento: 'whatsapp' }), false);
 });
 
-test('administrador nao pode declarar manualmente que um pedido foi pago', () => {
-  assert.throws(
-    () => validateOrderUpdate('aguardando_pagamento', { status: 'pago' }),
-    (error) => error.code === 'ORDER_STATUS_TRANSITION_INVALID'
-      && error.details?.field === 'status'
+test('administrador pode confirmar o pagamento combinado pelo WhatsApp', () => {
+  assert.equal(
+    validateOrderUpdate('aguardando_pagamento', { status: 'pago' }).status,
+    'pago'
   );
 });
 
-test('configuracao publica nao entrega chave de teste em producao', () => {
-  const previousNodeEnv = process.env.NODE_ENV;
-  const previousKey = process.env.STRIPE_PUBLISHABLE_KEY;
-  process.env.NODE_ENV = 'production';
-  process.env.STRIPE_PUBLISHABLE_KEY = 'pk_test_example';
+test('configuracao publica anuncia somente o checkout pelo WhatsApp', () => {
+  const previousNumber = process.env.WHATSAPP_NUMBER;
+  process.env.WHATSAPP_NUMBER = '+55 (54) 99113-8217';
   let payload;
   try {
     configController.getConfig({}, { json(value) { payload = value; } });
   } finally {
-    process.env.NODE_ENV = previousNodeEnv;
-    if (previousKey === undefined) delete process.env.STRIPE_PUBLISHABLE_KEY;
-    else process.env.STRIPE_PUBLISHABLE_KEY = previousKey;
+    if (previousNumber === undefined) delete process.env.WHATSAPP_NUMBER;
+    else process.env.WHATSAPP_NUMBER = previousNumber;
   }
-  assert.equal(payload.stripePublishableKey, '');
-  assert.equal(payload.paymentsEnabled, false);
-  assert.equal(payload.paymentMode, 'test');
+  assert.deepEqual(payload, {
+    paymentMethod: 'whatsapp',
+    whatsappNumber: '5554991138217',
+  });
 });
 
 test('pedido de teste nao pode avancar para separacao em producao', () => {
@@ -71,12 +70,18 @@ test('pedido de teste nao pode avancar para separacao em producao', () => {
       payment_status: 'paid',
       stripe_session_id: 'cs_test_example',
     }, 'em_separacao', { production: true }),
-    (error) => error.code === 'ORDER_LIVE_PAYMENT_REQUIRED'
+    (error) => error.code === 'ORDER_PAYMENT_REQUIRED'
   );
   assert.doesNotThrow(
     () => assertOrderCanEnterFulfillment({
       payment_status: 'paid',
       stripe_session_id: 'cs_live_example',
+    }, 'em_separacao', { production: true })
+  );
+  assert.doesNotThrow(
+    () => assertOrderCanEnterFulfillment({
+      payment_status: 'paid',
+      metodo_pagamento: 'whatsapp',
     }, 'em_separacao', { production: true })
   );
 });

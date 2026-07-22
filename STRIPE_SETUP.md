@@ -1,4 +1,6 @@
-# Stripe — Fanáticos Mantos
+# Stripe (integração legada/inativa) — Fanáticos Mantos
+
+> O checkout público está temporariamente operando pelo WhatsApp. Este documento e o código de webhook foram mantidos apenas para histórico, compatibilidade com pedidos antigos e uma possível reativação futura; o frontend não cria novas sessões Stripe.
 
 ## O que foi implementado
 

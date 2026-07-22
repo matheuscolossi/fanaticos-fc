@@ -187,7 +187,7 @@ function renderCart() {
   }
 }
 
-// Botão "Confirmar pagamento" do mini-carrinho (dropdown) leva para a página
+// O botão do mini-carrinho leva para a página de carrinho
 // de carrinho em vez de abrir o checkout direto — só lá tem o campo de cupom,
 // e sem ele o pedido sairia sem o desconto aplicado.
 function goToCartPage() {
@@ -210,7 +210,7 @@ async function checkout() {
   } catch (_) {
     closeCart();
     showToast('Faça login para finalizar o pedido.', 'error');
-    openAuthModal('login');
+    redirectToAccountLogin();
     return;
   }
   closeCart();
@@ -274,8 +274,8 @@ async function renderCheckoutStep1() {
       </div>
       <div class="co-form-row">
         <div class="co-form-group">
-          <label>E-mail *</label>
-          <input type="email" id="co_email" placeholder="email@dominio.com" />
+          <label>E-mail da conta *</label>
+          <input type="email" id="co_email" placeholder="email@dominio.com" readonly />
         </div>
       </div>
       <div class="co-form-row">
@@ -299,11 +299,11 @@ async function renderCheckoutStep1() {
         <div class="co-payment-opt co-payment-opt--selected">
           <div class="co-payment-card">
             <span class="co-payment-icon"></span>
-            <div><strong>Pagamento seguro</strong><small>As formas disponíveis serão exibidas no checkout</small></div>
+            <div><strong>WhatsApp</strong><small>Combine o pagamento diretamente com a loja pelo chat</small></div>
           </div>
         </div>
       </div>
-      <button type="button" id="btnConfirmarPedido" class="btn btn--primary co-btn-submit">Confirmar pedido</button>
+      <button type="button" id="btnConfirmarPedido" class="btn btn--whatsapp co-btn-submit">Finalizar pelo WhatsApp</button>
     </div>
   `;
 
@@ -385,6 +385,37 @@ async function atualizarResumoCheckout() {
   }
 }
 
+function buildWhatsAppOrderMessage({ pedidoId, items, resumo, nome, telefone, email, endereco, cupomCodigo }) {
+  const linhas = items.map((item) => {
+    const details = cartItemDetails(item);
+    return `• ${Number(item.qty) || 0}x ${item.nome}${details ? ` — ${details}` : ''}`;
+  }).join('\n');
+  const totais = [
+    `Subtotal: ${formatBRL(resumo.subtotal)}`,
+    `Frete: ${resumo.freight > 0 ? formatBRL(resumo.freight) : 'Grátis'}`,
+    resumo.discount > 0 ? `Desconto: − ${formatBRL(resumo.discount)}` : '',
+    `*Total: ${formatBRL(resumo.total)}*`,
+  ].filter(Boolean).join('\n');
+
+  return [
+    'Olá! Quero finalizar meu pedido na Fanáticos Mantos.',
+    '',
+    `*Pedido #${pedidoId}*`,
+    '*Itens:*',
+    linhas,
+    '',
+    totais,
+    cupomCodigo ? `Cupom: ${cupomCodigo}` : null,
+    '',
+    `*Cliente:* ${nome}`,
+    `*Telefone:* ${telefone}`,
+    `*E-mail:* ${email}`,
+    `*Entrega:* ${endereco}`,
+    '',
+    'Gostaria de combinar o pagamento por aqui.',
+  ].filter((line) => line !== null).join('\n');
+}
+
 async function confirmarPedido() {
   try {
     const nome     = document.getElementById('co_nome').value.trim();
@@ -394,7 +425,7 @@ async function confirmarPedido() {
     const cidade   = document.getElementById('co_cidade').value.trim();
     const cep      = document.getElementById('co_cep').value.trim();
 
-    if (!nome || !telefone || !email) {
+    if (!nome || !telefone || !email || !endRua || !cidade || !cep) {
       showToast('Preencha todos os campos obrigatórios.', 'error');
       return;
     }
@@ -403,10 +434,15 @@ async function confirmarPedido() {
     const cupomCodigo = getCupomAplicado();
 
     const btn = document.getElementById('btnConfirmarPedido');
-    if (btn) { btn.disabled = true; btn.textContent = 'Processando...'; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Criando pedido...'; }
+
+    // A aba é aberta ainda dentro do clique para que navegadores e celulares
+    // não bloqueiem o WhatsApp depois que a API terminar de criar o pedido.
+    const whatsappTab = window.open('about:blank', '_blank');
 
     try {
-      const session = await api.post('/pagamentos/stripe/create-session', {
+      const numberPromise = loadWhatsAppConfig();
+      const pedido = await api.post('/pedidos', {
         itens: cartItems.map(i => ({
           productId: i.id,
           qty: i.qty,
@@ -420,15 +456,47 @@ async function confirmarPedido() {
         endereco,
         uf: getUfFrete(),
         cupom_codigo: cupomCodigo || null,
+        metodo_pagamento: 'whatsapp',
       });
 
-      if (!session?.url) throw new Error('O Stripe não retornou a URL de pagamento.');
-      window.location.assign(session.url);
+      const itensCopia = [...cartItems];
+      const resumoPedido = {
+        subtotal: Number(pedido.subtotal) || 0,
+        freight: Number(pedido.freight) || 0,
+        discount: Number(pedido.discount) || 0,
+        total: Number(pedido.total) || 0,
+      };
+      const numeroWhatsApp = await numberPromise;
+      const mensagem = buildWhatsAppOrderMessage({
+        pedidoId: pedido.id,
+        items: itensCopia,
+        resumo: resumoPedido,
+        nome,
+        telefone,
+        email,
+        endereco,
+        cupomCodigo,
+      });
+      const url = whatsappUrl(mensagem, numeroWhatsApp);
+
+      cartItems = [];
+      saveCart();
+      setCupomAplicado('');
+      setCartResumo(null);
+      setCepFrete('', '');
+      renderCart();
+      updateBadge();
+      if (typeof renderCartPage === 'function') renderCartPage();
+      closeCheckoutModal();
+      showToast(`Pedido #${pedido.id} criado. Continue pelo WhatsApp.`);
+      if (whatsappTab && !whatsappTab.closed) whatsappTab.location.replace(url);
+      else window.location.assign(url);
       return;
 
     } catch(apiErr) {
+      if (whatsappTab && !whatsappTab.closed) whatsappTab.close();
       console.warn('[checkout:order:create:error]', apiErr);
-      if (btn) { btn.disabled = false; btn.textContent = 'Confirmar pedido'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Finalizar pelo WhatsApp'; }
 
       // Cupom inválido/expirado/esgotado: o sistema deve impedir o uso, então bloqueia o checkout
       if (cupomCodigo && apiErr.code?.startsWith('COUPON_')) {
@@ -452,7 +520,7 @@ async function confirmarPedido() {
     console.error('[checkout:unexpected:error]', err);
     showToast(err.message || 'Erro ao processar pedido. Tente novamente.', 'error');
     const btn = document.getElementById('btnConfirmarPedido');
-    if (btn) { btn.disabled = false; btn.textContent = 'Confirmar pedido'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Finalizar pelo WhatsApp'; }
   }
 }
 
@@ -524,107 +592,6 @@ function renderCheckoutVerification(email, dadosForm) {
     }
   });
 }
-
-// ── PIX OVERLAY (criado dinamicamente, imune a interferências) ────────────────
-
-/* Legacy manual Pix overlay removed; Stripe Checkout handles Pix and card.
-function abrirPixOverlay(pedidoId, total) {
-  console.log('[pix:overlay:open]', { total });
-  // Se já está aberto, não faz nada (evita fechar e reabrir)
-  if (document.getElementById('_pixModal')) {
-    console.warn('[pix:overlay:already-open]');
-    return;
-  }
-
-  const PIX_CPF    = '032.962.710-40';
-  const PIX_NOME   = 'Fanaticos FC';
-  const PIX_CIDADE = 'Caxias do Sul';
-
-  const payload      = gerarPixPayload(PIX_CPF, PIX_NOME, PIX_CIDADE, total);
-  const qrUrl        = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payload)}`;
-  const cpfFormatado = PIX_CPF.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-
-  // Cria overlay diretamente no body — z-index 9999 garante que nada fique na frente
-  const overlay = document.createElement('div');
-  overlay.id = '_pixModal';
-  overlay.style.cssText = [
-    'position:fixed', 'inset:0', 'z-index:9999',
-    'background:rgba(0,0,0,0.85)', 'backdrop-filter:blur(4px)',
-    'display:flex', 'align-items:flex-start', 'justify-content:center',
-    'overflow-y:auto', 'padding:1rem',
-  ].join(';');
-
-  overlay.innerHTML = `
-    <div class="modal modal--checkout" style="margin:auto;width:100%;max-width:640px">
-      <div class="co-header">
-        <h2>Pague via PIX</h2>
-        <button class="modal__close" id="_btnFecharPix">×</button>
-      </div>
-      <div class="pix-box">
-        <div class="pix-qr-wrap">
-          <img src="${qrUrl}" alt="QR Code PIX" class="pix-qr-img" />
-          <p class="pix-qr-hint">Escaneie com o app do seu banco</p>
-        </div>
-        <div class="pix-divider"><span>ou use a chave abaixo</span></div>
-        <div class="pix-key-wrap">
-          <div class="pix-key-label">Chave PIX — CPF</div>
-          <div class="pix-key-value" id="_pixKey">${cpfFormatado}</div>
-          <button class="btn btn--outline pix-copy-btn" id="_btnCopiarChave">Copiar Chave</button>
-        </div>
-        <div class="pix-key-wrap" style="margin-top:.75rem">
-          <div class="pix-key-label">PIX Copia e Cola</div>
-          <div class="pix-key-value pix-key-value--sm" id="_pixPayload">${payload}</div>
-          <button class="btn btn--outline pix-copy-btn" id="_btnCopiarPayload">Copiar código completo</button>
-        </div>
-        <div class="pix-info-row">
-          <div class="pix-info-item"><span>Beneficiário</span><strong>Fanáticos FC</strong></div>
-          <div class="pix-info-item"><span>Valor</span><strong>${formatBRL(total)}</strong></div>
-          ${pedidoId ? `<div class="pix-info-item"><span>Nº do Pedido</span><strong>#${pedidoId}</strong></div>` : ''}
-        </div>
-        <div class="pix-steps">
-          <div class="pix-step"><span class="pix-step-num">1</span> Abra o app do seu banco</div>
-          <div class="pix-step"><span class="pix-step-num">2</span> Escaneie o QR code <em>ou</em> use a chave CPF</div>
-          <div class="pix-step"><span class="pix-step-num">3</span> Confirme o valor e pague</div>
-          <div class="pix-step"><span class="pix-step-num">4</span> Envie o comprovante pelo WhatsApp</div>
-        </div>
-        ${pedidoId ? `<p class="pix-rastreio-hint">Guarde o número <strong>#${pedidoId}</strong> para rastrear seu pedido.</p>` : ''}
-      </div>
-      <div class="co-pix-actions">
-        <button class="btn btn--whatsapp" id="_btnEnviarComp">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg>
-          Enviar comprovante via WhatsApp
-        </button>
-        <button class="btn btn--outline" id="_btnJaPaguei">Confirmar pagamento</button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(overlay);
-
-  function fechar() { overlay.remove(); }
-
-  overlay.querySelector('#_btnFecharPix').addEventListener('click', fechar);
-  overlay.querySelector('#_btnCopiarChave').addEventListener('click', () => {
-    navigator.clipboard.writeText(PIX_CPF).then(() => showToast('Chave PIX copiada.'));
-  });
-  overlay.querySelector('#_btnCopiarPayload').addEventListener('click', () => {
-    navigator.clipboard.writeText(overlay.querySelector('#_pixPayload').textContent)
-      .then(() => showToast('Código PIX copiado.'));
-  });
-  overlay.querySelector('#_btnEnviarComp').addEventListener('click', () => {
-    const msg = `Olá. Realizei o pagamento via PIX do pedido #${pedidoId || '?'}. Segue o comprovante.`;
-    window.open(`https://wa.me/5554991138217?text=${encodeURIComponent(msg)}`, '_blank');
-  });
-  overlay.querySelector('#_btnJaPaguei').addEventListener('click', () => {
-    fechar();
-    showToast('Pedido registrado. Aguarde a confirmação.');
-  });
-}
-
-function fecharPixOverlay() {
-  document.getElementById('_pixModal')?.remove();
-}
-*/
 
 // ── RASTREAR PEDIDO ───────────────────────────────────────────────────────────
 

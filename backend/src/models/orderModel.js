@@ -98,6 +98,60 @@ function findByStripeSession(sessionId, db = database) {
   );
 }
 
+async function createWhatsApp(order, db = database) {
+  const items = Array.isArray(order.itens) ? order.itens : [];
+  const result = await db.run(
+    `INSERT INTO pedidos (
+       usuario_id, itens, total, nome_cliente, email_cliente, telefone_cliente, endereco,
+       metodo_pagamento, status, cupom_codigo, cupom_desconto, payment_status, currency,
+       stock_status, updated_at, prazo_entrega_min, prazo_entrega_max, previsao_entrega,
+       transportadora
+     ) VALUES (?, JSON_VALUE(?), ?, ?, ?, ?, ?, 'whatsapp', 'aguardando_pagamento', ?, ?,
+       'unpaid', 'BRL', 'committed', CURRENT_TIMESTAMP, ?, ?, ?, ?)`,
+    [
+      order.usuario_id,
+      JSON.stringify(items),
+      order.total,
+      order.nome_cliente,
+      order.email_cliente,
+      order.telefone_cliente,
+      order.endereco,
+      order.cupom_codigo || null,
+      order.cupom_desconto ?? null,
+      order.prazo_entrega_min ?? null,
+      order.prazo_entrega_max ?? null,
+      order.previsao_entrega || null,
+      order.transportadora || null,
+    ]
+  );
+
+  const orderId = result.lastID;
+  for (const item of items) {
+    const price = Number(item.price ?? item.preco ?? 0);
+    const quantity = Number(item.qty || 0);
+    await db.run(
+      `INSERT INTO pedido_itens (
+         pedido_id, produto_id, nome, preco_unitario, quantidade, tamanho, variacao, subtotal
+       ) VALUES (?, ?, ?, ?, ?, ?, JSON_VALUE(?), ?)`,
+      [
+        orderId,
+        Number(item.productId ?? item.id) || null,
+        item.name || item.nome || 'Produto',
+        price,
+        quantity,
+        item.tamanho || null,
+        JSON.stringify({
+          ...(item.personalizacao || item.variacao || {}),
+          ...(item.cor ? { cor: item.cor } : {}),
+        }),
+        Math.round(price * quantity * 100) / 100,
+      ]
+    );
+  }
+
+  return { ...result, id: orderId };
+}
+
 function findByStripePaymentIntent(paymentIntentId, db = database) {
   return db.get(
     'SELECT id, status, payment_status, stripe_session_id FROM pedidos WHERE stripe_payment_intent_id = ?',
@@ -245,7 +299,7 @@ function findTrackingForUser(orderId, user) {
 
 function exists(orderId, db = database) {
   return db.get(
-    `SELECT id, status, payment_status, stripe_session_id, stock_status, arquivado_em,
+    `SELECT id, status, payment_status, metodo_pagamento, stripe_session_id, stock_status, arquivado_em,
             codigo_rastreio, transportadora, rastreio_url, prazo_entrega_min,
             prazo_entrega_max, previsao_entrega, motivo_cancelamento
      FROM pedidos WHERE id = ?`,
@@ -255,6 +309,7 @@ function exists(orderId, db = database) {
 
 function updateTracking(orderId, {
   status,
+  payment_status,
   codigo_rastreio,
   transportadora,
   rastreio_url,
@@ -271,6 +326,7 @@ function updateTracking(orderId, {
   return db.run(
     `UPDATE pedidos SET
        status = COALESCE(?, status),
+       payment_status = COALESCE(?, payment_status),
        codigo_rastreio = CASE WHEN ? THEN ? ELSE codigo_rastreio END,
        transportadora = CASE WHEN ? THEN ? ELSE transportadora END,
        rastreio_url = CASE WHEN ? THEN ? ELSE rastreio_url END,
@@ -283,6 +339,7 @@ function updateTracking(orderId, {
      WHERE id = ?`,
     [
       status || null,
+      payment_status || null,
       changesTracking ? 1 : 0,
       codigo_rastreio ?? null,
       changesCarrier ? 1 : 0,
@@ -357,6 +414,7 @@ function listEvents(orderIds, db = database) {
 
 module.exports = {
   create,
+  createWhatsApp,
   createPaidFromStripe,
   clearArchived,
   exists,

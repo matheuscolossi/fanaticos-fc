@@ -18,10 +18,22 @@ let owner;
 let stranger;
 let orderId;
 
+async function cleanupTrackingOrders() {
+  const orders = await database.all(
+    'SELECT id FROM pedidos WHERE email_cliente IN (?, ?)',
+    [ownerEmail, strangerEmail]
+  );
+  for (const order of orders) {
+    await database.run('DELETE FROM pedido_eventos WHERE pedido_id = ?', [order.id]);
+    await database.run('DELETE FROM pedido_itens WHERE pedido_id = ?', [order.id]);
+    await database.run('DELETE FROM pedidos WHERE id = ?', [order.id]);
+  }
+}
+
 before(async () => {
   await database.init();
   await database.run('DELETE FROM logs_acoes WHERE usuario_nome IN (?, ?)', ['Tracking Owner', 'Tracking Stranger']);
-  await database.run('DELETE FROM pedidos WHERE email_cliente IN (?, ?)', [ownerEmail, strangerEmail]);
+  await cleanupTrackingOrders();
   await database.run('DELETE FROM usuarios WHERE email IN (?, ?)', [ownerEmail, strangerEmail]);
 
   const ownerResult = await database.run(
@@ -51,9 +63,13 @@ before(async () => {
 });
 
 after(async () => {
-  await database.run('DELETE FROM logs_acoes WHERE usuario_id IN (?, ?)', [owner.id, stranger.id]);
-  await database.run('DELETE FROM pedidos WHERE id = ?', [orderId]);
-  await database.run('DELETE FROM usuarios WHERE id IN (?, ?)', [owner.id, stranger.id]);
+  if (owner && stranger) {
+    await database.run('DELETE FROM logs_acoes WHERE usuario_id IN (?, ?)', [owner.id, stranger.id]);
+  }
+  await cleanupTrackingOrders();
+  if (owner && stranger) {
+    await database.run('DELETE FROM usuarios WHERE id IN (?, ?)', [owner.id, stranger.id]);
+  }
   await database.close();
 });
 

@@ -1457,8 +1457,8 @@ const STATUS_PEDIDO = {
 };
 
 const TRANSICOES_STATUS_PEDIDO = {
-  pendente: ['aguardando_pagamento', 'cancelado'],
-  aguardando_pagamento: ['cancelado'],
+  pendente: ['aguardando_pagamento', 'pago', 'cancelado'],
+  aguardando_pagamento: ['pago', 'cancelado'],
   pago: ['em_separacao', 'cancelado'],
   em_separacao: ['enviado', 'cancelado'],
   enviado: ['entregue'],
@@ -1469,13 +1469,21 @@ const TRANSICOES_STATUS_PEDIDO = {
 let pedidosCache = [];
 let mostrarPedidosArquivados = false;
 
-function isPagamentoLiveConfirmado(pedido) {
-  return pedido?.payment_status === 'paid'
-    && String(pedido?.stripe_session_id || '').startsWith('cs_live_');
+function isPagamentoConfirmado(pedido) {
+  if (pedido?.payment_status !== 'paid') return false;
+  if (pedido?.metodo_pagamento === 'whatsapp') return true;
+  return String(pedido?.stripe_session_id || '').startsWith('cs_live_');
 }
 
 function isPagamentoStripeTeste(pedido) {
   return String(pedido?.stripe_session_id || '').startsWith('cs_test_');
+}
+
+function descricaoMetodoPagamento(pedido) {
+  if (isPagamentoStripeTeste(pedido)) return 'Stripe TESTE (sem cobrança real)';
+  if (pedido?.metodo_pagamento === 'whatsapp') return 'WhatsApp';
+  if (pedido?.stripe_session_id || pedido?.metodo_pagamento === 'stripe') return 'Stripe (legado)';
+  return 'Pagamento legado';
 }
 
 function getPedidosTotalPages() {
@@ -1492,11 +1500,7 @@ function verDetalhesPedido(id) {
   if (!p) return;
 
   const st = STATUS_PEDIDO[p.status] || { label: p.status, color: '#888' };
-  const metodo = isPagamentoStripeTeste(p)
-    ? 'Stripe TESTE (sem cobrança real)'
-    : p.stripe_session_id || p.metodo_pagamento === 'stripe'
-      ? 'Stripe (cartão ou PIX)'
-      : 'Pagamento legado';
+  const metodo = descricaoMetodoPagamento(p);
   const itensHtml = p.itens.map(i =>
     `<div style="display:flex;justify-content:space-between;padding:.35rem 0;border-bottom:1px solid var(--border)">
       <span>${safeText(i.nome)} <em style="color:var(--text-muted)">x${Number(i.qty) || 0}</em></span>
@@ -1629,7 +1633,7 @@ function renderPedidos() {
   const start = (pedidosPage - 1) * ORDERS_PER_PAGE;
   const pagePedidos = pedidos.slice(start, start + ORDERS_PER_PAGE);
   const totalGeral = pedidos
-    .filter(isPagamentoLiveConfirmado)
+    .filter(isPagamentoConfirmado)
     .reduce((s, p) => s + (Number(p.total) || 0), 0);
   const pendentes = pedidos.filter(p => p.status === 'aguardando_pagamento' || p.status === 'pendente').length;
   wrap.innerHTML = `
@@ -1683,9 +1687,7 @@ function renderPedidos() {
             const statusPermitidos = [p.status, ...proximosStatus];
             const metodoIcon = pagamentoTeste
               ? '<strong style="color:#ff5252">Stripe TESTE — sem cobrança real</strong>'
-              : p.stripe_session_id || p.metodo_pagamento === 'stripe'
-                ? 'Stripe (cartão ou PIX)'
-                : 'Pagamento legado';
+              : descricaoMetodoPagamento(p);
             return `
             <tr id="pedido-row-${p.id}">
               <td><strong>#${p.id}</strong></td>
